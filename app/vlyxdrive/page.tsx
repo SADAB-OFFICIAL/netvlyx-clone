@@ -1,372 +1,162 @@
+// app/ncloud/page.tsx
 'use client';
 
-import { useSearchParams, useRouter } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { 
-  CloudLightning, Loader2, Play, AlertTriangle, 
-  FolderOpen, Server, ChevronDown, ChevronUp, Database, Film
+  Play, Download, CloudLightning, Wifi, Loader2, 
+  AlertTriangle, Copy, CheckCircle 
 } from 'lucide-react';
 
-// --- Types ---
-interface ApiLink {
-  name: string;
-  url: string;
-  isVCloud?: boolean;
-  isHubCloud?: boolean;
-}
-
-interface LinkGroup {
-  title: string;
-  quality?: string;
-  size?: string;
-  links: ApiLink[];
-  episodeNumber?: number;
-}
-
-function VlyxDriveContent() {
+function NCloudPlayer() {
   const params = useSearchParams();
-  const router = useRouter();
   const key = params.get('key');
   
-  const [status, setStatus] = useState('processing'); 
-  const [metaData, setMetaData] = useState<any>(null);
-  const [apiData, setApiData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null); // Asli Video Link
+  const [metaData, setMetaData] = useState<any>(null); // Title, Poster
+  const [tab, setTab] = useState<'stream' | 'download'>('stream');
+  const [copied, setCopied] = useState(false);
   
-  // State to track which server lists are expanded
-  const [expandedServers, setExpandedServers] = useState<Record<number, boolean>>({});
-  // State to track hidden qualities (Movie mode)
-  const [showOtherQualities, setShowOtherQualities] = useState(false);
-
   useEffect(() => {
     if (key) {
       const init = async () => {
         try {
+          // 1. Decode Data from URL
           const json = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
           const payload = JSON.parse(json);
           setMetaData(payload);
 
-          const res = await fetch(`/api/resolve-link?url=${encodeURIComponent(payload.link)}`);
+          // 2. Call Backend Scraper (The "2-Step" Magic)
+          const res = await fetch(`/api/ncloud?url=${encodeURIComponent(payload.url)}`);
           const result = await res.json();
           
-          if (result.success && result.data) {
-             setApiData(result.data);
-             setStatus('ready');
+          if (result.success && result.streamUrl) {
+             setStreamUrl(result.streamUrl);
+             setLoading(false);
           } else {
-             setStatus('error');
+             throw new Error("Failed to generate link");
           }
         } catch (e) {
-          setStatus('error');
+          console.error("Link Generation Failed");
+          setLoading(false);
         }
       };
       init();
     }
   }, [key]);
 
-  const handlePlay = (url: string) => {
-    const nCloudKey = btoa(JSON.stringify({ url: url, title: "Stream" }))
-       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    router.push(`/ncloud?key=${nCloudKey}`);
-  };
-
-  const toggleServerExpand = (idx: number) => {
-    setExpandedServers(prev => ({ ...prev, [idx]: !prev[idx] }));
-  };
-
-  // Helper to split links into Main (HubCloud) and Others
-  const splitLinks = (links: ApiLink[]) => {
-      // Sort: HubCloud/N-Cloud first
-      const sorted = [...links].sort((a, b) => {
-          const aHub = a.name.toLowerCase().includes('hub') || a.name.toLowerCase().includes('cloud');
-          const bHub = b.name.toLowerCase().includes('hub') || b.name.toLowerCase().includes('cloud');
-          return aHub === bHub ? 0 : aHub ? -1 : 1;
-      });
-
-      return {
-          main: sorted[0],
-          others: sorted.slice(1)
-      };
-  };
-
-  // Helper for button styling
-  const getButtonClass = (name: string) => {
-      const lower = name.toLowerCase();
-      if (lower.includes('hub') || lower.includes('cloud')) 
-          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
-      if (lower.includes('gdflix') || lower.includes('drive')) 
-          return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
-      return "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600";
-  };
-
-  // Helper for Main Button Text
-  const getMainButtonText = (name: string) => {
-      const lower = name.toLowerCase();
-      if (lower.includes('hub') || lower.includes('cloud') || lower.includes('n-cloud')) {
-          return "Continue with N-Cloud";
-      }
-      return `Play via ${name}`;
-  };
-
-  // --- FILTERING LOGIC (Same as before) ---
-  const getFilteredGroups = () => {
-    if (!apiData || apiData.type !== 'quality') return { preferred: [], others: [] };
-    const userQuality = metaData?.quality?.toLowerCase(); 
-
-    if (!userQuality || userQuality === 'standard') {
-        return { preferred: apiData.linkData as LinkGroup[], others: [] as LinkGroup[] };
+  const copyLink = () => {
+    if (streamUrl) {
+      navigator.clipboard.writeText(streamUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
-
-    const preferred: LinkGroup[] = [];
-    const others: LinkGroup[] = [];
-
-    (apiData.linkData as LinkGroup[]).forEach((group) => {
-        const groupQ = group.quality?.toLowerCase() || '';
-        if (groupQ.includes(userQuality) || userQuality.includes(groupQ)) {
-            preferred.push(group);
-        } else {
-            others.push(group);
-        }
-    });
-
-    if (preferred.length === 0 && others.length > 0) {
-        return { preferred: [others[0]], others: others.slice(1) };
-    }
-
-    return { preferred, others };
   };
+
+  const playInVLC = () => {
+    if (!streamUrl) return;
+    const intent = `intent:${streamUrl}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`;
+    window.location.href = intent;
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
+      <div className="relative mb-4">
+         <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-500"></div>
+         <CloudLightning className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-blue-400" size={24}/>
+      </div>
+      <p className="text-gray-400 font-mono text-sm">Generating Secure Token...</p>
+      <p className="text-xs text-gray-600 mt-2">Bypassing Cloudflare • Handshaking</p>
+    </div>
+  );
+
+  if (!streamUrl) return (
+    <div className="min-h-screen bg-black flex items-center justify-center text-red-500">
+      <div className="text-center">
+        <AlertTriangle className="w-12 h-12 mx-auto mb-2" />
+        <p>Stream Generation Failed</p>
+        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-gray-800 rounded text-white text-sm">Retry</button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-4 font-sans">
-      <div className="max-w-3xl mx-auto animate-fade-in">
+    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans">
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
         
         {/* Header */}
-        {metaData && (
-          <div className="relative overflow-hidden bg-gray-900 rounded-3xl border border-gray-800 p-6 mb-8 shadow-2xl">
-             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-             <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center md:items-start">
-                <img 
-                  src={metaData.poster || '/placeholder.png'} 
-                  className="w-24 h-36 object-cover rounded-xl shadow-lg border border-gray-700" 
-                  alt="Poster" 
-                  onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/150x225?text=No+Poster')}
-                />
-                <div className="text-center md:text-left flex-1">
-                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mb-3 border border-blue-500/30">
-                      <FolderOpen size={12} /> SECURE DRIVE
-                   </div>
-                   <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
-                      {metaData.title}
-                   </h1>
-                   <p className="text-gray-400 text-sm">
-                      {apiData?.type === 'quality' 
-                         ? `Movie • ${metaData.quality ? metaData.quality : 'Select Quality'}` 
-                         : 'Series • Select Episode'}
-                   </p>
-                </div>
-             </div>
-          </div>
-        )}
-
-        {/* Loading */}
-        {status === 'processing' && (
-           <div className="text-center py-20">
-              <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
-              <p className="text-gray-400">Fetching links from secure API...</p>
+        <div className="flex items-center justify-between mb-6">
+           <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                 <CloudLightning className="text-white" size={20}/>
+              </div>
+              <div>
+                 <h1 className="text-xl font-bold">N-Cloud Player</h1>
+                 <p className="text-xs text-green-400 flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    Secure • Tokenized
+                 </p>
+              </div>
            </div>
-        )}
+        </div>
 
-        {/* Content */}
-        {status === 'ready' && apiData && (
-           <div className="space-y-6">
-              
-              {/* CASE 1: MOVIE / BULK (Quality Groups) */}
-              {apiData.type === 'quality' && (
-                 (() => {
-                    const { preferred, others } = getFilteredGroups();
-                    
-                    return (
-                        <>
-                           {/* PREFERRED QUALITY */}
-                           {preferred.map((group: LinkGroup, idx: number) => {
-                              const { main, others: otherServers } = splitLinks(group.links);
-                              const isExpanded = expandedServers[idx];
-
-                              return (
-                                <div key={idx} className="bg-gray-900/50 border-2 border-green-500/30 rounded-2xl overflow-hidden shadow-2xl relative">
-                                   <div className="absolute top-0 right-0 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl z-10">SELECTED</div>
-                                   <div className="bg-gray-800/60 px-6 py-4 border-b border-gray-800 flex justify-between items-center">
-                                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                         <Database className="text-green-400" size={24} />
-                                         {group.quality} <span className="text-sm font-normal text-gray-400 ml-2 bg-black/30 px-2 py-0.5 rounded">{group.size}</span>
-                                      </h3>
-                                   </div>
-                                   <div className="p-5 flex flex-col gap-3">
-                                      {/* MAIN BUTTON (Always Visible) */}
-                                      <button 
-                                          onClick={() => handlePlay(main.url)} 
-                                          className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name)}`}
-                                      >
-                                          <span className="flex items-center gap-3">
-                                              <CloudLightning size={24} className="fill-current" />
-                                              <span className="text-lg">{getMainButtonText(main.name)}</span>
-                                          </span>
-                                          <Play size={24} className="fill-current" />
-                                      </button>
-
-                                      {/* EXPAND BUTTON (If other servers exist) */}
-                                      {otherServers.length > 0 && (
-                                          <div className="mt-2">
-                                              <button 
-                                                  onClick={() => toggleServerExpand(idx)}
-                                                  className="w-full text-center py-2 text-sm text-gray-400 hover:text-white flex items-center justify-center gap-1 transition-colors"
-                                              >
-                                                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                                  {isExpanded ? 'Hide Servers' : `Show ${otherServers.length} more servers`}
-                                              </button>
-
-                                              {/* HIDDEN SERVERS LIST */}
-                                              {isExpanded && (
-                                                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
-                                                      {otherServers.map((link, i) => (
-                                                          <button 
-                                                              key={i} 
-                                                              onClick={() => handlePlay(link.url)} 
-                                                              className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all border ${getButtonClass(link.name)}`}
-                                                          >
-                                                              <Server size={16} /> {link.name}
-                                                          </button>
-                                                      ))}
-                                                  </div>
-                                              )}
-                                          </div>
-                                      )}
-                                   </div>
-                                </div>
-                              );
-                           })}
-
-                           {/* OTHER QUALITIES (Initially Hidden) */}
-                           {others.length > 0 && (
-                               <div className="mt-8 pt-6 border-t border-gray-800">
-                                   <button 
-                                      onClick={() => setShowOtherQualities(!showOtherQualities)}
-                                      className="w-full py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-gray-300 hover:text-white flex items-center justify-center gap-2 transition-all"
-                                   >
-                                      {showOtherQualities ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                                      {showOtherQualities ? 'Hide Other Qualities' : `Show ${others.length} Other Qualities`}
-                                   </button>
-                                   
-                                   {showOtherQualities && (
-                                       <div className="mt-4 space-y-4 animate-fade-in">
-                                           {others.map((group: LinkGroup, idx: number) => (
-                                              <div key={idx} className="bg-gray-900/40 border border-gray-800 rounded-xl overflow-hidden grayscale hover:grayscale-0 transition-all duration-300">
-                                                 <div className="px-6 py-3 border-b border-gray-800 bg-black/20 flex justify-between items-center">
-                                                    <h3 className="text-lg font-bold text-gray-400">{group.quality}</h3>
-                                                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">{group.size}</span>
-                                                 </div>
-                                                 <div className="p-4 flex flex-col gap-2">
-                                                    {group.links.map((link, i) => (
-                                                       <button key={i} onClick={() => handlePlay(link.url)} className="w-full py-3 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-left text-sm text-gray-300 flex items-center gap-2 border border-gray-700 hover:border-blue-500">
-                                                          <Server size={16} className="text-blue-500"/> {link.name}
-                                                       </button>
-                                                    ))}
-                                                 </div>
-                                              </div>
-                                           ))}
-                                       </div>
-                                   )}
-                               </div>
-                           )}
-                        </>
-                    );
-                 })()
-              )}
-
-              {/* CASE 2: SERIES (Episode Groups) */}
-              {apiData.type === 'episode' && (
-                 (apiData.linkData as LinkGroup[]).map((group: LinkGroup, idx: number) => {
-                    const { main, others: otherServers } = splitLinks(group.links);
-                    const isExpanded = expandedServers[idx];
-
-                    return (
-                       <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-600 transition-all">
-                          <div className="p-5 flex flex-col sm:flex-row items-center gap-6">
-                              <div className="flex-1 text-center sm:text-left">
-                                  <h3 className="text-lg font-bold text-white flex items-center justify-center sm:justify-start gap-2">
-                                      <Film className="text-blue-500" size={24} /> 
-                                      {group.title || `Episode ${group.episodeNumber || idx + 1}`}
-                                  </h3>
-                              </div>
-                              
-                              <div className="flex flex-col gap-2 w-full sm:w-auto min-w-[280px]">
-                                  {/* MAIN BUTTON */}
-                                  <button 
-                                      onClick={() => handlePlay(main.url)}
-                                      className={`w-full py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg ${getButtonClass(main.name)}`}
-                                  >
-                                      <Play size={20} className="fill-current" /> 
-                                      {getMainButtonText(main.name)}
-                                  </button>
-                                  
-                                  {/* SHOW MORE TOGGLE */}
-                                  {otherServers.length > 0 && (
-                                      <div className="relative">
-                                          {!isExpanded ? (
-                                              <button 
-                                                  onClick={() => toggleServerExpand(idx)}
-                                                  className="w-full py-2 text-xs text-gray-500 hover:text-white flex items-center justify-center gap-1 transition-colors hover:bg-white/5 rounded-lg"
-                                              >
-                                                  <ChevronDown size={12}/> Show {otherServers.length} more servers
-                                              </button>
-                                          ) : (
-                                              <div className="mt-2 space-y-2 animate-fade-in bg-black/40 p-3 rounded-xl border border-gray-800">
-                                                  {otherServers.map((link, i) => (
-                                                      <button 
-                                                          key={i}
-                                                          onClick={() => handlePlay(link.url)}
-                                                          className="w-full flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 hover:text-white transition-colors border border-gray-700"
-                                                      >
-                                                          <Server size={12} /> {link.name}
-                                                      </button>
-                                                  ))}
-                                                  <button 
-                                                      onClick={() => toggleServerExpand(idx)}
-                                                      className="w-full text-center text-xs text-gray-500 hover:text-white pt-1"
-                                                  >
-                                                      <ChevronUp size={12}/> Hide
-                                                  </button>
-                                              </div>
-                                          )}
-                                      </div>
-                                  )}
-                              </div>
-                          </div>
-                       </div>
-                    );
-                 })
-              )}
-
+        <div className="grid lg:grid-cols-3 gap-6">
+           {/* VIDEO PLAYER */}
+           <div className="lg:col-span-2 space-y-4">
+              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
+                 <video 
+                    controls 
+                    autoPlay
+                    className="w-full h-full" 
+                    poster={metaData?.poster || ''}
+                    src={streamUrl}
+                 >
+                 </video>
+              </div>
+              <h2 className="text-2xl font-bold text-white">{metaData?.title || 'Unknown Title'}</h2>
            </div>
-        )}
 
-        {/* Error State */}
-        {status === 'error' && (
-           <div className="text-center py-20">
-              <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-white">Data Fetch Failed</h3>
-              <p className="text-gray-400">Could not retrieve links from the API.</p>
+           {/* CONTROLS */}
+           <div className="lg:col-span-1 space-y-4">
+              <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
+                 {/* Tabs */}
+                 <div className="flex p-1 bg-black/40 rounded-lg mb-6">
+                    <button onClick={() => setTab('stream')} className={`flex-1 py-2 text-sm font-bold rounded ${tab === 'stream' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Stream</button>
+                    <button onClick={() => setTab('download')} className={`flex-1 py-2 text-sm font-bold rounded ${tab === 'download' ? 'bg-green-600 text-white' : 'text-gray-400'}`}>Download</button>
+                 </div>
+
+                 {tab === 'stream' ? (
+                    <div className="space-y-3">
+                       <button onClick={playInVLC} className="w-full py-3 bg-[#ff6b00]/10 border border-[#ff6b00]/30 hover:bg-[#ff6b00]/20 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold transition-all">
+                          Play in VLC
+                       </button>
+                       {/* Add more players here */}
+                    </div>
+                 ) : (
+                    <div className="space-y-3">
+                       <a href={streamUrl} download className="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl flex items-center justify-center gap-2 text-white font-bold transition-all">
+                          <Download size={18}/> Direct Download
+                       </a>
+                       <button onClick={copyLink} className="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-xl flex items-center justify-center gap-2 text-gray-300 transition-all">
+                          {copied ? <CheckCircle size={18} className="text-green-500"/> : <Copy size={18}/>}
+                          {copied ? 'Copied' : 'Copy Link'}
+                       </button>
+                    </div>
+                 )}
+              </div>
            </div>
-        )}
+        </div>
+
       </div>
     </div>
   );
 }
 
-export default function VlyxDrive() {
+export default function NCloud() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-4">
-      <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
-        <VlyxDriveContent />
-      </Suspense>
-    </div>
+    <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
+      <NCloudPlayer />
+    </Suspense>
   );
 }
