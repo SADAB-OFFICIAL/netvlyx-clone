@@ -44,7 +44,7 @@ export default function MoviePage() {
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
 
-  // 1. Fetching Logic
+  // 1. URL Decode & Data Fetching
   const movieUrl = slug 
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
@@ -61,7 +61,7 @@ export default function MoviePage() {
         if (result.error) throw new Error(result.error);
         setData(result);
         
-        // Season Detection
+        // --- Season Detection Logic ---
         const title = result.title || "";
         const rangeMatch = title.match(/(?:season|s)\s*(\d+)\s*[-–—]\s*(\d+)/i);
         const singleMatch = title.match(/(?:season|s)\s*(\d+)/i);
@@ -93,58 +93,57 @@ export default function MoviePage() {
     fetchRealData();
   }, [movieUrl]);
 
-  // --- 2. HELPER: Is Bulk Link? (The Core Logic) ---
+  // --- 2. HELPER: Is Bulk Link? (Strict Logic) ---
   const isBulkLink = (sectionTitle: string, linkLabel: string) => {
     const text = (sectionTitle + " " + linkLabel).toLowerCase();
-    // Keywords from your uploaded file + common variations
-    return /batch|zip|pack|complete|volume|collection/.test(text) || 
-           (linkLabel.toLowerCase().includes('season') && !linkLabel.toLowerCase().includes('episode'));
+    // In keywords se decide hoga ki ye Bulk hai ya nahi
+    return /batch|zip|pack|complete|volume|collection/.test(text);
   };
 
-  // --- 3. HELPER: Get Processed Sections ---
-  // Ye function Sections aur Links dono ko filter karega
+  // --- 3. PROCESS SECTIONS (Filtering) ---
   const getProcessedSections = () => {
     if (!data) return [];
     
-    // 1. Season Filter
+    // Step A: Season Filter
     let sections = data.downloadSections.filter(sec => {
         if (selectedSeason === null) return true;
         const seasonRegex = new RegExp(`(?:season|s)[\\s\\-_]*0?${selectedSeason}(?:\\D|$)`, 'i');
         return seasonRegex.test(sec.title);
     });
 
-    // 2. Type Filter (Links ke andar jakar check karna)
+    // Step B: Type Filter (Download Mode Only)
     if (actionType === 'download' && downloadType) {
-        // Hum section ko tabhi rakhenge agar usme MATCHING links hain
-        // Aur hum section ke andar se NON-MATCHING links uda denge
         sections = sections.map(sec => {
             const filteredLinks = sec.links.filter(link => {
                 const isBulk = isBulkLink(sec.title, link.label);
+                // Agar Bulk button dabaya hai to sirf Bulk links dikhao, warna Episode links
                 return downloadType === 'bulk' ? isBulk : !isBulk;
             });
             return { ...sec, links: filteredLinks };
-        }).filter(sec => sec.links.length > 0); // Empty sections hata do
+        }).filter(sec => sec.links.length > 0); // Empty sections remove karo
     }
 
     return sections;
   };
 
-  // --- 4. Quality Extraction (Updated) ---
+  // --- 4. QUALITY EXTRACTION ---
   useEffect(() => {
     if (!data) return;
-    const currentSections = getProcessedSections(); // Filtered links se quality nikalo
+    // Current filtered links ke hisab se qualities nikalo
+    const currentSections = getProcessedSections(); 
     
     const qualities = new Set<string>();
     currentSections.forEach(sec => {
-        // Section Title se quality
+        // 1. Try Section Title
         const qMatch = sec.title.match(/(480p|720p|1080p|2160p|4k)/i);
         if (qMatch) qualities.add(qMatch[1].toLowerCase());
         else {
-            // Agar Section title me nahi hai, to links me check karo
+            // 2. Try Link Labels
             sec.links.forEach(l => {
                 const lMatch = l.label.match(/(480p|720p|1080p|2160p|4k)/i);
                 if (lMatch) qualities.add(lMatch[1].toLowerCase());
             });
+            // Agar kahin quality na mile to 'Standard'
             if (qualities.size === 0) qualities.add("Standard");
         }
     });
@@ -153,26 +152,25 @@ export default function MoviePage() {
     const sorted = Array.from(qualities).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     setAvailableQualities(sorted);
 
+    // Auto select agar ek hi quality hai
     if (sorted.length === 1) setSelectedQuality(sorted[0]);
     else setSelectedQuality(null);
 
   }, [data, selectedSeason, downloadType, actionType]);
 
-  // --- 5. Final Links Display ---
+  // --- 5. FINAL DISPLAY LINKS ---
   const getFinalDisplayLinks = () => {
     let sections = getProcessedSections();
 
     if (selectedQuality) {
         sections = sections.filter(sec => {
-            // Check if Section matches Quality OR if it contains links of that quality
+            // Match Quality in Section Title OR Link Label
             const secMatch = sec.title.toLowerCase().includes(selectedQuality.toLowerCase());
             if (secMatch) return true;
             
-            // Deep check: Kya is section me selected quality ka link hai?
-            // (Agar section title generic hai to links filter karo)
             return sec.links.some(l => l.label.toLowerCase().includes(selectedQuality.toLowerCase()));
         }).map(sec => {
-             // Agar Section title quality se match nahi karta, to sirf specific quality wale links dikhao
+             // Agar Section title match nahi karta, to andar ke links filter karo
              if (!sec.title.toLowerCase().includes(selectedQuality.toLowerCase())) {
                  return {
                      ...sec,
@@ -185,9 +183,22 @@ export default function MoviePage() {
     return sections;
   };
 
+  // --- LINK CLICK HANDLER (UPDATED WITH METADATA) ---
   const handleLinkClick = (url: string) => {
-    const key = btoa(JSON.stringify({ link: url, source: 'netvlyx' }))
-      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    // Is payload mein hum Title aur Poster bhi bhej rahe hain
+    // Taaki agla page (VlyxDrive) inhe use kar sake
+    const payload = {
+        link: url,
+        source: 'netvlyx',
+        title: data?.title || 'Unknown Title',
+        poster: data?.poster || ''
+    };
+
+    const key = btoa(JSON.stringify(payload))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+      
     router.push(`/vlyxdrive?key=${key}`);
   };
 
@@ -249,6 +260,7 @@ export default function MoviePage() {
 
             <div className="bg-gray-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl transition-all duration-300">
               
+              {/* HEADER WITH BACK BUTTON */}
               {(selectedSeason || actionType) && (
                  <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
                     <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
@@ -263,7 +275,7 @@ export default function MoviePage() {
                  </div>
               )}
 
-              {/* STEP 1: Season */}
+              {/* STEP 1: Season Select */}
               {availableSeasons.length > 0 && selectedSeason === null && (
                 <div className="animate-fade-in">
                   <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Film className="text-red-500" /> Select Season</h3>
@@ -277,7 +289,7 @@ export default function MoviePage() {
                 </div>
               )}
 
-              {/* STEP 2: Action */}
+              {/* STEP 2: Action Select */}
               {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
                 <div className="animate-fade-in">
                    <h3 className="text-2xl font-bold mb-6">Choose Action</h3>
@@ -294,7 +306,7 @@ export default function MoviePage() {
                 </div>
               )}
 
-              {/* STEP 3: Type (Bulk vs Ep) - Only Download + Series */}
+              {/* STEP 3: Type Select (Bulk vs Episode) */}
               {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                  <div className="animate-fade-in">
                     <h3 className="text-xl font-bold mb-6 text-center">Select Download Type</h3>
@@ -335,7 +347,7 @@ export default function MoviePage() {
                  </div>
               )}
 
-              {/* STEP 5: Links Display */}
+              {/* STEP 5: Final Links Display */}
               {selectedQuality !== null && (
                 <div className="animate-fade-in">
                    <h3 className="text-xl font-bold mb-4 text-green-400 flex items-center gap-2">
@@ -368,7 +380,7 @@ export default function MoviePage() {
                       ) : (
                         <div className="text-center p-8 bg-gray-800/50 rounded-xl border border-dashed border-gray-700">
                            <AlertCircle className="mx-auto mb-2 text-gray-500"/>
-                           <p className="text-gray-400">No links found for <span className="text-white font-bold">{selectedQuality}</span> in this category.</p>
+                           <p className="text-gray-400">No links found for <span className="text-white font-bold">{selectedQuality}</span>.</p>
                            <button onClick={() => setSelectedQuality(null)} className="mt-4 text-blue-400 hover:underline">Try another quality</button>
                         </div>
                       )}
