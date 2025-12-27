@@ -10,39 +10,49 @@ export async function GET(request: Request) {
 
   try {
     // --- STEP 1: First Scrape (Embed Page) ---
-    // HubCloud ka main page load karo
     const response1 = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36' }
     });
+    
+    if (!response1.ok) throw new Error(`HubCloud Page 1 Error: ${response1.status}`);
+    
     const html1 = await response1.text();
     const $1 = cheerio.load(html1);
 
-    // Wahan se 'Download' ya 'Play' button ka link nikalo
-    // HubCloud aksar ek button deta hai jo next step par le jata hai
+    // Multiple patterns to find the button
     let step2Url = $1('a:contains("Download")').attr('href') || 
                    $1('a:contains("Play")').attr('href') ||
-                   $1('.btn-success').attr('href');
+                   $1('a.btn-success').attr('href') ||
+                   $1('a.btn-primary').attr('href') ||
+                   $1('a[href*="/drive/"]').attr('href') || // Common HubCloud pattern
+                   $1('a[href*="/video/"]').attr('href');
 
     if (!step2Url) {
-        // Fallback: Agar button nahi mila, toh shayad ye direct link ho
-        // Ya script ke andar chupa ho
-        throw new Error("Step 1 Failed: Could not find intermediate link");
+       console.error("Step 1 HTML Preview:", html1.substring(0, 500)); // Debug log
+       throw new Error("Step 1 Failed: Button not found on HubCloud page");
+    }
+
+    // Handle relative URLs
+    if (step2Url.startsWith('/')) {
+        const urlObj = new URL(url);
+        step2Url = `${urlObj.origin}${step2Url}`;
     }
 
     // --- STEP 2: Second Scrape (Intermediate Page) ---
-    // Ab us intermediate link par jao
     const response2 = await fetch(step2Url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36' }
     });
     const html2 = await response2.text();
     const $2 = cheerio.load(html2);
 
-    // Ab final 'Generate Link' ya direct video URL dhundo
-    // HubCloud final page par aksar ek redirect ya direct link deta hai
+    // Final Link Patterns
     let finalLink = $2('a:contains("Download Link")').attr('href') ||
-                    $2('.btn-primary').attr('href');
-    
-    // Kabhi kabhi final link script tag me hoti hai (window.location = "...")
+                    $2('a.btn-success').attr('href') ||
+                    $2('a.btn-primary').attr('href') ||
+                    $2('a[href*=".mkv"]').attr('href') ||
+                    $2('a[href*=".mp4"]').attr('href');
+
+    // JS Redirect Fallback
     if (!finalLink) {
         const scriptContent = $2('script:contains("window.location")').html();
         if (scriptContent) {
@@ -51,24 +61,16 @@ export async function GET(request: Request) {
         }
     }
 
-    // --- Verification ---
-    if (!finalLink) throw new Error("Step 2 Failed: Could not extract tokenized URL");
-
-    // Agar link relative hai to usse absolute banao
-    // (e.g., "/video/abc" -> "https://hubcloud.run/video/abc")
-    if (finalLink.startsWith('/')) {
-        const baseUrl = new URL(step2Url).origin;
-        finalLink = `${baseUrl}${finalLink}`;
-    }
+    if (!finalLink) throw new Error("Step 2 Failed: Final stream link not found");
 
     return NextResponse.json({ 
         success: true, 
         streamUrl: finalLink,
-        message: "Secure Link Generated"
+        message: "Stream Generated"
     });
 
   } catch (error: any) {
-    console.error("N-Cloud Scrape Error:", error.message);
-    return NextResponse.json({ success: false, error: 'Failed to generate secure stream.' });
+    console.error("N-Cloud API Error:", error.message);
+    return NextResponse.json({ success: false, error: error.message || 'Scraping failed' });
   }
 }
