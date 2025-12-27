@@ -4,19 +4,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, 
-  Play, 
-  HardDrive, 
-  Download, 
-  AlertCircle, 
-  Calendar, 
-  Star, 
-  Film, 
-  CheckCircle,
-  Server,
-  ImageIcon,
-  Settings,
-  X
+  ArrowLeft, Play, HardDrive, Download, AlertCircle, 
+  Calendar, Film, CheckCircle, Server, ImageIcon, Settings
 } from 'lucide-react';
 
 // --- Types ---
@@ -46,7 +35,7 @@ export default function MoviePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // --- Logic State Variables ---
+  // --- Logic State ---
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [actionType, setActionType] = useState<'watch' | 'download' | null>(null);
   const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
@@ -55,7 +44,7 @@ export default function MoviePage() {
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
 
-  // 1. URL Decode & Data Fetching
+  // 1. Fetching Logic
   const movieUrl = slug 
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
@@ -68,13 +57,11 @@ export default function MoviePage() {
         setLoading(true);
         const res = await fetch(`/api/movie-details?url=${encodeURIComponent(movieUrl)}`);
         if (!res.ok) throw new Error("Failed to load data");
-        
         const result = await res.json();
         if (result.error) throw new Error(result.error);
-
         setData(result);
         
-        // --- SEASON DETECTION ---
+        // Season Detection
         const title = result.title || "";
         const rangeMatch = title.match(/(?:season|s)\s*(\d+)\s*[-–—]\s*(\d+)/i);
         const singleMatch = title.match(/(?:season|s)\s*(\d+)/i);
@@ -96,7 +83,6 @@ export default function MoviePage() {
         } else {
           setAvailableSeasons([]);
         }
-        
       } catch (err) {
         console.error(err);
         setError("Content not found.");
@@ -104,98 +90,104 @@ export default function MoviePage() {
         setLoading(false);
       }
     };
-
     fetchRealData();
   }, [movieUrl]);
 
-  // --- 2. LOGIC: Available Qualities Extraction ---
-  // Jab Season/Type change ho, tab qualities update karo
-  useEffect(() => {
-    if (!data) return;
+  // --- 2. HELPER: Is Bulk Link? (The Core Logic) ---
+  const isBulkLink = (sectionTitle: string, linkLabel: string) => {
+    const text = (sectionTitle + " " + linkLabel).toLowerCase();
+    // Keywords from your uploaded file + common variations
+    return /batch|zip|pack|complete|volume|collection/.test(text) || 
+           (linkLabel.toLowerCase().includes('season') && !linkLabel.toLowerCase().includes('episode'));
+  };
 
-    // Pehle sections ko filter karo based on Season & Type
-    const filteredSections = getSectionsForQualityCheck();
-    
-    const qualities = new Set<string>();
-    filteredSections.forEach(sec => {
-        // Title mein se quality nikalo (e.g. "Download 720p")
-        const qMatch = sec.title.match(/(480p|720p|1080p|2160p|4k)/i);
-        if (qMatch) {
-            qualities.add(qMatch[1].toLowerCase()); // '720p'
-        } else {
-            // Agar title mein nahi hai, to shayad links ke label mein ho?
-            // Usually section title mein hoti hai, fallback ke liye "Unknown"
-             qualities.add("Standard");
-        }
-    });
-
-    // Sort qualities: 4k > 1080p > 720p > 480p
-    const order = ['4k', '2160p', '1080p', '720p', '480p', 'standard'];
-    const sortedQualities = Array.from(qualities).sort((a, b) => {
-        return order.indexOf(a) - order.indexOf(b);
-    });
-
-    setAvailableQualities(sortedQualities);
-    
-    // Auto-select if only 1 quality exists
-    if (sortedQualities.length === 1) {
-       setSelectedQuality(sortedQualities[0]);
-    } else {
-       setSelectedQuality(null); // Reset if multiple options
-    }
-
-  }, [data, selectedSeason, downloadType, actionType]);
-
-
-  // --- HELPER: Sections Filter for Quality Calculation ---
-  const getSectionsForQualityCheck = () => {
+  // --- 3. HELPER: Get Processed Sections ---
+  // Ye function Sections aur Links dono ko filter karega
+  const getProcessedSections = () => {
     if (!data) return [];
-    let sections = data.downloadSections;
-
+    
     // 1. Season Filter
-    if (selectedSeason !== null) {
-      sections = sections.filter(sec => {
+    let sections = data.downloadSections.filter(sec => {
+        if (selectedSeason === null) return true;
         const seasonRegex = new RegExp(`(?:season|s)[\\s\\-_]*0?${selectedSeason}(?:\\D|$)`, 'i');
         return seasonRegex.test(sec.title);
-      });
-    }
+    });
 
-    // 2. Type Filter (Bulk vs Episode)
-    if (actionType === 'download') {
-        if (downloadType === 'bulk') {
-          sections = sections.filter(sec => 
-            /pack|zip|batch|complete|collection|volume/i.test(sec.title)
-          );
-        } else if (downloadType === 'episode') {
-          sections = sections.filter(sec => 
-            !/pack|zip|batch|complete|collection|volume/i.test(sec.title)
-          );
-        }
+    // 2. Type Filter (Links ke andar jakar check karna)
+    if (actionType === 'download' && downloadType) {
+        // Hum section ko tabhi rakhenge agar usme MATCHING links hain
+        // Aur hum section ke andar se NON-MATCHING links uda denge
+        sections = sections.map(sec => {
+            const filteredLinks = sec.links.filter(link => {
+                const isBulk = isBulkLink(sec.title, link.label);
+                return downloadType === 'bulk' ? isBulk : !isBulk;
+            });
+            return { ...sec, links: filteredLinks };
+        }).filter(sec => sec.links.length > 0); // Empty sections hata do
     }
 
     return sections;
   };
 
-  // --- 3. FINAL LINK FILTERING (Applied after Quality Select) ---
-  const getFinalLinks = () => {
-    let sections = getSectionsForQualityCheck();
+  // --- 4. Quality Extraction (Updated) ---
+  useEffect(() => {
+    if (!data) return;
+    const currentSections = getProcessedSections(); // Filtered links se quality nikalo
+    
+    const qualities = new Set<string>();
+    currentSections.forEach(sec => {
+        // Section Title se quality
+        const qMatch = sec.title.match(/(480p|720p|1080p|2160p|4k)/i);
+        if (qMatch) qualities.add(qMatch[1].toLowerCase());
+        else {
+            // Agar Section title me nahi hai, to links me check karo
+            sec.links.forEach(l => {
+                const lMatch = l.label.match(/(480p|720p|1080p|2160p|4k)/i);
+                if (lMatch) qualities.add(lMatch[1].toLowerCase());
+            });
+            if (qualities.size === 0) qualities.add("Standard");
+        }
+    });
 
-    // 3. Quality Filter
+    const order = ['4k', '2160p', '1080p', '720p', '480p', 'standard'];
+    const sorted = Array.from(qualities).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    setAvailableQualities(sorted);
+
+    if (sorted.length === 1) setSelectedQuality(sorted[0]);
+    else setSelectedQuality(null);
+
+  }, [data, selectedSeason, downloadType, actionType]);
+
+  // --- 5. Final Links Display ---
+  const getFinalDisplayLinks = () => {
+    let sections = getProcessedSections();
+
     if (selectedQuality) {
-        sections = sections.filter(sec => 
-            sec.title.toLowerCase().includes(selectedQuality.toLowerCase()) || 
-            (selectedQuality === 'standard' && !/(480p|720p|1080p|4k)/i.test(sec.title))
-        );
+        sections = sections.filter(sec => {
+            // Check if Section matches Quality OR if it contains links of that quality
+            const secMatch = sec.title.toLowerCase().includes(selectedQuality.toLowerCase());
+            if (secMatch) return true;
+            
+            // Deep check: Kya is section me selected quality ka link hai?
+            // (Agar section title generic hai to links filter karo)
+            return sec.links.some(l => l.label.toLowerCase().includes(selectedQuality.toLowerCase()));
+        }).map(sec => {
+             // Agar Section title quality se match nahi karta, to sirf specific quality wale links dikhao
+             if (!sec.title.toLowerCase().includes(selectedQuality.toLowerCase())) {
+                 return {
+                     ...sec,
+                     links: sec.links.filter(l => l.label.toLowerCase().includes(selectedQuality.toLowerCase()))
+                 };
+             }
+             return sec;
+        }).filter(sec => sec.links.length > 0);
     }
-
     return sections;
   };
 
   const handleLinkClick = (url: string) => {
     const key = btoa(JSON.stringify({ link: url, source: 'netvlyx' }))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     router.push(`/vlyxdrive?key=${key}`);
   };
 
@@ -206,7 +198,6 @@ export default function MoviePage() {
     if (availableSeasons.length === 0) router.back();
   };
 
-  // Steps handling
   const goBackStep = () => {
       if (selectedQuality) setSelectedQuality(null);
       else if (downloadType) setDownloadType(null);
@@ -233,23 +224,18 @@ export default function MoviePage() {
         </button>
         
         <div className="flex flex-col lg:flex-row gap-10">
-          {/* Poster */}
           <div className="w-full lg:w-[320px] flex-shrink-0 mx-auto lg:mx-0">
              <img src={data?.poster} alt={data?.title} className="rounded-2xl shadow-2xl w-full" />
           </div>
 
-          {/* Details */}
           <div className="flex-1 min-w-0">
             <h1 className="text-3xl md:text-5xl font-bold mb-4">{data?.title}</h1>
-            
             <div className="flex gap-4 mb-6 text-sm text-gray-300">
                <span className="bg-yellow-500/10 text-yellow-500 px-2 py-1 rounded">IMDb 8.5</span>
                {availableSeasons.length > 0 && <span className="bg-red-600/20 text-red-500 px-2 py-1 rounded">{availableSeasons.length} Seasons</span>}
             </div>
-
             <p className="text-gray-400 text-lg mb-8 line-clamp-4">{data?.plot}</p>
 
-            {/* Screenshots */}
             {data?.screenshots && data.screenshots.length > 0 && (
               <div className="mb-8">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><ImageIcon className="text-blue-500"/> Screenshots</h3>
@@ -261,25 +247,23 @@ export default function MoviePage() {
               </div>
             )}
 
-            {/* --- LOGIC UI START --- */}
             <div className="bg-gray-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl transition-all duration-300">
               
-              {/* HEADER WITH BACK BUTTON */}
               {(selectedSeason || actionType) && (
                  <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
                     <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
-                        <ArrowLeft size={14}/> Previous Step
+                        <ArrowLeft size={14}/> Previous
                     </button>
-                    <div className="text-sm font-bold text-gray-500">
+                    <div className="text-sm font-bold text-gray-500 hidden sm:block">
                         {selectedSeason ? `S${selectedSeason}` : ''} 
-                        {actionType ? ` > ${actionType === 'watch' ? 'Watch' : 'DL'}` : ''}
+                        {actionType ? ` > ${actionType === 'watch' ? 'Stream' : 'DL'}` : ''}
                         {downloadType ? ` > ${downloadType}` : ''}
                         {selectedQuality ? ` > ${selectedQuality}` : ''}
                     </div>
                  </div>
               )}
 
-              {/* STEP 1: Season Select */}
+              {/* STEP 1: Season */}
               {availableSeasons.length > 0 && selectedSeason === null && (
                 <div className="animate-fade-in">
                   <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Film className="text-red-500" /> Select Season</h3>
@@ -293,7 +277,7 @@ export default function MoviePage() {
                 </div>
               )}
 
-              {/* STEP 2: Action Select */}
+              {/* STEP 2: Action */}
               {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
                 <div className="animate-fade-in">
                    <h3 className="text-2xl font-bold mb-6">Choose Action</h3>
@@ -310,7 +294,7 @@ export default function MoviePage() {
                 </div>
               )}
 
-              {/* STEP 3: Type Select (Only for Download + Series) */}
+              {/* STEP 3: Type (Bulk vs Ep) - Only Download + Series */}
               {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                  <div className="animate-fade-in">
                     <h3 className="text-xl font-bold mb-6 text-center">Select Download Type</h3>
@@ -327,7 +311,7 @@ export default function MoviePage() {
                  </div>
               )}
 
-              {/* STEP 4: Quality Select (NEW STEP) */}
+              {/* STEP 4: Quality Select */}
               {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
                  <div className="animate-fade-in">
                     <h3 className="text-xl font-bold mb-6 text-center flex items-center justify-center gap-2">
@@ -337,11 +321,7 @@ export default function MoviePage() {
                     {availableQualities.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                             {availableQualities.map((q) => (
-                                <button 
-                                    key={q} 
-                                    onClick={() => setSelectedQuality(q)}
-                                    className="p-4 rounded-xl bg-gray-800 hover:bg-blue-600 border border-gray-700 font-bold text-lg uppercase transition-all"
-                                >
+                                <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 rounded-xl bg-gray-800 hover:bg-blue-600 border border-gray-700 font-bold text-lg uppercase transition-all">
                                     {q}
                                 </button>
                             ))}
@@ -355,16 +335,15 @@ export default function MoviePage() {
                  </div>
               )}
 
-              {/* STEP 5: Final Links Display */}
+              {/* STEP 5: Links Display */}
               {selectedQuality !== null && (
                 <div className="animate-fade-in">
                    <h3 className="text-xl font-bold mb-4 text-green-400 flex items-center gap-2">
                       <CheckCircle /> Available Links
                    </h3>
-                   
                    <div className="space-y-4">
-                      {getFinalLinks().length > 0 ? (
-                        getFinalLinks().map((section, idx) => (
+                      {getFinalDisplayLinks().length > 0 ? (
+                        getFinalDisplayLinks().map((section, idx) => (
                           <div key={idx} className="bg-black/40 rounded-xl p-4 border border-gray-700 hover:border-blue-500/50 transition-colors">
                              <h4 className="text-blue-400 font-bold mb-3 text-sm uppercase flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-blue-500"></span>
@@ -376,9 +355,7 @@ export default function MoviePage() {
                                      key={j} 
                                      onClick={() => handleLinkClick(link.url)}
                                      className={`px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2 shadow-lg hover:-translate-y-1 transition-all ${
-                                         actionType === 'watch' 
-                                         ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600' 
-                                         : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600'
+                                         actionType === 'watch' ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-blue-600 to-blue-700'
                                      }`}
                                    >
                                       {actionType === 'watch' ? <Play size={16} className="fill-current"/> : <Download size={16}/>} 
@@ -391,7 +368,7 @@ export default function MoviePage() {
                       ) : (
                         <div className="text-center p-8 bg-gray-800/50 rounded-xl border border-dashed border-gray-700">
                            <AlertCircle className="mx-auto mb-2 text-gray-500"/>
-                           <p className="text-gray-400">No links found for <span className="text-white font-bold">{selectedQuality}</span>.</p>
+                           <p className="text-gray-400">No links found for <span className="text-white font-bold">{selectedQuality}</span> in this category.</p>
                            <button onClick={() => setSelectedQuality(null)} className="mt-4 text-blue-400 hover:underline">Try another quality</button>
                         </div>
                       )}
