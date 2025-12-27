@@ -2,12 +2,13 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState, useRef, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { 
-  Play, Download, CloudLightning, Wifi, Loader2, 
-  AlertTriangle, Copy, CheckCircle, Server, HardDrive
+  Play, Download, CloudLightning, Loader2, AlertTriangle, 
+  Copy, CheckCircle, Server, HardDrive, Smartphone, Zap
 } from 'lucide-react';
 
+// --- Types ---
 interface Stream {
   server: string;
   link: string;
@@ -19,10 +20,10 @@ function NCloudPlayer() {
   const key = params.get('key');
   
   const [loading, setLoading] = useState(true);
-  const [streams, setStreams] = useState<Stream[]>([]); // List of all valid servers
-  const [currentStream, setCurrentStream] = useState<Stream | null>(null); // Currently playing
-  const [metaData, setMetaData] = useState<any>(null); // Poster/Title from previous page
-  const [apiTitle, setApiTitle] = useState(''); // Title from API
+  const [streams, setStreams] = useState<Stream[]>([]); 
+  const [currentStream, setCurrentStream] = useState<Stream | null>(null);
+  const [metaData, setMetaData] = useState<any>(null);
+  const [apiTitle, setApiTitle] = useState('');
   
   const [tab, setTab] = useState<'stream' | 'download'>('stream');
   const [copied, setCopied] = useState(false);
@@ -36,13 +37,14 @@ function NCloudPlayer() {
           const payload = JSON.parse(json);
           setMetaData(payload);
 
-          // 2. Fetch Streams from our Backend
-          const res = await fetch(`/api/ncloud?url=${payload.url}`); // No encode needed if backend handles it, but safer to match logic
+          // 2. Fetch Streams (Backend API Call)
+          // Ensure your /api/ncloud route is implementing the filtering logic we discussed
+          const res = await fetch(`/api/ncloud?url=${payload.url}`);
           const result = await res.json();
           
           if (result.success && result.streams.length > 0) {
              setStreams(result.streams);
-             setCurrentStream(result.streams[0]); // Auto play first (best) server
+             setCurrentStream(result.streams[0]); // Auto-select best server
              setApiTitle(result.title);
              setLoading(false);
           } else {
@@ -59,7 +61,6 @@ function NCloudPlayer() {
 
   const changeServer = (stream: Stream) => {
       setCurrentStream(stream);
-      // Auto scroll to player or highlight can be added here
   };
 
   const copyLink = () => {
@@ -70,6 +71,7 @@ function NCloudPlayer() {
     }
   };
 
+  // --- External App Intents (Android) ---
   const playInVLC = () => {
     if (!currentStream?.link) return;
     const intent = `intent:${currentStream.link}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`;
@@ -79,6 +81,18 @@ function NCloudPlayer() {
   const playInMX = () => {
     if (!currentStream?.link) return;
     const intent = `intent:${currentStream.link}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;scheme=https;end`;
+    window.location.href = intent;
+  };
+
+  const downloadIn1DM = () => {
+    if (!currentStream?.link) return;
+    const intent = `intent:${currentStream.link}#Intent;package=idm.internet.download.manager;type=video/*;scheme=https;end`;
+    window.location.href = intent;
+  };
+  
+  const downloadInADM = () => {
+    if (!currentStream?.link) return;
+    const intent = `intent:${currentStream.link}#Intent;package=com.dv.adm;type=video/*;scheme=https;end`;
     window.location.href = intent;
   };
 
@@ -115,7 +129,7 @@ function NCloudPlayer() {
                 <h1 className="text-xl font-bold">N-Cloud Player</h1>
                 <p className="text-xs text-blue-400 flex items-center gap-1">
                 <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                Server: {currentStream.server}
+                Active Server: <span className="text-white font-bold">{currentStream.server}</span>
                 </p>
             </div>
         </div>
@@ -124,9 +138,9 @@ function NCloudPlayer() {
            
            {/* LEFT COLUMN: PLAYER */}
            <div className="lg:col-span-2 space-y-4">
-              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
+              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl group">
                  <video 
-                    key={currentStream.link} // Key change forces reload on server switch
+                    key={currentStream.link} // Forces reload on server switch
                     controls 
                     autoPlay
                     className="w-full h-full" 
@@ -139,8 +153,9 @@ function NCloudPlayer() {
                   <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">
                       {metaData?.title || apiTitle || 'Unknown Title'}
                   </h2>
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-1 break-all">
-                      File: {apiTitle}
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-1 break-all font-mono bg-gray-900/50 p-2 rounded border border-gray-800">
+                      <HardDrive size={12} className="inline mr-2"/>
+                      {apiTitle || 'File details unavailable'}
                   </p>
               </div>
            </div>
@@ -150,25 +165,25 @@ function NCloudPlayer() {
               
               {/* SERVER SELECTOR */}
               <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
-                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                     <Server size={14} /> Switch Server
+                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                     <Server size={14} /> Available Servers
                  </h3>
                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-700">
                     {streams.map((stream, idx) => (
                         <button 
                             key={idx}
                             onClick={() => changeServer(stream)}
-                            className={`w-full py-2.5 px-4 rounded-xl flex items-center justify-between transition-all border ${
+                            className={`w-full py-3 px-4 rounded-xl flex items-center justify-between transition-all border ${
                                 currentStream.link === stream.link 
-                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg' 
-                                : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' 
+                                : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white'
                             }`}
                         >
-                            <div className="flex items-center gap-2">
-                                <HardDrive size={16} />
+                            <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${currentStream.link === stream.link ? 'bg-white animate-pulse' : 'bg-gray-500'}`}></div>
                                 <span className="font-semibold text-sm">{stream.server}</span>
                             </div>
-                            {currentStream.link === stream.link && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                            {idx === 0 && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white font-bold">BEST</span>}
                         </button>
                     ))}
                  </div>
@@ -176,25 +191,51 @@ function NCloudPlayer() {
 
               {/* ACTIONS CARD */}
               <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
-                 <div className="flex p-1 bg-black/40 rounded-lg mb-4">
-                    <button onClick={() => setTab('stream')} className={`flex-1 py-2 text-sm font-bold rounded ${tab === 'stream' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Stream</button>
-                    <button onClick={() => setTab('download')} className={`flex-1 py-2 text-sm font-bold rounded ${tab === 'download' ? 'bg-green-600 text-white' : 'text-gray-400'}`}>Download</button>
+                 <div className="flex p-1 bg-black/40 rounded-lg mb-5">
+                    <button onClick={() => setTab('stream')} className={`flex-1 py-2 text-sm font-bold rounded transition-all ${tab === 'stream' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>Stream</button>
+                    <button onClick={() => setTab('download')} className={`flex-1 py-2 text-sm font-bold rounded transition-all ${tab === 'download' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>Download</button>
                  </div>
 
                  {tab === 'stream' ? (
-                    <div className="space-y-3">
-                       <button onClick={playInVLC} className="w-full py-3 bg-[#ff6b00]/10 border border-[#ff6b00]/30 hover:bg-[#ff6b00]/20 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold transition-all">
-                          <Play size={18} className="fill-current"/> Play in VLC
+                    <div className="space-y-3 animate-fade-in">
+                       <button onClick={playInVLC} className="w-full py-3 bg-[#ff6b00]/10 border border-[#ff6b00]/30 hover:bg-[#ff6b00]/20 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold transition-all group">
+                          <div className="w-8 h-8 rounded bg-[#ff6b00] flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                             <Play size={16} className="fill-current"/> 
+                          </div>
+                          Play in VLC
                        </button>
-                       <button onClick={playInMX} className="w-full py-3 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold transition-all">
-                          <Play size={18} className="fill-current"/> Play in MX
+                       <button onClick={playInMX} className="w-full py-3 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold transition-all group">
+                          <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                             <Play size={16} className="fill-current"/> 
+                          </div>
+                          Play in MX Player
                        </button>
                     </div>
                  ) : (
-                    <div className="space-y-3">
-                       <a href={currentStream.link} download className="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl flex items-center justify-center gap-2 text-white font-bold transition-all shadow-lg shadow-green-900/20">
-                          <Download size={18}/> Direct Download
+                    <div className="space-y-4 animate-fade-in">
+                       {/* App Downloads (No Lag) */}
+                       <div className="grid grid-cols-2 gap-3">
+                           <button onClick={downloadIn1DM} className="py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl flex flex-col items-center justify-center gap-1 transition-all">
+                               <Smartphone size={20} className="text-blue-400"/>
+                               <span className="text-xs font-bold text-white">1DM App</span>
+                           </button>
+                           <button onClick={downloadInADM} className="py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl flex flex-col items-center justify-center gap-1 transition-all">
+                               <Smartphone size={20} className="text-green-400"/>
+                               <span className="text-xs font-bold text-white">ADM App</span>
+                           </button>
+                       </div>
+
+                       {/* Direct Browser Download (Safe Mode) */}
+                       <a 
+                          href={currentStream.link} 
+                          download
+                          target="_blank" // Key for No Lag
+                          rel="noopener noreferrer"
+                          className="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl flex items-center justify-center gap-2 text-white font-bold transition-all shadow-lg shadow-green-900/20"
+                       >
+                          <Download size={18}/> Direct Browser DL
                        </a>
+
                        <button onClick={copyLink} className="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-xl flex items-center justify-center gap-2 text-gray-300 transition-all border border-gray-700">
                           {copied ? <CheckCircle size={18} className="text-green-500"/> : <Copy size={18}/>}
                           {copied ? 'Copied' : 'Copy Link'}
@@ -213,7 +254,7 @@ function NCloudPlayer() {
 
 export default function NCloud() {
   return (
-    <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
+    <Suspense fallback={<div className="text-white text-center mt-20">Loading Player...</div>}>
       <NCloudPlayer />
     </Suspense>
   );
