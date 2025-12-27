@@ -1,11 +1,10 @@
-// app/vlyxdrive/page.tsx
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { 
   CloudLightning, Loader2, Play, AlertTriangle, 
-  FolderOpen, Server, CheckCircle, ChevronDown, ChevronUp, Database, Film
+  FolderOpen, Server, ChevronDown, ChevronUp, Database, Film
 } from 'lucide-react';
 
 // --- Types ---
@@ -21,7 +20,7 @@ interface LinkGroup {
   quality?: string;
   size?: string;
   links: ApiLink[];
-  episodeNumber?: number; // Series ke liye
+  episodeNumber?: number;
 }
 
 function VlyxDriveContent() {
@@ -32,8 +31,11 @@ function VlyxDriveContent() {
   const [status, setStatus] = useState('processing'); 
   const [metaData, setMetaData] = useState<any>(null);
   const [apiData, setApiData] = useState<any>(null);
-  const [showOthers, setShowOthers] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
+  
+  // State to track which server lists are expanded
+  const [expandedServers, setExpandedServers] = useState<Record<number, boolean>>({});
+  // State to track hidden qualities (Movie mode)
+  const [showOtherQualities, setShowOtherQualities] = useState(false);
 
   useEffect(() => {
     if (key) {
@@ -66,23 +68,47 @@ function VlyxDriveContent() {
     router.push(`/ncloud?key=${nCloudKey}`);
   };
 
-  const toggleExpand = (idx: number) => {
-    setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
+  const toggleServerExpand = (idx: number) => {
+    setExpandedServers(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
+  // Helper to split links into Main (HubCloud) and Others
+  const splitLinks = (links: ApiLink[]) => {
+      // Sort: HubCloud/N-Cloud first
+      const sorted = [...links].sort((a, b) => {
+          const aHub = a.name.toLowerCase().includes('hub') || a.name.toLowerCase().includes('cloud');
+          const bHub = b.name.toLowerCase().includes('hub') || b.name.toLowerCase().includes('cloud');
+          return aHub === bHub ? 0 : aHub ? -1 : 1;
+      });
+
+      return {
+          main: sorted[0],
+          others: sorted.slice(1)
+      };
+  };
+
+  // Helper for button styling
   const getButtonClass = (name: string) => {
       const lower = name.toLowerCase();
-      if (lower.includes('hub') || lower.includes('cloud') || lower.includes('n-cloud')) 
+      if (lower.includes('hub') || lower.includes('cloud')) 
           return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
       if (lower.includes('gdflix') || lower.includes('drive')) 
           return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
       return "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600";
   };
 
-  // --- FILTERING LOGIC ---
+  // Helper for Main Button Text
+  const getMainButtonText = (name: string) => {
+      const lower = name.toLowerCase();
+      if (lower.includes('hub') || lower.includes('cloud') || lower.includes('n-cloud')) {
+          return "Continue with N-Cloud";
+      }
+      return `Play via ${name}`;
+  };
+
+  // --- FILTERING LOGIC (Same as before) ---
   const getFilteredGroups = () => {
     if (!apiData || apiData.type !== 'quality') return { preferred: [], others: [] };
-    
     const userQuality = metaData?.quality?.toLowerCase(); 
 
     if (!userQuality || userQuality === 'standard') {
@@ -160,48 +186,87 @@ function VlyxDriveContent() {
                     return (
                         <>
                            {/* PREFERRED QUALITY */}
-                           {preferred.map((group: LinkGroup, idx: number) => (
-                              <div key={idx} className="bg-gray-900/50 border-2 border-green-500/30 rounded-2xl overflow-hidden shadow-2xl relative">
-                                 <div className="absolute top-0 right-0 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl z-10">SELECTED</div>
-                                 <div className="bg-gray-800/60 px-6 py-4 border-b border-gray-800 flex justify-between items-center">
-                                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                       <Database className="text-green-400" size={24} />
-                                       {group.quality} <span className="text-sm font-normal text-gray-400 ml-2 bg-black/30 px-2 py-0.5 rounded">{group.size}</span>
-                                    </h3>
-                                 </div>
-                                 <div className="p-5 flex flex-col gap-3">
-                                    {group.links.map((link: ApiLink, i: number) => (
-                                       <button key={i} onClick={() => handlePlay(link.url)} className={`w-full py-3 px-5 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(link.name)}`}>
-                                          <span className="flex items-center gap-3">{link.name.includes('Hub') ? <CloudLightning size={18} /> : <Server size={18} />}{link.name}</span>
-                                          <Play size={18} />
-                                       </button>
-                                    ))}
-                                 </div>
-                              </div>
-                           ))}
+                           {preferred.map((group: LinkGroup, idx: number) => {
+                              const { main, others: otherServers } = splitLinks(group.links);
+                              const isExpanded = expandedServers[idx];
 
-                           {/* OTHER QUALITIES (HIDDEN) */}
+                              return (
+                                <div key={idx} className="bg-gray-900/50 border-2 border-green-500/30 rounded-2xl overflow-hidden shadow-2xl relative">
+                                   <div className="absolute top-0 right-0 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl z-10">SELECTED</div>
+                                   <div className="bg-gray-800/60 px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                         <Database className="text-green-400" size={24} />
+                                         {group.quality} <span className="text-sm font-normal text-gray-400 ml-2 bg-black/30 px-2 py-0.5 rounded">{group.size}</span>
+                                      </h3>
+                                   </div>
+                                   <div className="p-5 flex flex-col gap-3">
+                                      {/* MAIN BUTTON (Always Visible) */}
+                                      <button 
+                                          onClick={() => handlePlay(main.url)} 
+                                          className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name)}`}
+                                      >
+                                          <span className="flex items-center gap-3">
+                                              <CloudLightning size={24} className="fill-current" />
+                                              <span className="text-lg">{getMainButtonText(main.name)}</span>
+                                          </span>
+                                          <Play size={24} className="fill-current" />
+                                      </button>
+
+                                      {/* EXPAND BUTTON (If other servers exist) */}
+                                      {otherServers.length > 0 && (
+                                          <div className="mt-2">
+                                              <button 
+                                                  onClick={() => toggleServerExpand(idx)}
+                                                  className="w-full text-center py-2 text-sm text-gray-400 hover:text-white flex items-center justify-center gap-1 transition-colors"
+                                              >
+                                                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                  {isExpanded ? 'Hide Servers' : `Show ${otherServers.length} more servers`}
+                                              </button>
+
+                                              {/* HIDDEN SERVERS LIST */}
+                                              {isExpanded && (
+                                                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
+                                                      {otherServers.map((link, i) => (
+                                                          <button 
+                                                              key={i} 
+                                                              onClick={() => handlePlay(link.url)} 
+                                                              className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all border ${getButtonClass(link.name)}`}
+                                                          >
+                                                              <Server size={16} /> {link.name}
+                                                          </button>
+                                                      ))}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      )}
+                                   </div>
+                                </div>
+                              );
+                           })}
+
+                           {/* OTHER QUALITIES (Initially Hidden) */}
                            {others.length > 0 && (
-                               <div className="mt-6">
+                               <div className="mt-8 pt-6 border-t border-gray-800">
                                    <button 
-                                      onClick={() => setShowOthers(!showOthers)}
-                                      className="w-full py-3 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl text-gray-300 hover:text-white flex items-center justify-center gap-2 transition-all"
+                                      onClick={() => setShowOtherQualities(!showOtherQualities)}
+                                      className="w-full py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-gray-300 hover:text-white flex items-center justify-center gap-2 transition-all"
                                    >
-                                      {showOthers ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                                      {showOthers ? 'Hide Other Qualities' : `Show ${others.length} Other Qualities`}
+                                      {showOtherQualities ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                                      {showOtherQualities ? 'Hide Other Qualities' : `Show ${others.length} Other Qualities`}
                                    </button>
                                    
-                                   {showOthers && (
+                                   {showOtherQualities && (
                                        <div className="mt-4 space-y-4 animate-fade-in">
                                            {others.map((group: LinkGroup, idx: number) => (
-                                              <div key={idx} className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-hidden grayscale hover:grayscale-0 transition-all">
-                                                 <div className="px-6 py-3 border-b border-gray-800 bg-black/20">
-                                                    <h3 className="text-lg font-bold text-gray-400">{group.quality} <span className="text-xs ml-2">{group.size}</span></h3>
+                                              <div key={idx} className="bg-gray-900/40 border border-gray-800 rounded-xl overflow-hidden grayscale hover:grayscale-0 transition-all duration-300">
+                                                 <div className="px-6 py-3 border-b border-gray-800 bg-black/20 flex justify-between items-center">
+                                                    <h3 className="text-lg font-bold text-gray-400">{group.quality}</h3>
+                                                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">{group.size}</span>
                                                  </div>
                                                  <div className="p-4 flex flex-col gap-2">
-                                                    {group.links.map((link: ApiLink, i: number) => (
-                                                       <button key={i} onClick={() => handlePlay(link.url)} className="w-full py-2 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-left text-sm text-gray-300 flex items-center gap-2">
-                                                          <Server size={14}/> {link.name}
+                                                    {group.links.map((link, i) => (
+                                                       <button key={i} onClick={() => handlePlay(link.url)} className="w-full py-3 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-left text-sm text-gray-300 flex items-center gap-2 border border-gray-700 hover:border-blue-500">
+                                                          <Server size={16} className="text-blue-500"/> {link.name}
                                                        </button>
                                                     ))}
                                                  </div>
@@ -219,61 +284,62 @@ function VlyxDriveContent() {
               {/* CASE 2: SERIES (Episode Groups) */}
               {apiData.type === 'episode' && (
                  (apiData.linkData as LinkGroup[]).map((group: LinkGroup, idx: number) => {
-                    const isExpanded = expandedGroups[idx];
-                    const sortedLinks = [...group.links].sort((a, b) => {
-                        const aHub = a.name.includes('Hub') || a.isHubCloud;
-                        const bHub = b.name.includes('Hub') || b.isHubCloud;
-                        return aHub === bHub ? 0 : aHub ? -1 : 1;
-                    });
-                    const mainLink = sortedLinks[0];
-                    const otherLinks = sortedLinks.slice(1);
+                    const { main, others: otherServers } = splitLinks(group.links);
+                    const isExpanded = expandedServers[idx];
 
                     return (
                        <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-600 transition-all">
-                          <div className="p-4 flex flex-col sm:flex-row items-center gap-4">
+                          <div className="p-5 flex flex-col sm:flex-row items-center gap-6">
                               <div className="flex-1 text-center sm:text-left">
                                   <h3 className="text-lg font-bold text-white flex items-center justify-center sm:justify-start gap-2">
-                                      <Film className="text-blue-500" size={20} /> 
+                                      <Film className="text-blue-500" size={24} /> 
                                       {group.title || `Episode ${group.episodeNumber || idx + 1}`}
                                   </h3>
                               </div>
                               
-                              <div className="flex flex-col gap-2 w-full sm:w-auto">
-                                  {/* Play Main Link */}
+                              <div className="flex flex-col gap-2 w-full sm:w-auto min-w-[280px]">
+                                  {/* MAIN BUTTON */}
                                   <button 
-                                      onClick={() => handlePlay(mainLink.url)}
-                                      className={`px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg ${getButtonClass(mainLink.name)}`}
+                                      onClick={() => handlePlay(main.url)}
+                                      className={`w-full py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg ${getButtonClass(main.name)}`}
                                   >
-                                      <Play size={18} className="fill-current" /> Play Now
+                                      <Play size={20} className="fill-current" /> 
+                                      {getMainButtonText(main.name)}
                                   </button>
                                   
-                                  {/* Toggle Others */}
-                                  {otherLinks.length > 0 && (
-                                      <button 
-                                          onClick={() => toggleExpand(idx)}
-                                          className="text-xs text-gray-400 hover:text-white flex items-center justify-center gap-1 py-1"
-                                      >
-                                          {isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
-                                          {isExpanded ? 'Hide Servers' : `${otherLinks.length} More Servers`}
-                                      </button>
+                                  {/* SHOW MORE TOGGLE */}
+                                  {otherServers.length > 0 && (
+                                      <div className="relative">
+                                          {!isExpanded ? (
+                                              <button 
+                                                  onClick={() => toggleServerExpand(idx)}
+                                                  className="w-full py-2 text-xs text-gray-500 hover:text-white flex items-center justify-center gap-1 transition-colors hover:bg-white/5 rounded-lg"
+                                              >
+                                                  <ChevronDown size={12}/> Show {otherServers.length} more servers
+                                              </button>
+                                          ) : (
+                                              <div className="mt-2 space-y-2 animate-fade-in bg-black/40 p-3 rounded-xl border border-gray-800">
+                                                  {otherServers.map((link, i) => (
+                                                      <button 
+                                                          key={i}
+                                                          onClick={() => handlePlay(link.url)}
+                                                          className="w-full flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 hover:text-white transition-colors border border-gray-700"
+                                                      >
+                                                          <Server size={12} /> {link.name}
+                                                      </button>
+                                                  ))}
+                                                  <button 
+                                                      onClick={() => toggleServerExpand(idx)}
+                                                      className="w-full text-center text-xs text-gray-500 hover:text-white pt-1"
+                                                  >
+                                                      <ChevronUp size={12}/> Hide
+                                                  </button>
+                                              </div>
+                                          )}
+                                      </div>
                                   )}
                               </div>
                           </div>
-
-                          {/* Expanded Other Links */}
-                          {isExpanded && otherLinks.length > 0 && (
-                              <div className="bg-black/20 p-4 border-t border-gray-800 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
-                                  {otherLinks.map((link: ApiLink, i: number) => (
-                                      <button 
-                                          key={i}
-                                          onClick={() => handlePlay(link.url)}
-                                          className="flex items-center gap-2 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors border border-gray-700"
-                                      >
-                                          <Server size={14} /> {link.name}
-                                      </button>
-                                  ))}
-                              </div>
-                          )}
                        </div>
                     );
                  })
@@ -297,8 +363,10 @@ function VlyxDriveContent() {
 
 export default function VlyxDrive() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center">Loading...</div>}>
-      <VlyxDriveContent />
-    </Suspense>
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-4">
+      <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
+        <VlyxDriveContent />
+      </Suspense>
+    </div>
   );
 }
