@@ -1,7 +1,7 @@
 // app/v/[...slug]/page.tsx
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, 
@@ -13,8 +13,8 @@ import {
   Star, 
   Film, 
   CheckCircle,
-  ChevronRight,
-  Server
+  Server,
+  ImageIcon
 } from 'lucide-react';
 
 // --- Types ---
@@ -32,10 +32,10 @@ interface MovieData {
   title: string;
   poster: string;
   plot: string;
+  screenshots: string[];
   downloadSections: DownloadSection[];
 }
 
-// --- Main Component ---
 export default function MoviePage() {
   const { slug } = useParams();
   const router = useRouter();
@@ -44,40 +44,78 @@ export default function MoviePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // --- Logic State Variables ---
+  // --- Logic State ---
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [actionType, setActionType] = useState<'watch' | 'download' | null>(null);
   const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
 
-  // 1. URL Decode Logic
+  // 1. URL Decode & Data Fetching
   const movieUrl = slug 
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
 
-  // 2. Real Data Fetching
   useEffect(() => {
     if (!movieUrl) return;
 
     const fetchRealData = async () => {
       try {
         setLoading(true);
-        // Backend API call
         const res = await fetch(`/api/movie-details?url=${encodeURIComponent(movieUrl)}`);
-        
-        if (!res.ok) throw new Error("Failed to load movie data");
+        if (!res.ok) throw new Error("Failed to load data");
         
         const result = await res.json();
         if (result.error) throw new Error(result.error);
 
         setData(result);
         
-        // Detect Seasons from Title (e.g., "Stranger Things Season 1-4")
-        extractSeasons(result.title);
+        // --- SEASON DETECTION LOGIC ---
+        // Title example: "Stranger Things Season 1-4 Download"
+        const title = result.title || "";
+        const rangeMatch = title.match(/(?:season|s)\s*(\d+)\s*[-–—]\s*(\d+)/i);
+        const singleMatch = title.match(/(?:season|s)\s*(\d+)/i);
+        
+        if (rangeMatch) {
+          const start = parseInt(rangeMatch[1]);
+          const end = parseInt(rangeMatch[2]);
+          // Agar range ulti hai ya barabar hai to fix karo
+          if (start < end) {
+             setAvailableSeasons(Array.from({ length: end - start + 1 }, (_, i) => start + i));
+          } else {
+             setAvailableSeasons([start]);
+          }
+        } else if (singleMatch) {
+          // Agar title mein 'Season 2' likha hai, matlab shayad ye single season page hai
+          // Lekin agar links mein multiple seasons huye to?
+          // Fallback: Check download sections for seasons
+          const sectionSeasons = new Set<number>();
+          result.downloadSections.forEach((sec: any) => {
+            const m = sec.title.match(/(?:season|s)\s*0?(\d+)/i);
+            if (m) sectionSeasons.add(parseInt(m[1]));
+          });
+
+          if (sectionSeasons.size > 0) {
+            setAvailableSeasons(Array.from(sectionSeasons).sort((a,b) => a - b));
+          } else {
+            setAvailableSeasons([parseInt(singleMatch[1])]);
+          }
+        } else {
+          // No season in title -> Check sections
+           const sectionSeasons = new Set<number>();
+           result.downloadSections.forEach((sec: any) => {
+            const m = sec.title.match(/(?:season|s)\s*0?(\d+)/i);
+            if (m) sectionSeasons.add(parseInt(m[1]));
+          });
+          if (sectionSeasons.size > 0) {
+             setAvailableSeasons(Array.from(sectionSeasons).sort((a,b) => a - b));
+          } else {
+             setAvailableSeasons([]); // Movie logic
+          }
+        }
         
       } catch (err) {
         console.error(err);
-        setError("Content not found or link expired.");
+        setError("Content not found.");
       } finally {
         setLoading(false);
       }
@@ -86,54 +124,41 @@ export default function MoviePage() {
     fetchRealData();
   }, [movieUrl]);
 
-  // --- Helper: Extract Seasons from Title ---
-  const extractSeasons = (title: string) => {
-    // Patterns: "Season 1-5", "S01-S03", "Season 4"
-    const rangeMatch = title.match(/season\s*(\d+)\s*[-–—]\s*(\d+)/i);
-    const singleMatch = title.match(/season\s*(\d+)/i);
-    
-    if (rangeMatch) {
-      const start = parseInt(rangeMatch[1]);
-      const end = parseInt(rangeMatch[2]);
-      const seasons = Array.from({ length: end - start + 1 }, (_, i) => start + i);
-      setAvailableSeasons(seasons);
-    } else if (singleMatch) {
-      // Agar sirf ek season mention hai, to sirf wahi dikhayenge
-      setAvailableSeasons([parseInt(singleMatch[1])]);
-    } else {
-      // Agar 'Season' keyword nahi hai, to ise Movie maana jayega (No seasons)
-      setAvailableSeasons([]);
-    }
-  };
-
-  // --- Helper: Filter Links based on Selection ---
-  const getFilteredSections = () => {
+  // --- FILTERING LOGIC (Main Work) ---
+  const getFilteredLinks = () => {
     if (!data || !data.downloadSections) return [];
 
-    let sections = data.downloadSections;
+    let filteredSections = data.downloadSections;
 
-    // 1. Filter by Season (if selected)
+    // 1. Season Filter
     if (selectedSeason !== null) {
-      // Regex to match "S01", "Season 1", "S1" in section title
-      const seasonRegex = new RegExp(`(?:season|s)\\s*0?${selectedSeason}(?:\\D|$)`, 'i');
-      sections = sections.filter(sec => seasonRegex.test(sec.title));
+      filteredSections = filteredSections.filter(sec => {
+        // Section Title mein season dhundo (e.g. "Download S01 720p")
+        const seasonRegex = new RegExp(`(?:season|s)[\\s\\-_]*0?${selectedSeason}(?:\\D|$)`, 'i');
+        
+        // Agar Section title mein season hai to match karo
+        if (seasonRegex.test(sec.title)) return true;
+        
+        // Agar section title generic hai (e.g. "720p Links"), to links ke andar check karo?
+        // Usually Movies4u sections ko season wise alag karta hai, so title check is best.
+        return false; 
+      });
     }
 
-    // 2. Filter by Download Type (Bulk vs Episode)
+    // 2. Type Filter (Bulk vs Episode)
     if (downloadType === 'bulk') {
-      sections = sections.filter(sec => 
+      filteredSections = filteredSections.filter(sec => 
         /pack|zip|batch|complete|collection/i.test(sec.title)
       );
     } else if (downloadType === 'episode') {
-      sections = sections.filter(sec => 
+      filteredSections = filteredSections.filter(sec => 
         !/pack|zip|batch|complete|collection/i.test(sec.title)
       );
     }
 
-    return sections;
+    return filteredSections;
   };
 
-  // --- VlyxDrive Redirect ---
   const handleLinkClick = (url: string) => {
     const key = btoa(JSON.stringify({ link: url, source: 'netvlyx' }))
       .replace(/\+/g, '-')
@@ -142,240 +167,146 @@ export default function MoviePage() {
     router.push(`/vlyxdrive?key=${key}`);
   };
 
-  // --- Reset Handlers ---
+  // Reset Logic
   const resetSelection = () => {
     setActionType(null);
     setDownloadType(null);
-    // Agar seasons hain to season selection par wapas jao, nahi to home
     if (availableSeasons.length === 0) router.back();
   };
 
-  // --- Render Functions ---
-  
-  // Loading Screen
-  if (loading) return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-      <div className="relative">
-        <div className="w-16 h-16 border-4 border-red-600/30 border-t-red-600 rounded-full animate-spin"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Film className="w-6 h-6 text-red-600 animate-pulse" />
-        </div>
-      </div>
-      <p className="text-gray-400 text-sm font-medium animate-pulse">Loading content...</p>
-    </div>
-  );
-
-  // Error Screen
-  if (error) return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-gray-900 border border-red-900/50 rounded-2xl p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-white mb-2">Error Loading Page</h2>
-        <p className="text-gray-400 mb-6">{error}</p>
-        <button onClick={() => router.back()} className="px-6 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-white">Go Back</button>
-      </div>
-    </div>
-  );
+  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+  if (error) return <div className="min-h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
 
   return (
     <div className="min-h-screen bg-black text-white pb-20 animate-fade-in font-sans">
       
-      {/* Dynamic Background */}
+      {/* Background */}
       <div className="fixed inset-0 z-0">
-        <div 
-          className="absolute inset-0 bg-cover bg-center opacity-20 blur-3xl scale-110 transition-all duration-1000"
-          style={{ backgroundImage: `url(${data?.poster || '/placeholder.png'})` }}
-        ></div>
+        <div className="absolute inset-0 bg-cover bg-center opacity-20 blur-3xl scale-110" style={{ backgroundImage: `url(${data?.poster || '/placeholder.png'})` }}></div>
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/95 to-black/80"></div>
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        {/* Navbar / Back */}
-        <button 
-          onClick={() => router.back()} 
-          className="mb-8 flex items-center gap-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 backdrop-blur-md py-2 px-4 rounded-full transition-all border border-white/5"
-        >
+        <button onClick={() => router.back()} className="mb-8 flex items-center gap-2 text-gray-400 hover:text-white bg-white/5 py-2 px-4 rounded-full border border-white/10">
           <ArrowLeft size={18} /> Back
         </button>
         
-        <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
-          
-          {/* LEFT: Poster Area */}
+        <div className="flex flex-col lg:flex-row gap-10">
+          {/* Poster */}
           <div className="w-full lg:w-[320px] flex-shrink-0 mx-auto lg:mx-0">
-            <div className="relative aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl shadow-red-900/10 ring-1 ring-white/10 group">
-              <img 
-                src={data?.poster || '/placeholder.png'} 
-                alt={data?.title} 
-                className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700" 
-                onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x450?text=No+Poster')}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
-            </div>
+             <img src={data?.poster} alt={data?.title} className="rounded-2xl shadow-2xl w-full" />
           </div>
 
-          {/* RIGHT: Content Area */}
+          {/* Details */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4 leading-tight">
-              {data?.title}
-            </h1>
+            <h1 className="text-3xl md:text-5xl font-bold mb-4">{data?.title}</h1>
             
-            {/* Meta Tags */}
-            <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-gray-300">
-              <div className="flex items-center gap-1 text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded">
-                <Star size={14} className="fill-current" /> 8.5 IMDb
-              </div>
-              <div className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded">
-                <Calendar size={14} /> 2024
-              </div>
-              {availableSeasons.length > 0 && (
-                <div className="flex items-center gap-1 bg-red-600/20 text-red-500 px-2 py-1 rounded border border-red-600/30">
-                  <Film size={14} /> {availableSeasons.length} Seasons
-                </div>
-              )}
+            <div className="flex gap-4 mb-6 text-sm text-gray-300">
+               <span className="bg-yellow-500/10 text-yellow-500 px-2 py-1 rounded">IMDb 8.5</span>
+               {availableSeasons.length > 0 && <span className="bg-red-600/20 text-red-500 px-2 py-1 rounded">{availableSeasons.length} Seasons</span>}
             </div>
 
-            {/* Plot */}
-            <p className="text-gray-400 leading-relaxed text-lg mb-8 line-clamp-4 hover:line-clamp-none transition-all cursor-pointer">
-              {data?.plot || "No synopsis available."}
-            </p>
+            <p className="text-gray-400 text-lg mb-8 line-clamp-4">{data?.plot}</p>
 
-            {/* --- INTERACTIVE SECTION (Logic Starts Here) --- */}
-            <div className="bg-gray-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 md:p-8 shadow-xl">
+            {/* Screenshots */}
+            {data?.screenshots && data.screenshots.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><ImageIcon className="text-blue-500"/> Screenshots</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {data.screenshots.map((src, i) => (
+                    <img key={i} src={src} className="rounded-lg border border-gray-800" alt="Screen" />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* --- LOGIC UI START --- */}
+            <div className="bg-gray-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl">
               
-              {/* Step 1: Season Selection (Only if seasons exist) */}
+              {/* 1. Season Select */}
               {availableSeasons.length > 0 && selectedSeason === null && (
-                <div className="animate-fade-in">
-                  <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                    <Film className="text-red-500" /> Select Season
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div>
+                  <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Film className="text-red-500" /> Select Season</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {availableSeasons.map((season) => (
-                      <button
-                        key={season}
-                        onClick={() => setSelectedSeason(season)}
-                        className="group relative p-4 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 hover:border-red-500/50 transition-all hover:scale-105"
-                      >
-                        <div className="text-center">
-                          <span className="text-3xl font-bold text-white group-hover:text-red-500 transition-colors">
-                            {season}
-                          </span>
-                          <p className="text-xs text-gray-500 uppercase tracking-wider mt-1">Season</p>
-                        </div>
+                      <button key={season} onClick={() => setSelectedSeason(season)} className="p-4 rounded-xl bg-gray-800 hover:bg-red-600 transition-colors text-xl font-bold">
+                        Season {season}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Action Selection (Watch vs Download) */}
+              {/* 2. Action Select */}
               {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
-                <div className="animate-fade-in">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-2xl font-bold flex items-center gap-2">
-                      {selectedSeason ? `Season ${selectedSeason}` : 'Movie'} Options
-                    </h3>
-                    {selectedSeason && (
-                      <button onClick={() => setSelectedSeason(null)} className="text-sm text-gray-400 hover:text-white">
-                        Change Season
+                <div>
+                   <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-2xl font-bold">{selectedSeason ? `Season ${selectedSeason}` : 'Movie'} Options</h3>
+                      {selectedSeason && <button onClick={() => setSelectedSeason(null)} className="text-sm text-gray-400">Change Season</button>}
+                   </div>
+                   <div className="grid grid-cols-2 gap-6">
+                      <button onClick={() => setActionType('download')} className="p-6 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/50 rounded-xl text-center">
+                         <HardDrive className="mx-auto mb-2 text-blue-400" size={32} />
+                         <span className="font-bold text-lg">Download</span>
                       </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <button 
-                      onClick={() => setActionType('download')}
-                      className="group p-6 rounded-2xl bg-gradient-to-br from-blue-600/20 to-blue-800/20 border border-blue-500/30 hover:bg-blue-600/30 transition-all"
-                    >
-                      <HardDrive className="w-12 h-12 text-blue-400 mb-4 mx-auto group-hover:scale-110 transition-transform" />
-                      <h4 className="text-xl font-bold text-white text-center">Download</h4>
-                      <p className="text-center text-gray-400 text-sm mt-2">Save to device storage</p>
-                    </button>
-                    
-                    <button 
-                      onClick={() => setActionType('watch')}
-                      className="group p-6 rounded-2xl bg-gradient-to-br from-green-600/20 to-green-800/20 border border-green-500/30 hover:bg-green-600/30 transition-all"
-                    >
-                      <Play className="w-12 h-12 text-green-400 mb-4 mx-auto group-hover:scale-110 transition-transform fill-current" />
-                      <h4 className="text-xl font-bold text-white text-center">Watch Online</h4>
-                      <p className="text-center text-gray-400 text-sm mt-2">Stream instantly</p>
-                    </button>
-                  </div>
+                      <button onClick={() => setActionType('watch')} className="p-6 bg-green-600/20 hover:bg-green-600/40 border border-green-500/50 rounded-xl text-center">
+                         <Play className="mx-auto mb-2 text-green-400 fill-current" size={32} />
+                         <span className="font-bold text-lg">Watch Online</span>
+                      </button>
+                   </div>
                 </div>
               )}
 
-              {/* Step 3: Type Selection (Episode vs Bulk) - Only for Series & Download */}
+              {/* 3. Type Select (Only for Download + Series) */}
               {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
-                <div className="animate-fade-in">
-                  <button onClick={() => setActionType(null)} className="text-sm text-gray-400 mb-4 hover:text-white flex items-center gap-1">
-                    <ArrowLeft size={14} /> Back
-                  </button>
-                  <h3 className="text-xl font-bold mb-6 text-center">Choose Download Type</h3>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <button 
-                      onClick={() => setDownloadType('episode')}
-                      className="p-5 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 flex items-center justify-center gap-3 transition-all"
-                    >
-                      <Film className="text-purple-400" />
-                      <span className="font-bold">Episode Wise</span>
-                    </button>
-                    <button 
-                      onClick={() => setDownloadType('bulk')}
-                      className="p-5 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 flex items-center justify-center gap-3 transition-all"
-                    >
-                      <Server className="text-orange-400" />
-                      <span className="font-bold">Bulk / Zip Pack</span>
-                    </button>
-                  </div>
-                </div>
+                 <div>
+                    <button onClick={() => setActionType(null)} className="text-gray-400 mb-4 flex gap-1 items-center"><ArrowLeft size={14}/> Back</button>
+                    <h3 className="text-xl font-bold mb-4 text-center">Download Type</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                       <button onClick={() => setDownloadType('episode')} className="p-4 bg-gray-800 hover:bg-purple-600 rounded-xl font-bold flex flex-col items-center gap-2">
+                          <Film /> Episode Wise
+                       </button>
+                       <button onClick={() => setDownloadType('bulk')} className="p-4 bg-gray-800 hover:bg-orange-600 rounded-xl font-bold flex flex-col items-center gap-2">
+                          <Server /> Bulk / Zip
+                       </button>
+                    </div>
+                 </div>
               )}
 
-              {/* Step 4: Final Links Display */}
+              {/* 4. Links Display */}
               {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && (
-                <div className="animate-fade-in">
-                  <button onClick={resetSelection} className="text-sm text-gray-400 mb-6 hover:text-white flex items-center gap-1">
-                    <ArrowLeft size={14} /> Back to Options
-                  </button>
-
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                     <CheckCircle className="text-green-500" /> 
-                     {availableSeasons.length > 0 
-                        ? `Season ${selectedSeason} Links` 
-                        : 'Download Links'}
-                  </h3>
-
-                  <div className="space-y-4">
-                    {getFilteredSections().length > 0 ? (
-                      getFilteredSections().map((section, idx) => (
-                        <div key={idx} className="bg-black/40 rounded-xl p-5 border border-white/5 hover:border-white/10 transition-colors">
-                          <h4 className="text-blue-400 font-bold mb-4 text-sm uppercase tracking-widest border-l-2 border-blue-500 pl-3">
-                            {section.title}
-                          </h4>
-                          <div className="flex flex-wrap gap-3">
-                            {section.links.map((link, j) => (
-                              <button
-                                key={j}
-                                onClick={() => handleLinkClick(link.url)}
-                                className={`
-                                  flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-sm transition-all shadow-lg hover:-translate-y-1
-                                  ${actionType === 'watch' 
-                                    ? 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:shadow-green-900/50' 
-                                    : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:shadow-blue-900/50'}
-                                `}
-                              >
-                                {actionType === 'watch' ? <Play size={16} className="fill-current" /> : <Download size={16} />}
-                                {link.label}
-                              </button>
-                            ))}
+                <div>
+                   <button onClick={resetSelection} className="text-gray-400 mb-6 flex gap-1 items-center"><ArrowLeft size={14}/> Back to Options</button>
+                   <h3 className="text-xl font-bold mb-4 text-green-400 flex items-center gap-2">
+                      <CheckCircle /> Links Found
+                   </h3>
+                   
+                   <div className="space-y-4">
+                      {getFilteredLinks().length > 0 ? (
+                        getFilteredLinks().map((section, idx) => (
+                          <div key={idx} className="bg-black/40 rounded-xl p-4 border border-gray-700">
+                             <h4 className="text-blue-400 font-bold mb-3 text-sm uppercase">{section.title}</h4>
+                             <div className="flex flex-wrap gap-3">
+                                {section.links.map((link, j) => (
+                                   <button 
+                                     key={j} 
+                                     onClick={() => handleLinkClick(link.url)}
+                                     className={`px-5 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 ${actionType === 'watch' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                   >
+                                      {actionType === 'watch' ? <Play size={14} className="fill-current"/> : <Download size={14}/>} 
+                                      {link.label}
+                                   </button>
+                                ))}
+                             </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="text-center p-8 bg-gray-800/50 rounded-xl">
+                           <p className="text-gray-400">No links found for this selection.</p>
+                           {availableSeasons.length > 0 && <p className="text-xs text-gray-500 mt-2">Try changing download type (Bulk/Episode)</p>}
                         </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-10 bg-black/20 rounded-xl border border-dashed border-gray-700">
-                        <p className="text-gray-400">No specific links found for this selection.</p>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                   </div>
                 </div>
               )}
 
