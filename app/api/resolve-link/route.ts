@@ -9,36 +9,67 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    const response = await fetch(url, { 
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      redirect: 'follow' 
-    });
+    // 1. Fetch the Page
+    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // Humara maqsad hai HubCloud ya V-Cloud ka link dhundna
-    let resolvedUrl = '';
+    // --- LOGIC: Check for Folder/List Structure ---
+    // (HubCloud/Drive sites par aksar table rows ya multiple links hote hain)
     
-    // Strategy 1: Saare links check karo
-    $('a').each((i, el) => {
-      const href = $(el).attr('href');
-      if (href) {
-        if (href.includes('hubcloud') || href.includes('vcloud') || href.includes('drive') || href.includes('gdflix')) {
-          resolvedUrl = href;
-          return false; // Loop break
-        }
+    const linksFound: any[] = [];
+    
+    // Pattern 1: Table Rows (Common in Drive/Folder pages)
+    $('table tr, .file-list .item').each((i, el) => {
+      const linkEl = $(el).find('a').first();
+      const name = linkEl.text().trim() || $(el).find('.filename').text().trim();
+      const href = linkEl.attr('href');
+      
+      if (href && name && !name.toLowerCase().includes('parent directory')) {
+        linksFound.push({ title: name, link: href });
       }
     });
 
-    // Strategy 2: Agar seedha link nahi mila, to shayad "Fast Server" button ho
-    if (!resolvedUrl) {
-      resolvedUrl = $('.maxbutton-fast-server').attr('href') || '';
+    // Pattern 2: Simple List (Agar table nahi hai)
+    if (linksFound.length === 0) {
+       $('.entry-content a, .list-group-item a').each((i, el) => {
+          const href = $(el).attr('href');
+          const text = $(el).text().trim();
+          // Filter garbage links
+          if (href && (href.includes('drive') || href.includes('file')) && text.length > 3) {
+             linksFound.push({ title: text, link: href });
+          }
+       });
     }
 
-    if (resolvedUrl) {
-      return NextResponse.json({ success: true, url: resolvedUrl });
+    // --- DECISION TIME ---
+    if (linksFound.length > 1) {
+       // CASE A: It's a Folder (Return List)
+       return NextResponse.json({ 
+         success: true, 
+         type: 'folder', 
+         items: linksFound 
+       });
     } else {
-      return NextResponse.json({ success: false, error: "Cloud link not found" });
+       // CASE B: It's a Single File (Direct Resolve)
+       // (Purana logic: Find HubCloud/VCloud link)
+       let resolvedUrl = '';
+       $('a').each((i, el) => {
+         const href = $(el).attr('href');
+         if (href && (href.includes('hubcloud') || href.includes('vcloud') || href.includes('pixel') || href.includes('drive'))) {
+           resolvedUrl = href;
+           return false; 
+         }
+       });
+       
+       // Fallback
+       if (!resolvedUrl) resolvedUrl = $('.btn-success, .btn-primary').attr('href') || url;
+
+       return NextResponse.json({ 
+         success: true, 
+         type: 'file', 
+         url: resolvedUrl 
+       });
     }
 
   } catch (error) {
