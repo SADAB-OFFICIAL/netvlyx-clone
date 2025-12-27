@@ -5,10 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { 
   Play, Download, CloudLightning, Loader2, AlertTriangle, 
-  Copy, CheckCircle, Server, HardDrive, Smartphone, Zap
+  Copy, CheckCircle, Server, HardDrive, ExternalLink
 } from 'lucide-react';
 
-// --- Types ---
 interface Stream {
   server: string;
   link: string;
@@ -32,19 +31,17 @@ function NCloudPlayer() {
     if (key) {
       const init = async () => {
         try {
-          // 1. Decode Data
           const json = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
           const payload = JSON.parse(json);
           setMetaData(payload);
 
-          // 2. Fetch Streams (Backend API Call)
-          // Ensure your /api/ncloud route is implementing the filtering logic we discussed
+          // Fetch Streams from Backend
           const res = await fetch(`/api/ncloud?url=${payload.url}`);
           const result = await res.json();
           
           if (result.success && result.streams.length > 0) {
              setStreams(result.streams);
-             setCurrentStream(result.streams[0]); // Auto-select best server
+             setCurrentStream(result.streams[0]);
              setApiTitle(result.title);
              setLoading(false);
           } else {
@@ -59,8 +56,18 @@ function NCloudPlayer() {
     }
   }, [key]);
 
-  const changeServer = (stream: Stream) => {
+  // --- Main Logic: Click Handling ---
+  const handleServerClick = (stream: Stream) => {
+      // 1. Update active stream for UI highlighting
       setCurrentStream(stream);
+
+      // 2. Logic based on Tab
+      if (tab === 'download') {
+          // DOWNLOAD MODE: Open Link Directly (Browser Popup)
+          window.open(stream.link, '_blank');
+      } else {
+          // STREAM MODE: Just update player (Automatic via state)
+      }
   };
 
   const copyLink = () => {
@@ -71,28 +78,10 @@ function NCloudPlayer() {
     }
   };
 
-  // --- External App Intents (Android) ---
-  const playInVLC = () => {
+  // External Players (VLC/MX) for Stream Tab
+  const playInApp = (pkg: string) => {
     if (!currentStream?.link) return;
-    const intent = `intent:${currentStream.link}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`;
-    window.location.href = intent;
-  };
-
-  const playInMX = () => {
-    if (!currentStream?.link) return;
-    const intent = `intent:${currentStream.link}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;scheme=https;end`;
-    window.location.href = intent;
-  };
-
-  const downloadIn1DM = () => {
-    if (!currentStream?.link) return;
-    const intent = `intent:${currentStream.link}#Intent;package=idm.internet.download.manager;type=video/*;scheme=https;end`;
-    window.location.href = intent;
-  };
-  
-  const downloadInADM = () => {
-    if (!currentStream?.link) return;
-    const intent = `intent:${currentStream.link}#Intent;package=com.dv.adm;type=video/*;scheme=https;end`;
+    const intent = `intent:${currentStream.link}#Intent;package=${pkg};type=video/*;scheme=https;end`;
     window.location.href = intent;
   };
 
@@ -102,7 +91,7 @@ function NCloudPlayer() {
          <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-500"></div>
          <CloudLightning className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-blue-400" size={24}/>
       </div>
-      <p className="text-gray-400 font-mono text-sm">Resolving Best Servers...</p>
+      <p className="text-gray-400 font-mono text-sm">Connecting to Cloud...</p>
     </div>
   );
 
@@ -126,29 +115,39 @@ function NCloudPlayer() {
                 <CloudLightning className="text-white" size={20}/>
             </div>
             <div>
-                <h1 className="text-xl font-bold">N-Cloud Player</h1>
+                <h1 className="text-xl font-bold">N-Cloud</h1>
                 <p className="text-xs text-blue-400 flex items-center gap-1">
                 <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                Active Server: <span className="text-white font-bold">{currentStream.server}</span>
+                Connected: <span className="text-white font-bold">{currentStream.server}</span>
                 </p>
             </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
            
-           {/* LEFT COLUMN: PLAYER */}
+           {/* LEFT COLUMN: PLAYER / INFO */}
            <div className="lg:col-span-2 space-y-4">
               <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl group">
-                 <video 
-                    key={currentStream.link} // Forces reload on server switch
-                    controls 
-                    autoPlay
-                    className="w-full h-full" 
-                    poster={metaData?.poster || ''}
-                    src={currentStream.link}
-                 >
-                 </video>
+                 {/* Only render video if in Stream tab, saves data/resources in Download tab */}
+                 {tab === 'stream' ? (
+                     <video 
+                        key={currentStream.link} 
+                        controls 
+                        autoPlay
+                        className="w-full h-full" 
+                        poster={metaData?.poster || ''}
+                        src={currentStream.link}
+                     >
+                     </video>
+                 ) : (
+                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900/50">
+                        <Download size={48} className="text-green-500 mb-4 animate-bounce" />
+                        <h3 className="text-xl font-bold text-white">Download Mode</h3>
+                        <p className="text-gray-400 text-sm mt-2">Click any server button to start download</p>
+                     </div>
+                 )}
               </div>
+              
               <div>
                   <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">
                       {metaData?.title || apiTitle || 'Unknown Title'}
@@ -160,85 +159,80 @@ function NCloudPlayer() {
               </div>
            </div>
 
-           {/* RIGHT COLUMN: SERVERS & ACTIONS */}
+           {/* RIGHT COLUMN: ACTIONS & SERVERS */}
            <div className="lg:col-span-1 space-y-4">
               
-              {/* SERVER SELECTOR */}
+              {/* TABS */}
+              <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-2">
+                 <div className="flex p-1 bg-black/40 rounded-xl">
+                    <button 
+                        onClick={() => setTab('stream')} 
+                        className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${tab === 'stream' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <Play size={16} /> Stream
+                    </button>
+                    <button 
+                        onClick={() => setTab('download')} 
+                        className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${tab === 'download' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <Download size={16} /> Download
+                    </button>
+                 </div>
+              </div>
+
+              {/* SERVER LIST (BEHAVIOR CHANGES BASED ON TAB) */}
               <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                     <Server size={14} /> Available Servers
+                     <Server size={14} /> {tab === 'download' ? 'Select Server to Download' : 'Switch Server'}
                  </h3>
-                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-700">
+                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-700">
                     {streams.map((stream, idx) => (
                         <button 
                             key={idx}
-                            onClick={() => changeServer(stream)}
-                            className={`w-full py-3 px-4 rounded-xl flex items-center justify-between transition-all border ${
+                            onClick={() => handleServerClick(stream)}
+                            className={`w-full py-3 px-4 rounded-xl flex items-center justify-between transition-all border group ${
                                 currentStream.link === stream.link 
-                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' 
+                                ? (tab === 'download' ? 'bg-green-600/20 border-green-500 text-green-400' : 'bg-blue-600 border-blue-500 text-white shadow-lg') 
                                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white'
                             }`}
                         >
                             <div className="flex items-center gap-3">
-                                <div className={`w-2 h-2 rounded-full ${currentStream.link === stream.link ? 'bg-white animate-pulse' : 'bg-gray-500'}`}></div>
+                                <div className={`w-2 h-2 rounded-full ${currentStream.link === stream.link ? 'bg-current animate-pulse' : 'bg-gray-500'}`}></div>
                                 <span className="font-semibold text-sm">{stream.server}</span>
                             </div>
-                            {idx === 0 && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white font-bold">BEST</span>}
+                            
+                            {/* Icon changes based on Tab */}
+                            {tab === 'download' ? (
+                                <ExternalLink size={16} className="text-gray-500 group-hover:text-green-400" />
+                            ) : (
+                                idx === 0 && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white font-bold">BEST</span>
+                            )}
                         </button>
                     ))}
                  </div>
               </div>
 
-              {/* ACTIONS CARD */}
+              {/* EXTRA ACTIONS */}
               <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
-                 <div className="flex p-1 bg-black/40 rounded-lg mb-5">
-                    <button onClick={() => setTab('stream')} className={`flex-1 py-2 text-sm font-bold rounded transition-all ${tab === 'stream' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>Stream</button>
-                    <button onClick={() => setTab('download')} className={`flex-1 py-2 text-sm font-bold rounded transition-all ${tab === 'download' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>Download</button>
-                 </div>
-
                  {tab === 'stream' ? (
                     <div className="space-y-3 animate-fade-in">
-                       <button onClick={playInVLC} className="w-full py-3 bg-[#ff6b00]/10 border border-[#ff6b00]/30 hover:bg-[#ff6b00]/20 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold transition-all group">
-                          <div className="w-8 h-8 rounded bg-[#ff6b00] flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-                             <Play size={16} className="fill-current"/> 
-                          </div>
+                       <button onClick={() => playInApp('org.videolan.vlc')} className="w-full py-3 bg-[#ff6b00]/10 border border-[#ff6b00]/30 hover:bg-[#ff6b00]/20 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold transition-all">
                           Play in VLC
                        </button>
-                       <button onClick={playInMX} className="w-full py-3 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold transition-all group">
-                          <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-                             <Play size={16} className="fill-current"/> 
-                          </div>
+                       <button onClick={() => playInApp('com.mxtech.videoplayer.ad')} className="w-full py-3 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold transition-all">
                           Play in MX Player
                        </button>
                     </div>
                  ) : (
-                    <div className="space-y-4 animate-fade-in">
-                       {/* App Downloads (No Lag) */}
-                       <div className="grid grid-cols-2 gap-3">
-                           <button onClick={downloadIn1DM} className="py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl flex flex-col items-center justify-center gap-1 transition-all">
-                               <Smartphone size={20} className="text-blue-400"/>
-                               <span className="text-xs font-bold text-white">1DM App</span>
-                           </button>
-                           <button onClick={downloadInADM} className="py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl flex flex-col items-center justify-center gap-1 transition-all">
-                               <Smartphone size={20} className="text-green-400"/>
-                               <span className="text-xs font-bold text-white">ADM App</span>
-                           </button>
+                    <div className="space-y-3 animate-fade-in">
+                       <div className="bg-green-500/10 p-3 rounded-lg border border-green-500/20 text-center">
+                           <p className="text-xs text-green-400">
+                               Clicking a server above will open the download popup directly.
+                           </p>
                        </div>
-
-                       {/* Direct Browser Download (Safe Mode) */}
-                       <a 
-                          href={currentStream.link} 
-                          download
-                          target="_blank" // Key for No Lag
-                          rel="noopener noreferrer"
-                          className="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl flex items-center justify-center gap-2 text-white font-bold transition-all shadow-lg shadow-green-900/20"
-                       >
-                          <Download size={18}/> Direct Browser DL
-                       </a>
-
                        <button onClick={copyLink} className="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-xl flex items-center justify-center gap-2 text-gray-300 transition-all border border-gray-700">
                           {copied ? <CheckCircle size={18} className="text-green-500"/> : <Copy size={18}/>}
-                          {copied ? 'Copied' : 'Copy Link'}
+                          {copied ? 'Copied' : 'Copy Direct Link'}
                        </button>
                     </div>
                  )}
@@ -254,7 +248,7 @@ function NCloudPlayer() {
 
 export default function NCloud() {
   return (
-    <Suspense fallback={<div className="text-white text-center mt-20">Loading Player...</div>}>
+    <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
       <NCloudPlayer />
     </Suspense>
   );
