@@ -49,7 +49,7 @@ export default function MoviePage() {
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
 
-  // 1. URL Decode & Data Fetching
+  // 1. Data Fetching
   const movieUrl = slug 
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
@@ -69,8 +69,6 @@ export default function MoviePage() {
         // Season Detection
         const title = result.title || "";
         const rangeMatch = title.match(/(?:season|s)\s*(\d+)\s*[-–—]\s*(\d+)/i);
-        const singleMatch = title.match(/(?:season|s)\s*(\d+)/i);
-        
         const sectionSeasons = new Set<number>();
         result.downloadSections.forEach((sec: any) => {
             const m = sec.title.match(/(?:season|s)\s*0?(\d+)/i);
@@ -83,8 +81,6 @@ export default function MoviePage() {
           setAvailableSeasons(Array.from({ length: end - start + 1 }, (_, i) => start + i));
         } else if (sectionSeasons.size > 0) {
           setAvailableSeasons(Array.from(sectionSeasons).sort((a,b) => a - b));
-        } else if (singleMatch) {
-          setAvailableSeasons([parseInt(singleMatch[1])]);
         } else {
           setAvailableSeasons([]);
         }
@@ -98,13 +94,13 @@ export default function MoviePage() {
     fetchRealData();
   }, [movieUrl]);
 
-  // --- 2. HELPER: Is Bulk Link? ---
+  // --- Helper: Is Bulk? ---
   const isBulkLink = (sectionTitle: string, linkLabel: string) => {
     const text = (sectionTitle + " " + linkLabel).toLowerCase();
     return /batch|zip|pack|complete|volume|collection/.test(text);
   };
 
-  // --- 3. HELPER: Group Links by Episode ---
+  // --- Helper: Group Links ---
   const groupLinksByEpisode = (sections: DownloadSection[]) => {
     const groups: Record<number, EpisodeGroup> = {};
     const others: DownloadLink[] = [];
@@ -112,12 +108,9 @@ export default function MoviePage() {
     sections.forEach(sec => {
       sec.links.forEach(link => {
         const match = link.label.match(/(?:episode|ep|e)\s*0?(\d+)/i) || link.label.match(/\b\d+x0?(\d+)\b/);
-        
         if (match) {
           const epNum = parseInt(match[1]);
-          if (!groups[epNum]) {
-            groups[epNum] = { episode: epNum, links: [] };
-          }
+          if (!groups[epNum]) groups[epNum] = { episode: epNum, links: [] };
           groups[epNum].links.push(link);
         } else {
           others.push(link);
@@ -126,30 +119,19 @@ export default function MoviePage() {
     });
 
     const sortedGroups = Object.values(groups).sort((a, b) => a.episode - b.episode);
-    
-    sortedGroups.forEach(group => {
-       group.links.sort((a, b) => {
-          const isHubA = /hub|cloud|ncloud/i.test(a.label);
-          const isHubB = /hub|cloud|ncloud/i.test(b.label);
-          return (isHubA === isHubB) ? 0 : isHubA ? -1 : 1;
-       });
-    });
-
     return { groups: sortedGroups, others };
   };
 
-  // --- 4. PROCESS SECTIONS & QUALITY ---
+  // --- 2. LOGIC: Process Sections (Season & Type Filter) ---
   const getProcessedSections = () => {
     if (!data) return [];
     
-    // Season Filter
     let sections = data.downloadSections.filter(sec => {
         if (selectedSeason === null) return true;
         const seasonRegex = new RegExp(`(?:season|s)[\\s\\-_]*0?${selectedSeason}(?:\\D|$)`, 'i');
         return seasonRegex.test(sec.title);
     });
 
-    // Type Filter
     if (actionType === 'download' && downloadType) {
         sections = sections.map(sec => {
             const filteredLinks = sec.links.filter(link => {
@@ -159,11 +141,10 @@ export default function MoviePage() {
             return { ...sec, links: filteredLinks };
         }).filter(sec => sec.links.length > 0);
     }
-
     return sections;
   };
 
-  // Quality Extraction
+  // --- 3. LOGIC: Quality Extraction ---
   useEffect(() => {
     if (!data) return;
     const currentSections = getProcessedSections(); 
@@ -177,29 +158,35 @@ export default function MoviePage() {
                 const lMatch = l.label.match(/(480p|720p|1080p|2160p|4k)/i);
                 if (lMatch) qualities.add(lMatch[1].toLowerCase());
             });
-            if (qualities.size === 0) qualities.add("Standard");
         }
     });
+
+    if (qualities.size === 0) qualities.add("Standard");
 
     const order = ['4k', '2160p', '1080p', '720p', '480p', 'standard'];
     const sorted = Array.from(qualities).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     setAvailableQualities(sorted);
 
-    if (sorted.length === 1) setSelectedQuality(sorted[0]);
-    else setSelectedQuality(null);
+    // Reset quality when filters change
+    setSelectedQuality(null);
 
   }, [data, selectedSeason, downloadType, actionType]);
 
-  // --- 5. FINAL LINKS GETTER ---
+  // --- 4. LOGIC: Final Data with Quality Filter (FIXED) ---
   const getFinalData = () => {
     let sections = getProcessedSections();
 
-    if (selectedQuality) {
+    if (selectedQuality && selectedQuality !== "Standard") {
         sections = sections.filter(sec => {
+            // Check if Section Title has quality
             const secMatch = sec.title.toLowerCase().includes(selectedQuality.toLowerCase());
-            if (secMatch) return true;
+            
+            if (secMatch) return true; // Keep whole section if title matches
+            
+            // Otherwise, filter links inside
             return sec.links.some(l => l.label.toLowerCase().includes(selectedQuality.toLowerCase()));
         }).map(sec => {
+             // If Section title didn't match, remove non-matching links
              if (!sec.title.toLowerCase().includes(selectedQuality.toLowerCase())) {
                  return {
                      ...sec,
@@ -213,18 +200,15 @@ export default function MoviePage() {
     if (downloadType === 'episode') {
         return { type: 'grouped', data: groupLinksByEpisode(sections) };
     }
-    
     return { type: 'sections', data: sections };
   };
 
-  // --- Handlers (UPDATED) ---
   const handleLinkClick = (url: string) => {
     const payload = {
         link: url,
         source: 'netvlyx',
         title: data?.title || 'Unknown Title',
         poster: data?.poster || '',
-        // Yahan hum Selected Quality bhej rahe hain
         quality: selectedQuality || null
     };
     const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -269,17 +253,6 @@ export default function MoviePage() {
             </div>
             <p className="text-gray-400 text-lg mb-8 line-clamp-4">{data?.plot}</p>
 
-            {data?.screenshots && data.screenshots.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><ImageIcon className="text-blue-500"/> Screenshots</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {data.screenshots.map((src, i) => (
-                    <img key={i} src={src} className="rounded-lg border border-gray-800" alt="Screen" />
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="bg-gray-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl transition-all duration-300">
               {(selectedSeason || actionType) && (
                  <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
@@ -295,7 +268,7 @@ export default function MoviePage() {
                  </div>
               )}
 
-              {/* Steps (Season, Action, Type, Quality) Logic same as before... */}
+              {/* Steps UI (Same as before) */}
               {availableSeasons.length > 0 && selectedSeason === null && (
                 <div className="animate-fade-in">
                   <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Film className="text-red-500" /> Select Season</h3>
@@ -347,23 +320,24 @@ export default function MoviePage() {
                    <h3 className="text-xl font-bold mb-6 text-green-400 flex items-center gap-2"><CheckCircle /> Available Links</h3>
                    <div className="space-y-4">
                       {finalContent.type === 'grouped' && (
-                        <div className="grid gap-4">
-                            {(finalContent.data as any).groups.map((group: EpisodeGroup) => (
+                        (finalContent.data as any).groups.length > 0 ? (
+                            (finalContent.data as any).groups.map((group: EpisodeGroup) => (
                                 <div key={group.episode} className="bg-gray-800/40 rounded-xl overflow-hidden border border-gray-700">
                                     <div className="bg-gray-800/80 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
                                         <span className="font-bold text-white flex items-center gap-2"><Play size={16} className="text-blue-500 fill-current"/> Episode {group.episode}</span>
                                     </div>
                                     <div className="p-4 flex flex-wrap gap-3">
                                         {group.links.map((link, idx) => (
-                                            <button key={idx} onClick={() => handleLinkClick(link.url)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold shadow-lg border ${link.label.toLowerCase().includes('hub') ? 'bg-yellow-600/20 border-yellow-600/50 hover:bg-yellow-600 text-yellow-400 hover:text-white' : 'bg-blue-600/20 border-blue-600/50 hover:bg-blue-600 text-blue-400 hover:text-white'}`}>
-                                                {link.label.toLowerCase().includes('hub') ? <CloudLightning size={16}/> : <Server size={16}/>}{link.label}
+                                            <button key={idx} onClick={() => handleLinkClick(link.url)} className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 border border-blue-600/50 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-sm font-semibold shadow-lg transition-all">
+                                                <Server size={16}/> {link.label}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            ))
+                        ) : (<div className="text-center p-8 text-gray-400">No links found for {selectedQuality}.</div>)
                       )}
+                      
                       {finalContent.type === 'sections' && (
                          (finalContent.data as DownloadSection[]).length > 0 ? (
                             (finalContent.data as DownloadSection[]).map((section, idx) => (
@@ -378,7 +352,7 @@ export default function MoviePage() {
                                     </div>
                                 </div>
                             ))
-                         ) : (<div className="text-center p-8 bg-gray-800/50 rounded-xl border border-dashed border-gray-700"><p className="text-gray-400">No links found.</p></div>)
+                         ) : (<div className="text-center p-8 bg-gray-800/50 rounded-xl border border-dashed border-gray-700"><p className="text-gray-400">No links found for {selectedQuality}.</p></div>)
                       )}
                    </div>
                 </div>
