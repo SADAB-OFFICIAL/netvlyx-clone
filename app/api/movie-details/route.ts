@@ -6,94 +6,62 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
 
-  if (!url) {
-    return NextResponse.json({ error: 'URL is required' }, { status: 400 });
-  }
+  if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-
-    if (!response.ok) throw new Error("Failed to fetch movie page");
-
+    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // 1. Basic Info Extract karein
     const title = $('h1.entry-title, h1.title').text().trim();
-    const poster = $('.entry-content img, .post-thumbnail img').first().attr('src') || 
-                   $('.entry-content img').first().attr('data-src');
-    
-    // Plot nikalna (Paragraphs ko jodkar)
+    const poster = $('.post-thumbnail img').first().attr('src') || $('.entry-content img').first().attr('src');
+
+    // 1. Screenshots Logic (Fixed)
+    const screenshots: string[] = [];
+    // Movies4u usually puts screenshots in a div with class 'ss-img' or centered paragraphs
+    $('.ss-img img, .entry-content p img').each((i, el) => {
+      const src = $(el).attr('src') || $(el).attr('data-src');
+      // Poster ko dubara screenshots mein na lein
+      if (src && src !== poster && screenshots.length < 10) {
+        screenshots.push(src);
+      }
+    });
+
     let plot = '';
     $('.entry-content p').each((i, el) => {
       const text = $(el).text().trim();
-      if (text.length > 50 && !text.includes('Download') && !text.includes('Join')) {
-        plot += text + ' ';
-      }
+      if (text.length > 50 && !text.includes('Download') && !text.includes('Join')) plot += text + ' ';
     });
 
-    // 2. Download Links Extract karein (Real Logic)
-    // Movies4u aksar links ko "Download 720p" headers ke niche rakhta hai
     const downloadSections: any[] = [];
-    
-    // Pattern 1: Headers ke baad links dhundna (Common in Movies4u)
     $('h3, h4, h5').each((i, el) => {
-      const headerText = $(el).text().toLowerCase();
-      
-      // Agar header mein quality likhi hai (e.g. 720p, 1080p, 480p)
-      if (headerText.includes('480p') || headerText.includes('720p') || headerText.includes('1080p') || headerText.includes('download')) {
+      const text = $(el).text().toLowerCase();
+      if (text.includes('480p') || text.includes('720p') || text.includes('1080p') || text.includes('download')) {
         const links: any[] = [];
-        
-        // Header ke baad wale elements mein links dhundo
-        let nextElem = $(el).next();
-        let limit = 0;
-        
-        // 5 elements tak niche check karo jab tak agla header na aaye
-        while (nextElem.length > 0 && limit < 8 && !nextElem.is('h3, h4, h5')) {
-          nextElem.find('a').each((j, linkEl) => {
-            const linkUrl = $(linkEl).attr('href');
-            const linkText = $(linkEl).text().trim() || "Download Link";
-            
-            // Bekar links filter karein
-            if (linkUrl && !linkUrl.includes('telegram') && !linkUrl.includes('whatsapp')) {
-              links.push({ label: linkText, url: linkUrl });
-            }
+        let next = $(el).next();
+        let count = 0;
+        while (next.length > 0 && count < 5 && !next.is('h3, h4, h5')) {
+          next.find('a').each((j, link) => {
+            const href = $(link).attr('href');
+            const label = $(link).text().trim() || "Download Link";
+            if (href && !href.includes('telegram')) links.push({ label, url: href });
           });
-          nextElem = nextElem.next();
-          limit++;
+          next = next.next();
+          count++;
         }
-
-        if (links.length > 0) {
-          downloadSections.push({
-            title: $(el).text().trim(), // e.g., "Download 720p Links"
-            links: links
-          });
-        }
+        if (links.length > 0) downloadSections.push({ title: $(el).text().trim(), links });
       }
     });
 
-    // Fallback: Agar upar wala method fail ho jaye, to saare buttons utha lo
-    if (downloadSections.length === 0) {
-      const links: any[] = [];
-      $('.entry-content a.button, .entry-content a.btn').each((i, el) => {
-        links.push({ label: $(el).text().trim(), url: $(el).attr('href') });
-      });
-      if (links.length > 0) downloadSections.push({ title: "Download Links", links });
-    }
-
-    return NextResponse.json({
-      title: title || "Unknown Title",
-      poster: poster || "",
-      plot: plot.substring(0, 300) + "..." || "No details available.",
-      downloadSections
+    return NextResponse.json({ 
+      title, 
+      poster, 
+      plot, 
+      screenshots, // Ye naya data hai
+      downloadSections 
     });
 
   } catch (error) {
-    console.error("Scraping Details Error:", error);
-    return NextResponse.json({ error: 'Failed to scrape details' }, { status: 500 });
+    return NextResponse.json({ error: 'Scraping Failed' }, { status: 500 });
   }
 }
