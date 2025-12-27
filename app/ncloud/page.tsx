@@ -4,238 +4,216 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { 
-  Play, Download, CloudLightning, Wifi, Smartphone, 
-  Settings, Volume2, Maximize, AlertTriangle, Loader2, Copy 
+  Play, Download, CloudLightning, Wifi, Loader2, 
+  AlertTriangle, Copy, CheckCircle, Server, HardDrive
 } from 'lucide-react';
+
+interface Stream {
+  server: string;
+  link: string;
+  type: string;
+}
 
 function NCloudPlayer() {
   const params = useSearchParams();
   const key = params.get('key');
   
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const [streams, setStreams] = useState<Stream[]>([]); // List of all valid servers
+  const [currentStream, setCurrentStream] = useState<Stream | null>(null); // Currently playing
+  const [metaData, setMetaData] = useState<any>(null); // Poster/Title from previous page
+  const [apiTitle, setApiTitle] = useState(''); // Title from API
+  
   const [tab, setTab] = useState<'stream' | 'download'>('stream');
   const [copied, setCopied] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
+  
   useEffect(() => {
     if (key) {
-      try {
-        const json = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
-        const payload = JSON.parse(json);
-        setData(payload);
-        setLoading(false);
-      } catch (e) {
-        console.error("Invalid Key");
-        setLoading(false);
-      }
+      const init = async () => {
+        try {
+          // 1. Decode Data
+          const json = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
+          const payload = JSON.parse(json);
+          setMetaData(payload);
+
+          // 2. Fetch Streams from our Backend
+          const res = await fetch(`/api/ncloud?url=${payload.url}`); // No encode needed if backend handles it, but safer to match logic
+          const result = await res.json();
+          
+          if (result.success && result.streams.length > 0) {
+             setStreams(result.streams);
+             setCurrentStream(result.streams[0]); // Auto play first (best) server
+             setApiTitle(result.title);
+             setLoading(false);
+          } else {
+             throw new Error("No playable streams found");
+          }
+        } catch (e) {
+          console.error("Stream Fetch Error", e);
+          setLoading(false);
+        }
+      };
+      init();
     }
   }, [key]);
 
+  const changeServer = (stream: Stream) => {
+      setCurrentStream(stream);
+      // Auto scroll to player or highlight can be added here
+  };
+
   const copyLink = () => {
-    if (data?.url) {
-      navigator.clipboard.writeText(data.url);
+    if (currentStream?.link) {
+      navigator.clipboard.writeText(currentStream.link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
   const playInVLC = () => {
-    if (!data?.url) return;
-    // Android Intent for VLC
-    const intent = `intent:${data.url}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`;
+    if (!currentStream?.link) return;
+    const intent = `intent:${currentStream.link}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`;
     window.location.href = intent;
   };
 
   const playInMX = () => {
-    if (!data?.url) return;
-    // Android Intent for MX Player
-    const intent = `intent:${data.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;scheme=https;end`;
+    if (!currentStream?.link) return;
+    const intent = `intent:${currentStream.link}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;scheme=https;end`;
     window.location.href = intent;
   };
 
   if (loading) return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
-      <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-      <p className="text-gray-400 animate-pulse">Connecting to Secure Cloud...</p>
+      <div className="relative mb-4">
+         <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-500"></div>
+         <CloudLightning className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-blue-400" size={24}/>
+      </div>
+      <p className="text-gray-400 font-mono text-sm">Resolving Best Servers...</p>
     </div>
   );
 
-  if (!data) return (
+  if (!currentStream) return (
     <div className="min-h-screen bg-black flex items-center justify-center text-red-500">
       <div className="text-center">
         <AlertTriangle className="w-12 h-12 mx-auto mb-2" />
-        <p>Invalid Session</p>
+        <p>No Streams Available</p>
+        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-gray-800 rounded text-white text-sm">Retry</button>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-blue-500/30">
-      
-      {/* Background Ambience */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[100px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[100px]"></div>
-      </div>
-
-      <div className="relative z-10 max-w-5xl mx-auto p-4 md:p-8">
+    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans">
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
         
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-             <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
-                <CloudLightning className="text-white w-6 h-6" />
-             </div>
-             <div>
-                <h1 className="text-2xl font-bold tracking-tight">N-Cloud</h1>
-                <div className="flex items-center gap-2 text-xs text-green-400 font-medium">
-                   <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                   </span>
-                   Secure Connection Active
-                </div>
-             </div>
-          </div>
-          <button 
-             onClick={() => window.history.back()}
-             className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
-          >
-             Close Player
-          </button>
+        <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <CloudLightning className="text-white" size={20}/>
+            </div>
+            <div>
+                <h1 className="text-xl font-bold">N-Cloud Player</h1>
+                <p className="text-xs text-blue-400 flex items-center gap-1">
+                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                Server: {currentStream.server}
+                </p>
+            </div>
         </div>
 
-        {/* Main Content Grid */}
         <div className="grid lg:grid-cols-3 gap-6">
            
-           {/* LEFT: Player / Preview Area */}
+           {/* LEFT COLUMN: PLAYER */}
            <div className="lg:col-span-2 space-y-4">
-              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl group">
-                 {/* HTML5 Video Player */}
+              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
                  <video 
-                    ref={videoRef}
+                    key={currentStream.link} // Key change forces reload on server switch
                     controls 
-                    className="w-full h-full object-contain" 
-                    poster={data.poster || '/placeholder.png'}
-                    src={data.url}
+                    autoPlay
+                    className="w-full h-full" 
+                    poster={metaData?.poster || ''}
+                    src={currentStream.link}
                  >
-                    Your browser does not support the video tag.
                  </video>
-                 
-                 {/* Custom Overlay (Optional - removes default controls if needed) */}
-                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="bg-black/60 backdrop-blur-md px-2 py-1 rounded text-xs font-mono border border-white/10">HD 1080p</span>
-                 </div>
               </div>
-
-              {/* Title & Metadata */}
               <div>
-                 <h2 className="text-xl md:text-2xl font-bold text-white mb-2">{data.title || 'Unknown Title'}</h2>
-                 <p className="text-gray-400 text-sm flex items-center gap-4">
-                    <span className="flex items-center gap-1.5"><Wifi size={14}/> High Speed</span>
-                    <span className="w-1 h-1 bg-gray-600 rounded-full"></span>
-                    <span>MP4 / MKV</span>
-                    <span className="w-1 h-1 bg-gray-600 rounded-full"></span>
-                    <span className="text-blue-400">Cloud Stream</span>
-                 </p>
+                  <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">
+                      {metaData?.title || apiTitle || 'Unknown Title'}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-1 break-all">
+                      File: {apiTitle}
+                  </p>
               </div>
            </div>
 
-           {/* RIGHT: Controls & Actions */}
-           <div className="lg:col-span-1">
-              <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 h-full flex flex-col">
-                 
-                 {/* Tabs */}
-                 <div className="flex p-1 bg-gray-950/50 rounded-xl mb-6">
-                    <button 
-                       onClick={() => setTab('stream')}
-                       className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${tab === 'stream' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                       <Play size={16} /> Stream
-                    </button>
-                    <button 
-                       onClick={() => setTab('download')}
-                       className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${tab === 'download' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                       <Download size={16} /> Download
-                    </button>
-                 </div>
-
-                 {/* TAB CONTENT */}
-                 <div className="flex-1 space-y-4">
-                    
-                    {tab === 'stream' && (
-                       <div className="space-y-3 animate-fade-in">
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">External Players</p>
-                          
-                          <button onClick={playInVLC} className="w-full py-4 px-4 bg-[#ff6b00]/10 hover:bg-[#ff6b00]/20 border border-[#ff6b00]/30 hover:border-[#ff6b00] rounded-xl flex items-center gap-3 transition-all group">
-                             <div className="w-10 h-10 bg-[#ff6b00] rounded-lg flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
-                                <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
-                             </div>
-                             <div className="text-left">
-                                <div className="font-bold text-white">Play in VLC</div>
-                                <div className="text-xs text-gray-400">Recommended for smooth playback</div>
-                             </div>
-                          </button>
-
-                          <button onClick={playInMX} className="w-full py-4 px-4 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-600/30 hover:border-blue-500 rounded-xl flex items-center gap-3 transition-all group">
-                             <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
-                                <Play size={20} className="fill-current"/>
-                             </div>
-                             <div className="text-left">
-                                <div className="font-bold text-white">Play in MX Player</div>
-                                <div className="text-xs text-gray-400">Best for Android users</div>
-                             </div>
-                          </button>
-                       </div>
-                    )}
-
-                    {tab === 'download' && (
-                       <div className="space-y-3 animate-fade-in">
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Direct Actions</p>
-                          
-                          <a 
-                             href={data.url} 
-                             download 
-                             className="w-full py-4 px-4 bg-green-600 hover:bg-green-500 text-white rounded-xl flex items-center justify-center gap-3 font-bold shadow-lg shadow-green-900/20 hover:scale-[1.02] transition-all"
-                          >
-                             <Download size={20} /> Browser Download
-                          </a>
-
-                          <button 
-                             onClick={copyLink}
-                             className="w-full py-4 px-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 rounded-xl flex items-center justify-center gap-3 text-gray-300 hover:text-white transition-all"
-                          >
-                             {copied ? <CheckCircle className="text-green-500" size={20}/> : <Copy size={20} />}
-                             {copied ? 'Link Copied!' : 'Copy Stream Link'}
-                          </button>
-                          
-                          <div className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 mt-4">
-                             <p className="text-xs text-yellow-500 text-center">
-                                Use IDM or 1DM for faster download speeds.
-                             </p>
-                          </div>
-                       </div>
-                    )}
-
+           {/* RIGHT COLUMN: SERVERS & ACTIONS */}
+           <div className="lg:col-span-1 space-y-4">
+              
+              {/* SERVER SELECTOR */}
+              <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
+                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                     <Server size={14} /> Switch Server
+                 </h3>
+                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-700">
+                    {streams.map((stream, idx) => (
+                        <button 
+                            key={idx}
+                            onClick={() => changeServer(stream)}
+                            className={`w-full py-2.5 px-4 rounded-xl flex items-center justify-between transition-all border ${
+                                currentStream.link === stream.link 
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg' 
+                                : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <HardDrive size={16} />
+                                <span className="font-semibold text-sm">{stream.server}</span>
+                            </div>
+                            {currentStream.link === stream.link && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                        </button>
+                    ))}
                  </div>
               </div>
-           </div>
 
+              {/* ACTIONS CARD */}
+              <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
+                 <div className="flex p-1 bg-black/40 rounded-lg mb-4">
+                    <button onClick={() => setTab('stream')} className={`flex-1 py-2 text-sm font-bold rounded ${tab === 'stream' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Stream</button>
+                    <button onClick={() => setTab('download')} className={`flex-1 py-2 text-sm font-bold rounded ${tab === 'download' ? 'bg-green-600 text-white' : 'text-gray-400'}`}>Download</button>
+                 </div>
+
+                 {tab === 'stream' ? (
+                    <div className="space-y-3">
+                       <button onClick={playInVLC} className="w-full py-3 bg-[#ff6b00]/10 border border-[#ff6b00]/30 hover:bg-[#ff6b00]/20 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold transition-all">
+                          <Play size={18} className="fill-current"/> Play in VLC
+                       </button>
+                       <button onClick={playInMX} className="w-full py-3 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold transition-all">
+                          <Play size={18} className="fill-current"/> Play in MX
+                       </button>
+                    </div>
+                 ) : (
+                    <div className="space-y-3">
+                       <a href={currentStream.link} download className="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl flex items-center justify-center gap-2 text-white font-bold transition-all shadow-lg shadow-green-900/20">
+                          <Download size={18}/> Direct Download
+                       </a>
+                       <button onClick={copyLink} className="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-xl flex items-center justify-center gap-2 text-gray-300 transition-all border border-gray-700">
+                          {copied ? <CheckCircle size={18} className="text-green-500"/> : <Copy size={18}/>}
+                          {copied ? 'Copied' : 'Copy Link'}
+                       </button>
+                    </div>
+                 )}
+              </div>
+
+           </div>
         </div>
+
       </div>
     </div>
   );
-}
-
-function CheckCircle({className, size}: {className?: string, size?: number}) {
-    return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
 }
 
 export default function NCloud() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white">Loading N-Cloud...</div>}>
+    <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
       <NCloudPlayer />
     </Suspense>
   );
