@@ -1,53 +1,28 @@
+// app/vlyxdrive/page.tsx
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { 
   CloudLightning, Loader2, Play, AlertTriangle, 
-  FolderOpen, Server, HardDrive, CheckCircle, ChevronDown, ChevronUp
+  FolderOpen, Server, HardDrive, CheckCircle, ChevronDown, ChevronUp, Film, Database
 } from 'lucide-react';
 
-// --- Types ---
-interface FileLink {
-  title: string;
+// --- Types based on your JSON ---
+interface ApiLink {
+  name: string;
   url: string;
-  source: string;
-  isPreferred: boolean;
+  isVCloud?: boolean;
+  isHubCloud?: boolean;
 }
 
-interface EpisodeGroup {
-  id: string;
-  episodeNumber: number;
-  title: string;
-  links: FileLink[];
+interface LinkGroup {
+  title: string;      // e.g., "480p [1.5GB]" or "Episode 1"
+  quality?: string;   // e.g., "480p"
+  size?: string;      // e.g., "1.5GB"
+  episodeNumber?: number; // Only for series
+  links: ApiLink[];
 }
-
-// --- Helpers ---
-const getSourceName = (url: string, title: string) => {
-    const lower = (url + title).toLowerCase();
-    if (lower.includes('hubcloud') || lower.includes('vcloud') || lower.includes('ncloud')) return 'N-Cloud'; // Preferred
-    if (lower.includes('gdflix') || lower.includes('drive')) return 'GDFlix';
-    if (lower.includes('pixel')) return 'PixelDrain';
-    if (lower.includes('gdirect') || lower.includes('instant')) return 'G-Direct';
-    return 'Cloud Server';
-};
-
-const isPreferred = (source: string) => source === 'N-Cloud' || source === 'G-Direct';
-
-const parseEpisodeInfo = (filename: string) => {
-  // Matches S01E01, 1x01, Episode 1
-  const match = filename.match(/[sS](\d{1,2})[eE](\d{1,2})/) || 
-                filename.match(/(\d{1,2})x(\d{1,2})/) ||
-                filename.match(/(?:episode|ep)\s*(\d{1,2})/i);
-  
-  if (match) {
-    // Agar regex S01E01 hai
-    if (match.length === 3) return { season: parseInt(match[1]), episode: parseInt(match[2]) };
-    // Agar regex Episode 1 hai
-    if (match.length === 2) return { season: 1, episode: parseInt(match[1]) };
-  }
-  return null;
-};
 
 function VlyxDriveContent() {
   const params = useSearchParams();
@@ -56,11 +31,8 @@ function VlyxDriveContent() {
   
   const [status, setStatus] = useState('processing'); 
   const [metaData, setMetaData] = useState<any>(null);
-  const [groupedEpisodes, setGroupedEpisodes] = useState<EpisodeGroup[]>([]);
-  const [otherFiles, setOtherFiles] = useState<FileLink[]>([]);
-  
-  // State for toggling "Show More" servers per episode
-  const [expandedEpisodes, setExpandedEpisodes] = useState<Record<string, boolean>>({});
+  const [apiData, setApiData] = useState<any>(null); // Full JSON Response
+  const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (key) {
@@ -70,12 +42,12 @@ function VlyxDriveContent() {
           const payload = JSON.parse(json);
           setMetaData(payload);
 
-          // Fetch Links
+          // Fetch from our Proxy (which calls NetVlyx API)
           const res = await fetch(`/api/resolve-link?url=${encodeURIComponent(payload.link)}`);
           const result = await res.json();
           
-          if (result.success) {
-             processFiles(result.items || [{title: 'Movie', link: result.url}]); // Handle single file too
+          if (result.success && result.data) {
+             setApiData(result.data); // data.type can be 'quality' (Movie) or 'episode' (Series)
              setStatus('ready');
           } else {
              setStatus('error');
@@ -88,209 +60,159 @@ function VlyxDriveContent() {
     }
   }, [key]);
 
-  // --- Logic: Grouping ---
-  const processFiles = (items: any[]) => {
-      const groups: Record<number, EpisodeGroup> = {};
-      const others: FileLink[] = [];
-
-      items.forEach(item => {
-          const info = parseEpisodeInfo(item.title);
-          const source = getSourceName(item.link, item.title);
-          const linkObj: FileLink = {
-              title: item.title,
-              url: item.link,
-              source: source,
-              isPreferred: isPreferred(source)
-          };
-
-          if (info) {
-              const epNum = info.episode;
-              if (!groups[epNum]) {
-                  groups[epNum] = {
-                      id: `ep-${epNum}`,
-                      episodeNumber: epNum,
-                      title: `Episode ${epNum}`,
-                      links: []
-                  };
-              }
-              groups[epNum].links.push(linkObj);
-          } else {
-              others.push(linkObj);
-          }
-      });
-
-      // Sort Episodes
-      const sortedGroups = Object.values(groups).sort((a, b) => a.episodeNumber - b.episodeNumber);
-      
-      // Sort Links inside Episodes (Preferred First)
-      sortedGroups.forEach(g => {
-          g.links.sort((a, b) => (a.isPreferred === b.isPreferred ? 0 : a.isPreferred ? -1 : 1));
-      });
-
-      setGroupedEpisodes(sortedGroups);
-      setOtherFiles(others);
-  };
-
-  const toggleExpand = (id: string) => {
-      setExpandedEpisodes(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const handlePlay = (url: string) => {
     const nCloudKey = btoa(JSON.stringify({ url: url, title: "Stream" }))
        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     router.push(`/ncloud?key=${nCloudKey}`);
   };
 
-  // Color logic based on source
-  const getButtonClass = (source: string) => {
-      if (source === 'N-Cloud') return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
-      if (source === 'GDFlix') return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
-      if (source === 'PixelDrain') return "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white";
-      return "bg-gray-700 hover:bg-gray-600 text-gray-200";
+  const toggleExpand = (idx: number) => {
+    setExpandedGroups(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  // Helper to style buttons based on server name
+  const getButtonClass = (name: string) => {
+      const lower = name.toLowerCase();
+      if (lower.includes('hub') || lower.includes('cloud') || lower.includes('n-cloud')) 
+          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
+      if (lower.includes('gdflix') || lower.includes('drive')) 
+          return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
+      return "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600";
   };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-4 font-sans">
-      <div className="max-w-4xl mx-auto animate-fade-in">
+      <div className="max-w-3xl mx-auto animate-fade-in">
         
-        {/* Header Card */}
+        {/* Header */}
         {metaData && (
           <div className="relative overflow-hidden bg-gray-900 rounded-3xl border border-gray-800 p-6 mb-8 shadow-2xl">
              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-             
              <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center md:items-start">
                 <img 
                   src={metaData.poster || '/placeholder.png'} 
-                  className="w-32 h-48 object-cover rounded-xl shadow-lg border border-gray-700" 
+                  className="w-24 h-36 object-cover rounded-xl shadow-lg border border-gray-700" 
                   alt="Poster" 
                 />
                 <div className="text-center md:text-left flex-1">
                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mb-3 border border-blue-500/30">
-                      <FolderOpen size={12} /> VLYX-DRIVE ACCESS
+                      <FolderOpen size={12} /> SECURE DRIVE
                    </div>
-                   <h1 className="text-2xl md:text-4xl font-bold text-white mb-2 leading-tight">
+                   <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
                       {metaData.title}
                    </h1>
-                   <p className="text-gray-400 text-sm md:text-base">
-                      Secure File Manager • {groupedEpisodes.length + otherFiles.length} Files Found
+                   <p className="text-gray-400 text-sm">
+                      {apiData?.type === 'quality' ? 'Movie • Select Quality' : 'Series • Select Episode'}
                    </p>
                 </div>
              </div>
           </div>
         )}
 
-        {/* Loading State */}
+        {/* Loading */}
         {status === 'processing' && (
            <div className="text-center py-20">
-              <div className="relative w-16 h-16 mx-auto mb-4">
-                 <div className="absolute inset-0 border-4 border-gray-700 rounded-full"></div>
-                 <div className="absolute inset-0 border-4 border-t-blue-500 rounded-full animate-spin"></div>
-              </div>
-              <p className="text-gray-400 animate-pulse">Scanning server directories...</p>
+              <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+              <p className="text-gray-400">Fetching links from secure API...</p>
            </div>
         )}
 
-        {/* Content List */}
-        {status === 'ready' && (
+        {/* Content */}
+        {status === 'ready' && apiData && (
            <div className="space-y-6">
               
-              {/* Episodes List */}
-              {groupedEpisodes.map((group) => {
-                  const preferredLinks = group.links.filter(l => l.isPreferred);
-                  const otherLinks = group.links.filter(l => !l.isPreferred);
-                  const isExpanded = expandedEpisodes[group.id];
+              {/* CASE 1: MOVIE (Quality Groups) */}
+              {apiData.type === 'quality' && (
+                 apiData.linkData.map((group: LinkGroup, idx: number) => (
+                    <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden">
+                       <div className="bg-gray-800/60 px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                             <Database className="text-purple-500" size={20} />
+                             {group.quality} <span className="text-sm font-normal text-gray-400 ml-2 bg-black/30 px-2 py-0.5 rounded">{group.size}</span>
+                          </h3>
+                       </div>
+                       <div className="p-5 flex flex-col gap-3">
+                          {group.links.map((link, i) => (
+                             <button 
+                                key={i}
+                                onClick={() => handlePlay(link.url)}
+                                className={`w-full py-3 px-5 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(link.name)}`}
+                             >
+                                <span className="flex items-center gap-3">
+                                   {link.name.includes('Hub') ? <CloudLightning size={18} /> : <Server size={18} />}
+                                   {link.name}
+                                </span>
+                                <Play size={18} />
+                             </button>
+                          ))}
+                       </div>
+                    </div>
+                 ))
+              )}
 
-                  return (
-                      <div key={group.id} className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition-all">
-                          {/* Episode Title Row */}
-                          <div className="bg-gray-800/40 px-6 py-4 flex items-center justify-between border-b border-gray-800">
-                              <h3 className="text-lg font-bold text-white flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center text-sm font-bold">
-                                      {group.episodeNumber}
-                                  </div>
-                                  {group.title}
-                              </h3>
-                              <span className="text-xs text-gray-500 bg-black/30 px-2 py-1 rounded">
-                                  {group.links.length} Servers
-                              </span>
+              {/* CASE 2: SERIES (Episode Groups) */}
+              {apiData.type === 'episode' && (
+                 // Assuming 'linkData' contains episodes for series too based on your structure hint
+                 apiData.linkData.map((group: LinkGroup, idx: number) => {
+                    const isExpanded = expandedGroups[idx];
+                    // Prefer HubCloud links first
+                    const sortedLinks = [...group.links].sort((a, b) => {
+                        const aHub = a.name.includes('Hub') || a.isHubCloud;
+                        const bHub = b.name.includes('Hub') || b.isHubCloud;
+                        return aHub === bHub ? 0 : aHub ? -1 : 1;
+                    });
+                    const mainLink = sortedLinks[0];
+                    const otherLinks = sortedLinks.slice(1);
+
+                    return (
+                       <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-600 transition-all">
+                          <div className="p-4 flex flex-col sm:flex-row items-center gap-4">
+                              <div className="flex-1 text-center sm:text-left">
+                                  <h3 className="text-lg font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+                                      <Film className="text-blue-500" size={20} /> 
+                                      {group.title || `Episode ${group.episodeNumber || idx + 1}`}
+                                  </h3>
+                              </div>
+                              
+                              <div className="flex flex-col gap-2 w-full sm:w-auto">
+                                  {/* Play Main Link */}
+                                  <button 
+                                      onClick={() => handlePlay(mainLink.url)}
+                                      className={`px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg ${getButtonClass(mainLink.name)}`}
+                                  >
+                                      <Play size={18} className="fill-current" /> Play Now
+                                  </button>
+                                  
+                                  {/* Toggle Others */}
+                                  {otherLinks.length > 0 && (
+                                      <button 
+                                          onClick={() => toggleExpand(idx)}
+                                          className="text-xs text-gray-400 hover:text-white flex items-center justify-center gap-1 py-1"
+                                      >
+                                          {isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+                                          {isExpanded ? 'Hide Servers' : `${otherLinks.length} More Servers`}
+                                      </button>
+                                  )}
+                              </div>
                           </div>
 
-                          {/* Links Area */}
-                          <div className="p-6">
-                              {/* Primary (Preferred) Links */}
-                              <div className="space-y-3">
-                                  {preferredLinks.map((link, idx) => (
+                          {/* Expanded Other Links */}
+                          {isExpanded && otherLinks.length > 0 && (
+                              <div className="bg-black/20 p-4 border-t border-gray-800 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
+                                  {otherLinks.map((link, i) => (
                                       <button 
-                                          key={`pref-${idx}`}
+                                          key={i}
                                           onClick={() => handlePlay(link.url)}
-                                          className={`w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 shadow-lg transform hover:scale-[1.02] transition-all ${getButtonClass(link.source)}`}
+                                          className="flex items-center gap-2 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors border border-gray-700"
                                       >
-                                          {link.source === 'N-Cloud' ? <CloudLightning size={20}/> : <Play size={20}/>}
-                                          {link.source === 'N-Cloud' ? 'Continue with N-Cloud' : `Play via ${link.source}`}
-                                          {link.isPreferred && <span className="text-xs bg-white/20 px-2 py-0.5 rounded ml-2">FAST</span>}
+                                          <Server size={14} /> {link.name}
                                       </button>
                                   ))}
                               </div>
-
-                              {/* Secondary Links (Collapsible) */}
-                              {otherLinks.length > 0 && (
-                                  <div className="mt-4">
-                                      {!isExpanded && preferredLinks.length > 0 ? (
-                                          <button 
-                                              onClick={() => toggleExpand(group.id)}
-                                              className="w-full py-2 text-sm text-gray-500 hover:text-white flex items-center justify-center gap-1 transition-colors"
-                                          >
-                                              <ChevronDown size={14} /> Show {otherLinks.length} more servers
-                                          </button>
-                                      ) : (
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 animate-fade-in">
-                                              {otherLinks.map((link, idx) => (
-                                                  <button 
-                                                      key={`other-${idx}`}
-                                                      onClick={() => handlePlay(link.url)}
-                                                      className={`py-3 px-4 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all ${getButtonClass(link.source)}`}
-                                                  >
-                                                      <Server size={16} /> {link.source}
-                                                  </button>
-                                              ))}
-                                              {preferredLinks.length > 0 && (
-                                                  <button 
-                                                      onClick={() => toggleExpand(group.id)}
-                                                      className="col-span-full py-2 text-sm text-gray-500 hover:text-white flex items-center justify-center gap-1"
-                                                  >
-                                                      <ChevronUp size={14} /> Show Less
-                                                  </button>
-                                              )}
-                                          </div>
-                                      )}
-                                  </div>
-                              )}
-                          </div>
-                      </div>
-                  );
-              })}
-
-              {/* Other Files (Movies/Extras) */}
-              {otherFiles.length > 0 && (
-                  <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
-                      <h4 className="text-lg font-bold text-gray-300 mb-4 flex items-center gap-2">
-                          <HardDrive size={18} /> Other Files
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {otherFiles.map((file, idx) => (
-                              <button 
-                                  key={idx}
-                                  onClick={() => handlePlay(file.url)}
-                                  className="p-4 rounded-xl bg-gray-800 hover:bg-gray-700 text-left transition-colors flex items-center justify-between group"
-                              >
-                                  <span className="font-medium text-gray-300 group-hover:text-white truncate pr-4">
-                                      {file.title}
-                                  </span>
-                                  <Play size={16} className="text-gray-600 group-hover:text-blue-400" />
-                              </button>
-                          ))}
-                      </div>
-                  </div>
+                          )}
+                       </div>
+                    );
+                 })
               )}
 
            </div>
@@ -299,11 +221,9 @@ function VlyxDriveContent() {
         {/* Error State */}
         {status === 'error' && (
            <div className="text-center py-20">
-              <div className="bg-red-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertTriangle className="w-10 h-10 text-red-500" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Link Expired or Invalid</h3>
-              <p className="text-gray-400">The requested folder could not be accessed.</p>
+              <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white">Data Fetch Failed</h3>
+              <p className="text-gray-400">Could not retrieve links from the API.</p>
            </div>
         )}
       </div>
@@ -313,8 +233,10 @@ function VlyxDriveContent() {
 
 export default function VlyxDrive() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center">Loading...</div>}>
-      <VlyxDriveContent />
-    </Suspense>
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-4">
+      <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
+        <VlyxDriveContent />
+      </Suspense>
+    </div>
   );
 }
