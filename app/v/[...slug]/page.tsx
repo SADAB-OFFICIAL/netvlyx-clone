@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  ImageIcon, Archive, Tv, ImageOff, Loader2, Info, Star, ChevronDown 
+  ImageIcon, Archive, Tv, Loader2, Star, ChevronDown 
 } from 'lucide-react';
 
 export default function MoviePage() {
@@ -68,7 +68,7 @@ export default function MoviePage() {
   // Use TMDB images if available, else scraper images
   const galleryImages = (tmdbData?.images && tmdbData.images.length > 0) ? tmdbData.images : data?.screenshots;
 
-  // --- FILTER LOGIC (Same as before) ---
+  // --- FILTER LOGIC ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
       let validSections = data.downloadSections.filter((sec: any) => {
@@ -97,6 +97,15 @@ export default function MoviePage() {
 
   const scrollToDownloads = () => {
       downloadRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // ✅ Added missing function here
+  const goBackStep = () => {
+      if (selectedQuality) setSelectedQuality(null);
+      else if (downloadType) setDownloadType(null);
+      else if (actionType) setActionType(null);
+      else if (selectedSeason) setSelectedSeason(null);
+      else router.back();
   };
 
   const handleLinkClick = (url: string) => {
