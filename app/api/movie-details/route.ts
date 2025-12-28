@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    // 1. CALL OFFICIAL NETVLYX API (Ye LINKS ke liye best hai)
+    // 1. CALL OFFICIAL NETVLYX API (Links ke liye best)
     const targetApi = `https://netvlyx.pages.dev/api/m4ulinks-scraper?url=${encodeURIComponent(url)}`;
     
     const response = await fetch(targetApi, {
@@ -27,33 +27,50 @@ export async function GET(request: Request) {
         } catch (e) {}
     }
 
-    // --- 2. SMART TITLE LOGIC (Jo abhi banaya tha) ---
-    // Agar API ne title nahi diya ya 'Unknown' diya, to URL se nikalo
-    let finalTitle = data.title;
+    // --- 2. STRONG TITLE LOGIC (APKE BATAYE HUE FORMULA SE) ---
+    // Formula: Bracket '(', '[', ya Dot '.' se pehle jo bhi hai wo utha lo.
+    
+    const cleanStrongTitle = (rawText: string) => {
+        if (!rawText) return "";
+        
+        // Step A: Hyphens ko space banao (URL slug ke liye)
+        let text = rawText.replace(/-/g, ' ');
+
+        // Step B: Break at '(', '[', '.', or 'Season' keywords
+        // Regex ka matlab: Ruk jao agar (, [, ., Season, S01, ya 202x dikhe
+        const splitRegex = /[\(\[\.]|Season|S\d+|Ep\d+|\b\d{4}\b/i;
+        
+        // Pehla hissa uthao (Jo main naam hai)
+        let cleanPart = text.split(splitRegex)[0];
+
+        // Step C: Safai (Trim extra spaces)
+        cleanPart = cleanPart.trim();
+
+        // Step D: Capitalize (Har word ka pehla letter bada)
+        return cleanPart.replace(/\b\w/g, (l) => l.toUpperCase());
+    };
+
+    // Pehle koshish karo API ke title se
+    let finalTitle = cleanStrongTitle(data.title);
     let releaseYear = null;
 
-    if (!finalTitle || finalTitle.toLowerCase().includes('unknown')) {
+    // Agar API ka title "Unknown" ya khali nikla, to URL se try karo
+    if (!finalTitle || finalTitle.length < 2 || finalTitle.toLowerCase().includes('unknown')) {
         try {
             const slug = new URL(url).pathname.split('/').filter(Boolean).pop() || "";
             
-            // Year nikalne ki koshish (e.g. pathaan-2023)
+            // Year nikalne ki koshish (Taaki TMDB ko aur help mile)
             const yearMatch = slug.match(/-(\d{4})-/);
             if (yearMatch) releaseYear = yearMatch[1];
 
-            // Title Clean karo
-            finalTitle = slug
-                .replace(/-(\d{4})-.*$/, '') 
-                .replace(/-/g, ' ')
-                .replace(/\b(download|movie|hindi|dubbed|dual|audio|season|episode|s\d+|e\d+|480p|720p|1080p|4k|web-dl|bluray|hdrip|multi|org)\b/gi, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-            finalTitle = finalTitle.replace(/\b\w/g, (l: string) => l.toUpperCase());
+            // URL par bhi wahi Strong Cleaner lagao
+            finalTitle = cleanStrongTitle(slug);
         } catch (e) {
             finalTitle = "Unknown Movie";
         }
     }
 
-    // --- 3. PROCESS LINKS (Official API Data se) ---
+    // --- 3. PROCESS LINKS (Baaki Logic Same) ---
     const downloadSections = (data.linkData || []).map((item: any) => {
         let season = null;
         const sMatch = (item.quality || "").match(/(?:Season|S)\s*0?(\d+)/i);
@@ -65,7 +82,6 @@ export async function GET(request: Request) {
         else if (quality.match(/720p/i)) quality = '720p';
         else if (quality.match(/480p/i)) quality = '480p';
 
-        // Pack Detection
         const sectionIsPack = /pack|zip|batch|complete|collection|volume/i.test(item.quality || "");
 
         return {
@@ -81,27 +97,24 @@ export async function GET(request: Request) {
         };
     });
 
-    // Detect Seasons
     const allSeasons = new Set<number>();
     downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
     
     if (allSeasons.size === 0) {
-        const titleRange = (finalTitle || "").match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
+        const titleRange = (data.title || "").match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
         if (titleRange) {
             for (let i = parseInt(titleRange[1]); i <= parseInt(titleRange[2]); i++) allSeasons.add(i);
         }
     }
 
-    // --- 4. SCREENSHOTS ---
-    // Official API 'screenshots' ya 'images' bhejti hai jo Source se hote hain
     let screenshots = Array.isArray(data.screenshots || data.images) ? (data.screenshots || data.images) : [];
 
     return NextResponse.json({
-        title: finalTitle,
+        title: finalTitle, // Ab ye ekdum Clean Title hoga
         year: releaseYear,
         poster: data.image || data.poster || "",
         plot: data.description || data.plot || "Overview unavailable.",
-        imdbId: null, // Frontend dhoond lega
+        imdbId: null, 
         seasons: Array.from(allSeasons).sort((a, b) => a - b),
         screenshots: screenshots.slice(0, 8),
         downloadSections: downloadSections
