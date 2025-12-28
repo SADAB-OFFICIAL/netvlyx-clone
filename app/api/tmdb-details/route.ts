@@ -6,19 +6,33 @@ const TMDB_KEY = "848d4c9db9d3f19d0229dc95735190d3"; // API Key
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const imdbId = searchParams.get('imdb_id');
+  const query = searchParams.get('query'); // Title search support
 
-  if (!imdbId) return NextResponse.json({ error: 'IMDb ID Required' }, { status: 400 });
+  if (!imdbId && !query) return NextResponse.json({ error: 'ID or Query Required' }, { status: 400 });
 
   try {
-    // Step 1: Find by IMDb ID
-    const findUrl = `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_KEY}&external_source=imdb_id`;
-    const findRes = await fetch(findUrl);
-    const findData = await findRes.json();
+    let item = null;
+    let type = 'movie';
 
-    const movie = findData.movie_results?.[0];
-    const tv = findData.tv_results?.[0];
-    const item = movie || tv;
-    const type = movie ? 'movie' : 'tv';
+    // A. Search by IMDb ID (Best Method)
+    if (imdbId) {
+        const findUrl = `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_KEY}&external_source=imdb_id`;
+        const findRes = await fetch(findUrl);
+        const findData = await findRes.json();
+        item = findData.movie_results?.[0] || findData.tv_results?.[0];
+        type = findData.movie_results?.[0] ? 'movie' : 'tv';
+    }
+
+    // B. Search by Title (Fallback if ID missing)
+    if (!item && query) {
+        // Clean title (remove year/season info for better search)
+        const cleanQuery = query.replace(/\s*(?:Season|S)\s*\d+.*$/i, '').replace(/\(\d{4}\)/, '').trim();
+        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(cleanQuery)}`;
+        const searchRes = await fetch(searchUrl);
+        const searchData = await searchRes.json();
+        item = searchData.results?.[0]; // Pick first result
+        if (item) type = item.media_type === 'tv' ? 'tv' : 'movie';
+    }
 
     if (!item) return NextResponse.json({ found: false });
 
