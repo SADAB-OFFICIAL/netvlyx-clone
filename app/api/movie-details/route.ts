@@ -9,20 +9,30 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
+    // 1. ADDED PROXY HEADERS (Bypass Protection)
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Referer": "https://movies4u.fans/", // Fake referer
+        "Origin": "https://movies4u.fans"
       }
     });
     
+    if (!response.ok) throw new Error("Source Blocked");
+
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // 1. Basic Info
+    // --- Basic Info ---
     const title = $('h1.entry-title, .title').first().text().trim();
+    
+    // Poster: Try multiple sources
     let poster = $('.post-thumbnail img').attr('src') || 
-                 $('.entry-content img').first().attr('src');
+                 $('.entry-content img').first().attr('src') || 
+                 $('meta[property="og:image"]').attr('content');
 
+    // Plot
     let plot = '';
     $('p').each((i, el) => {
         const text = $(el).text().trim();
@@ -31,66 +41,72 @@ export async function GET(request: Request) {
         }
     });
 
-    // 2. SCREENSHOTS
+    // --- SCREENSHOTS (Strict Filter) ---
     const screenshots: string[] = [];
-    $('.entry-content img, .post-content img').each((i, el) => {
+    const contentArea = $('.entry-content, .thecontent, .post-content');
+    
+    contentArea.find('img').each((i, el) => {
         const src = $(el).attr('src') || $(el).attr('data-src');
-        if (src && src !== poster && !src.includes('icon') && !src.includes('button') && !src.includes('logo')) {
-            screenshots.push(src);
+        if (src && src !== poster) {
+            if (!src.includes('icon') && !src.includes('logo') && !src.includes('button') && !src.includes('whatsapp')) {
+                screenshots.push(src);
+            }
         }
     });
+    // Limit to 8 unique images
     const uniqueScreenshots = [...new Set(screenshots)].slice(0, 8);
 
-    // 3. DOWNLOAD LINKS (The Fix: Heading Based Logic)
+    // --- DOWNLOAD LINKS (Headings Based - Fixes Seasons) ---
     const downloadSections: any[] = [];
     
-    // Scan standard headings used by Movies4u/Vega
-    $('h3, h4, h5, h6, strong, p > strong').each((i, el) => {
+    // Scan headers to separate Seasons (Season 1, Season 2...)
+    $('h3, h4, h5, h6, strong, b').each((i, el) => {
         const headingText = $(el).text().trim();
         
-        // Agar Heading me "Season", "480p", "Download" jaisa kuch hai
-        if (/Season|Episode|480p|720p|1080p|2160p|4k|Download|Zip|Pack/i.test(headingText)) {
-            
+        // Valid section must have these keywords
+        const isRelevant = /480p|720p|1080p|2160p|4k|Season|Episode|Download|Zip|Pack/i.test(headingText);
+
+        if (isRelevant) {
             const links: any[] = [];
             
-            // Us heading ke neeche ke links dhundo jab tak agli heading na aaye
+            // Collect links under this heading
             $(el).nextUntil('h3, h4, h5, h6').find('a').each((j, linkEl) => {
-                const href = $(linkEl).attr('href');
-                const text = $(linkEl).text().trim();
+                const linkUrl = $(linkEl).attr('href');
+                const linkText = $(linkEl).text().trim();
                 
-                if (href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix'))) {
-                    links.push({ label: text || 'Download Link', url: href });
+                // Filter Cloud Links
+                if (linkUrl && (linkUrl.includes('drive') || linkUrl.includes('hub') || linkUrl.includes('cloud') || linkUrl.includes('gdflix') || linkUrl.includes('file'))) {
+                    links.push({ label: linkText || 'Download', url: linkUrl });
                 }
             });
 
-            // Agar links mile, to section bana do
+            // Some themes put links directly as siblings
+            if (links.length === 0) {
+                 $(el).nextUntil('h3, h4, h5, h6').filter('a').each((j, linkEl) => {
+                    const linkUrl = $(linkEl).attr('href');
+                    const linkText = $(linkEl).text().trim();
+                    if (linkUrl && (linkUrl.includes('drive') || linkUrl.includes('hub'))) {
+                        links.push({ label: linkText || 'Download', url: linkUrl });
+                    }
+                 });
+            }
+
             if (links.length > 0) {
                 downloadSections.push({ title: headingText, links });
             }
         }
     });
 
-    // Fallback: Agar upar wala fail ho jaye (rare movie pages)
-    if (downloadSections.length === 0) {
-        const allLinks: any[] = [];
-        $('a').each((i, el) => {
-            const href = $(el).attr('href');
-            if (href && (href.includes('drive') || href.includes('hub'))) {
-                allLinks.push({ label: $(el).text().trim() || 'Download', url: href });
-            }
-        });
-        if (allLinks.length > 0) {
-            downloadSections.push({ title: 'Download Links', links: allLinks });
-        }
-    }
-
     return NextResponse.json({
-        title, poster, plot,
+        title,
+        poster,
+        plot,
         screenshots: uniqueScreenshots,
         downloadSections
     });
 
   } catch (error) {
-    return NextResponse.json({ error: 'Failed' });
+    console.error("Scraper Error:", error);
+    return NextResponse.json({ error: 'Failed to fetch details' });
   }
 }
