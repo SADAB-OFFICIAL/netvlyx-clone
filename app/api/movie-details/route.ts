@@ -1,6 +1,4 @@
-// app/api/movie-details/route.ts
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,119 +7,92 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    // 1. USE PROXY
-    const proxyUrl = `https://proxy.vlyx.workers.dev/?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
-
-    if (!response.ok) throw new Error("Proxy Failed");
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    // --- 2. BASIC DETAILS ---
-    const title = $('h1.entry-title, .title').first().text().trim();
-    const poster = $('.post-thumbnail img').attr('src') || $('.entry-content img').first().attr('src');
+    // 1. CALL OFFICIAL NETVLYX API (Stable Source)
+    // Yeh API humein bana-banaya data degi (Links, Quality, Plot etc.)
+    const targetApi = `https://netvlyx.pages.dev/api/m4ulinks-scraper?url=${encodeURIComponent(url)}`;
     
-    // Fallback Plot (Movies4u wala)
-    let plotArr: string[] = [];
-    $('.entry-content p, .post-content p').each((i, el) => {
-        const text = $(el).text().trim();
-        if (text.length > 40 && !text.toLowerCase().includes('download') && !text.toLowerCase().includes('telegram')) {
-            plotArr.push(text);
-        }
+    const response = await fetch(targetApi, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Referer': 'https://netvlyx.pages.dev/',
+        'Origin': 'https://netvlyx.pages.dev'
+      },
+      next: { revalidate: 300 } // 5 min cache
     });
-    const scrapedPlot = plotArr.slice(0, 2).join('\n\n') || "Loading overview...";
 
-    // --- 3. EXTRACTION: IMDb ID (The Missing Piece) ---
-    // NetVlyx logic: Find link containing 'imdb.com/title/tt...'
+    if (!response.ok) throw new Error("NetVlyx API Failed");
+    const data = await response.json();
+
+    // 2. DATA PROCESSING (Frontend ke liye format karna)
+
+    // A. Plot & Screenshots
+    const plot = data.description || data.plot || data.story || "No overview available.";
+    
+    let screenshots = data.screenshots || data.images || [];
+    if (!Array.isArray(screenshots)) screenshots = [];
+
+    // B. IMDb ID Extraction (Agar API text mein IMDb link de)
     let imdbId = null;
-    $('a').each((i, el) => {
-        const href = $(el).attr('href');
-        if (href && href.includes('imdb.com/title/tt')) {
-            const match = href.match(/tt\d+/);
-            if (match) {
-                imdbId = match[0];
-                return false; // Break loop
-            }
-        }
+    // Kabhi kabhi description ya title mein hidden hota hai, par frontend title se bhi dhund lega.
+    // Hum koshish karte hain agar API ne koi meta data bheja ho.
+    
+    // C. PROCESS LINKS (Ye sabse important hai)
+    // API 'linkData' bhejti hai, hum usse 'downloadSections' banayenge
+    const downloadSections = (data.linkData || []).map((item: any) => {
+        // Season Detection (e.g. "S01 720p")
+        let season = null;
+        const sMatch = (item.quality || "").match(/(?:Season|S)\s*0?(\d+)/i);
+        if (sMatch) season = parseInt(sMatch[1]);
+
+        // Clean Quality Name
+        let quality = (item.quality || "Standard").replace(/\s*\[.*?\]/g, "").trim();
+        // Normalize Quality
+        if (quality.match(/4k|2160p/i)) quality = '4K';
+        else if (quality.match(/1080p/i)) quality = '1080p';
+        else if (quality.match(/720p/i)) quality = '720p';
+        else if (quality.match(/480p/i)) quality = '480p';
+
+        // Check if it's a "Pack" section
+        const sectionIsPack = /pack|zip|batch|complete|collection|volume/i.test(item.quality || "");
+
+        return {
+            title: item.quality, // Full title e.g. "Season 1 720p [Pack]"
+            quality: quality,    // Normalized e.g. "720p"
+            size: item.size,
+            season: season,
+            links: (item.links || []).map((l: any) => ({
+                label: l.name || 'Download Server',
+                url: l.url,
+                // Mark link as Zip if section is Pack OR link name has Zip
+                isZip: sectionIsPack || /zip|pack|batch/i.test(l.name || "")
+            }))
+        };
     });
 
-    // --- 4. SCREENSHOTS ---
-    const screenshots: string[] = [];
-    $('.ss-img img').each((i, el) => {
-        const src = $(el).attr('src') || $(el).attr('data-src');
-        if (src) screenshots.push(src);
-    });
-    if (screenshots.length === 0) {
-        $('.entry-content img').each((i, el) => {
-            const src = $(el).attr('src') || $(el).attr('data-src');
-            if (src && src !== poster && !src.includes('icon')) screenshots.push(src);
-        });
-    }
-
-    // --- 5. LINKS & SEASONS ---
-    const downloadSections: any[] = [];
-    let detectedSeasons = new Set<number>();
-
-    const isValidLink = (href: string) => 
-        href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix') || href.includes('file') || href.includes('workers.dev'));
-
-    $('h3, h4, h5, h6, strong, b').each((i, el) => {
-        const headingText = $(el).text().trim();
-        const lowerHeading = headingText.toLowerCase();
-
-        if (lowerHeading.match(/480p|720p|1080p|2160p|4k|season|episode|download|zip|pack/)) {
-            let sectionSeason: number | null = null;
-            const sMatch = headingText.match(/(?:Season|S)\s*0?(\d+)/i);
-            if (sMatch) {
-                sectionSeason = parseInt(sMatch[1]);
-                detectedSeasons.add(sectionSeason);
-            }
-
-            let quality = 'Standard';
-            if (lowerHeading.includes('4k') || lowerHeading.includes('2160p')) quality = '4K';
-            else if (lowerHeading.includes('1080p')) quality = '1080p';
-            else if (lowerHeading.includes('720p')) quality = '720p';
-            else if (lowerHeading.includes('480p')) quality = '480p';
-
-            const links: any[] = [];
-            $(el).nextUntil('h3, h4, h5, h6').each((j, sib) => {
-                const processLink = (l: any) => {
-                    const href = $(l).attr('href');
-                    if (isValidLink(href || '')) links.push({ label: $(l).text().trim(), url: href });
-                };
-                if ($(sib).is('a')) processLink(sib);
-                $(sib).find('a').each((k, child) => processLink(child));
-            });
-
-            if (links.length > 0) {
-                downloadSections.push({ title: headingText, season: sectionSeason, quality, links });
-            }
-        }
-    });
-
-    // Detect Season Range from Title
-    if (detectedSeasons.size === 0) {
-        const range = title.match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
-        if (range) {
-            for (let i = parseInt(range[1]); i <= parseInt(range[2]); i++) detectedSeasons.add(i);
+    // Detect All Seasons for Filtering
+    const allSeasons = new Set<number>();
+    downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
+    
+    // Fallback: Agar sections mein season nahi mila par Title mein "Season 1-5" hai
+    if (allSeasons.size === 0) {
+        const titleRange = (data.title || "").match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
+        if (titleRange) {
+            for (let i = parseInt(titleRange[1]); i <= parseInt(titleRange[2]); i++) allSeasons.add(i);
         }
     }
 
     return NextResponse.json({
-        title,
-        poster,
-        plot: scrapedPlot,
-        imdbId: imdbId, // Sending this to Frontend
-        seasons: Array.from(detectedSeasons).sort((a,b)=>a-b),
-        screenshots: [...new Set(screenshots)].slice(0, 8),
-        downloadSections
+        title: data.title || "Unknown",
+        poster: data.image || data.poster || "",
+        plot: plot,
+        imdbId: imdbId, // Frontend TMDB se verify karega
+        seasons: Array.from(allSeasons).sort((a, b) => a - b),
+        screenshots: screenshots.slice(0, 8),
+        downloadSections: downloadSections
     });
 
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed' });
+  } catch (error: any) {
+    console.error("API Error:", error.message);
+    return NextResponse.json({ error: 'Failed to fetch data' });
   }
 }
