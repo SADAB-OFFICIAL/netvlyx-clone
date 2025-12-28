@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  ImageIcon, Archive, Tv, ImageOff, Loader2, Info
+  ImageIcon, Archive, Tv, ImageOff, Loader2, Info, Star
 } from 'lucide-react';
 
 export default function MoviePage() {
@@ -15,8 +15,11 @@ export default function MoviePage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // TMDB States
+  const [tmdbData, setTmdbData] = useState<any>(null);
 
-  // Filter States
+  // Filters
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [actionType, setActionType] = useState<'watch' | 'download' | null>(null);
   const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
@@ -28,12 +31,12 @@ export default function MoviePage() {
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
 
+  // 1. Fetch Main Data (Scraper)
   useEffect(() => {
     if (!movieUrl) return;
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Calls our Backend -> Calls NetVlyx Official API
         const res = await fetch(`/api/movie-details?url=${encodeURIComponent(movieUrl)}`);
         if (!res.ok) throw new Error("Failed");
         const result = await res.json();
@@ -45,63 +48,53 @@ export default function MoviePage() {
     fetchData();
   }, [movieUrl]);
 
-  // --- FILTER LOGIC ---
+  // 2. Fetch TMDB Data (If IMDb ID found)
+  useEffect(() => {
+    if (data?.imdbId && !tmdbData) {
+        fetch(`/api/tmdb-details?imdb_id=${data.imdbId}`)
+            .then(res => res.json())
+            .then(res => {
+                if (res.found) setTmdbData(res);
+            })
+            .catch(err => console.error("TMDB Fetch Error", err));
+    }
+  }, [data]);
+
+  // Merge Data (Prefer TMDB if available)
+  const finalOverview = tmdbData?.overview || data?.plot;
+  const finalRating = tmdbData?.rating;
+  const finalPoster = tmdbData?.poster || data?.poster; // TMDB posters are higher quality
+  const finalBackdrop = tmdbData?.backdrop || data?.poster;
+
+  // ... (Filter Logic Same as Before) ...
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
-
       let validSections = data.downloadSections.filter((sec: any) => {
-          if (selectedSeason !== null) {
-              if (sec.season !== null && sec.season !== selectedSeason) return false;
-          }
+          if (selectedSeason !== null && sec.season !== null && sec.season !== selectedSeason) return false;
           return true;
       });
-
       let allLinks: any[] = [];
       let qualSet = new Set<string>();
-
       validSections.forEach((sec: any) => {
           sec.links.forEach((link: any) => {
-              const isBatch = link.isZip || 
-                              link.label.toLowerCase().includes('zip') || 
-                              link.label.toLowerCase().includes('pack') ||
-                              sec.title.toLowerCase().includes('pack');
-
+              const isBatch = link.isZip || link.label.toLowerCase().includes('zip') || link.label.toLowerCase().includes('pack') || sec.title.toLowerCase().includes('pack');
               if (actionType === 'download') {
                   if (downloadType === 'bulk' && !isBatch) return;
                   if (downloadType === 'episode' && isBatch) return;
               } else if (actionType === 'watch' && isBatch) return;
-
               qualSet.add(sec.quality);
-              allLinks.push({
-                  ...link,
-                  quality: sec.quality,
-                  size: sec.size,
-                  sectionTitle: sec.title
-              });
+              allLinks.push({ ...link, quality: sec.quality, size: sec.size, sectionTitle: sec.title });
           });
       });
-
-      return {
-          links: allLinks,
-          qualities: Array.from(qualSet).sort((a, b) => {
-              const order = ['4K', '1080p', '720p', '480p', 'Standard'];
-              return order.indexOf(a) - order.indexOf(b);
-          })
-      };
+      return { links: allLinks, qualities: Array.from(qualSet).sort((a,b) => ['4K','1080p','720p','480p','Standard'].indexOf(a) - ['4K','1080p','720p','480p','Standard'].indexOf(b)) };
   };
 
   const { links: filteredLinks, qualities: currentQualities } = getFilteredData();
-
-  useEffect(() => {
-      if (selectedQuality && !currentQualities.includes(selectedQuality)) {
-          setSelectedQuality(null);
-      }
-  }, [currentQualities, selectedQuality]);
-
+  useEffect(() => { if (selectedQuality && !currentQualities.includes(selectedQuality)) setSelectedQuality(null); }, [currentQualities, selectedQuality]);
   const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
 
   const handleLinkClick = (url: string) => {
-    const payload = { link: url, title: data?.title, poster: data?.poster, quality: selectedQuality };
+    const payload = { link: url, title: data?.title, poster: finalPoster, quality: selectedQuality };
     const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     router.push(`/vlyxdrive?key=${key}`);
   };
@@ -120,7 +113,7 @@ export default function MoviePage() {
   return (
     <div className="min-h-screen bg-black text-white pb-20 animate-fade-in font-sans">
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-cover bg-center opacity-20 blur-3xl scale-110" style={{ backgroundImage: `url(${data?.poster})` }}></div>
+        <div className="absolute inset-0 bg-cover bg-center opacity-20 blur-3xl scale-110" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/95 to-black/80"></div>
       </div>
 
@@ -128,70 +121,69 @@ export default function MoviePage() {
         <button onClick={() => router.back()} className="mb-8 flex items-center gap-2 text-gray-400 hover:text-white bg-white/5 py-2 px-4 rounded-full border border-white/10"><ArrowLeft size={18} /> Back</button>
         
         <div className="flex flex-col lg:flex-row gap-10">
-          {/* POSTER */}
           <div className="w-full lg:w-[320px] mx-auto lg:mx-0">
-              <img src={data?.poster} alt={data?.title} className="rounded-2xl shadow-2xl w-full border border-white/10" />
+              <img src={finalPoster} alt={data?.title} className="rounded-2xl shadow-2xl w-full border border-white/10" />
           </div>
 
           <div className="flex-1 min-w-0">
-            {/* TITLE & OVERVIEW */}
-            <h1 className="text-3xl md:text-5xl font-bold mb-4 leading-tight">{data?.title}</h1>
+            <div className="flex items-center gap-4 mb-4">
+                 <h1 className="text-3xl md:text-5xl font-bold leading-tight">{data?.title}</h1>
+                 {finalRating && (
+                     <div className="flex items-center gap-1 bg-yellow-500/20 px-3 py-1 rounded-full border border-yellow-500/40">
+                         <Star className="w-4 h-4 text-yellow-500 fill-current"/>
+                         <span className="text-yellow-500 font-bold">{finalRating}</span>
+                     </div>
+                 )}
+            </div>
             
-            <div className="mb-8 bg-black/40 backdrop-blur-sm p-6 rounded-2xl border border-white/5">
+            {/* OVERVIEW SECTION (Updated) */}
+            <div className="mb-8 bg-black/40 backdrop-blur-sm p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-1 h-full bg-blue-600"></div>
                 <h3 className="text-lg font-bold text-gray-200 mb-2 flex items-center gap-2">
                     <Info size={18} className="text-blue-500"/> Overview
+                    {tmdbData && <span className="text-xs bg-blue-600 px-2 py-0.5 rounded text-white ml-auto">TMDB Verified</span>}
                 </h3>
-                <p className="text-gray-300 text-lg leading-relaxed">{data?.plot}</p>
+                <p className="text-gray-300 text-lg leading-relaxed">
+                   {finalOverview}
+                </p>
             </div>
 
-            {/* SCREENSHOTS SYSTEM */}
+            {/* SCREENSHOTS */}
             <div className="mb-8 animate-fade-in">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <ImageIcon className="text-blue-500"/> Screenshots
-                </h3>
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><ImageIcon className="text-blue-500"/> Screenshots</h3>
                 {data?.screenshots && data.screenshots.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {data.screenshots.map((src: string, i: number) => (
                             <div key={i} className="group relative overflow-hidden rounded-xl border border-gray-800 bg-black aspect-video hover:border-blue-500/50 transition-colors">
-                                <img src={src} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300" loading="lazy" alt={`Screenshot ${i+1}`}/>
+                                <img src={src} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300" loading="lazy"/>
                             </div>
                         ))}
                     </div>
                 ) : (
-                    // Empty State UI (Agar Official API me screenshots nahi mile)
                     <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-8 text-center">
-                        <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <ImageOff className="w-8 h-8 text-gray-600" />
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-300 mb-1">No Screenshots</h3>
-                        <p className="text-gray-500 text-sm">Preview images not available from source.</p>
+                        <ImageOff className="w-10 h-10 text-gray-600 mx-auto mb-2"/>
+                        <p className="text-gray-500">No screenshots available.</p>
                     </div>
                 )}
             </div>
 
-            {/* DOWNLOAD/WATCH SYSTEM */}
+            {/* ... (DOWNLOAD/WATCH UI - SAME AS BEFORE) ... */}
             <div className="bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl">
-               
-               {/* HEADER: STEP INDICATOR */}
                {(selectedSeason || actionType) && (
                  <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
                     <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1"><ArrowLeft size={14}/> Previous</button>
                     <div className="text-sm font-bold text-gray-500 hidden sm:block">
-                        {selectedSeason ? `S${selectedSeason}` : ''} 
-                        {actionType ? ` > ${actionType === 'watch' ? 'Stream' : 'DL'}` : ''}
-                        {selectedQuality ? ` > ${selectedQuality}` : ''}
+                        {selectedSeason ? `S${selectedSeason}` : ''} {actionType ? ` > ${actionType === 'watch' ? 'Stream' : 'DL'}` : ''} {selectedQuality ? ` > ${selectedQuality}` : ''}
                     </div>
                  </div>
                )}
 
-               {/* STEP 1: SEASON */}
                {availableSeasons.length > 0 && selectedSeason === null && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-fade-in">
                       {availableSeasons.map(s => <button key={s} onClick={() => setSelectedSeason(s)} className="p-4 bg-gray-800 rounded-xl hover:bg-red-600 font-bold text-xl border border-gray-700 transition-all">Season {s}</button>)}
                   </div>
                )}
 
-               {/* STEP 2: ACTION */}
                {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
                   <div className="grid grid-cols-2 gap-6 animate-fade-in">
                       <button onClick={() => setActionType('download')} className="p-8 bg-blue-600/20 border border-blue-500/40 rounded-2xl font-bold text-2xl text-white hover:bg-blue-600/30 transition-all">Download</button>
@@ -199,7 +191,6 @@ export default function MoviePage() {
                   </div>
                )}
 
-               {/* STEP 3: TYPE (Download Only) */}
                {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                    <div className="grid grid-cols-2 gap-6 animate-fade-in">
                        <button onClick={() => setDownloadType('episode')} className="p-8 bg-gray-800 rounded-2xl font-bold text-xl hover:bg-gray-700 transition-all">Episode Wise</button>
@@ -207,19 +198,17 @@ export default function MoviePage() {
                    </div>
                )}
 
-               {/* STEP 4: QUALITY */}
                {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
                    <div className="animate-fade-in">
                        <h3 className="text-xl font-bold mb-6 text-center">Select Quality</h3>
                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                            {currentQualities.length > 0 ? currentQualities.map(q => (
                                <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 rounded-xl font-bold text-lg transition-all">{q}</button>
-                           )) : <div className="col-span-full text-center text-gray-500">No options found. Try changing filters.</div>}
+                           )) : <div className="col-span-full text-center text-gray-500">No options found.</div>}
                        </div>
                    </div>
                )}
 
-               {/* STEP 5: LINKS */}
                {selectedQuality !== null && (
                    <div className="space-y-3 animate-fade-in">
                        <h3 className="text-green-400 font-bold mb-4 flex items-center gap-2"><CheckCircle/> Links ({selectedQuality})</h3>
