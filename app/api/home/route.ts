@@ -4,74 +4,89 @@ import * as cheerio from 'cheerio';
 
 export async function GET() {
   try {
-    // 1. Target Real Site
+    // 1. Target the Real Website
     const BASE_URL = 'https://movies4u.fans'; 
+    
+    // Fetch HTML
     const response = await fetch(BASE_URL, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
-      next: { revalidate: 3600 } // Cache for 1 hour
+      next: { revalidate: 1800 } // Cache for 30 Minutes
     });
-    
-    if (!response.ok) throw new Error("Failed to fetch source");
+
+    if (!response.ok) throw new Error(`Failed to fetch ${BASE_URL}`);
     const html = await response.text();
     const $ = cheerio.load(html);
 
     const homeData: any = {
-      featured: null,
-      sections: []
+      featured: [], // For Hero Slider
+      sections: []  // For Content Rows
     };
 
-    // --- 2. SCRAPE HERO SECTION (Featured) ---
-    // Movies4u par aksar bada slider hota hai
-    const heroEl = $('.deslide-item').first(); 
-    if (heroEl.length > 0) {
-        const title = heroEl.find('.deslide-title').text().trim();
-        const desc = heroEl.find('.deslide-desc').text().trim();
-        const poster = heroEl.find('img').attr('src');
-        const link = heroEl.find('a').attr('href');
-        const rating = heroEl.find('.deslide-imdb').text().trim();
-        const backdrop = heroEl.find('.deslide-cover img').attr('src') || poster;
+    // --- 2. SCRAPE HERO SLIDER (Featured Content) ---
+    // Movies4u themes usually use classes like 'deslide-item' or 'big-slider-item'
+    // Hum generic selectors use karenge jo mostly kaam karte hain
+    $('.deslide-item, .item.big').each((i, el) => {
+        if (i > 4) return; // Top 5 items only
 
-        homeData.featured = {
-            title,
-            desc,
-            poster,
-            backdrop,
-            rating,
-            link,
-            tags: ['Trending', 'Latest']
-        };
-    }
+        const title = $(el).find('.deslide-title, .title').text().trim();
+        const desc = $(el).find('.deslide-desc, .desc').text().trim();
+        const link = $(el).find('a').attr('href');
+        const poster = $(el).find('img').attr('src');
+        const rating = $(el).find('.deslide-imdb, .rating').text().trim() || "8.5";
+        const quality = $(el).find('.deslide-quality, .quality').text().trim() || "HD";
+        
+        // Ensure valid data
+        if (title && link) {
+            homeData.featured.push({
+                title,
+                desc,
+                link,
+                poster, // Use this for background too
+                backdrop: poster,
+                rating,
+                tags: [quality, 'Trending']
+            });
+        }
+    });
 
-    // --- 3. SCRAPE SECTIONS (Latest Movies, Series) ---
-    // Hum sections ko loop karenge
+    // --- 3. SCRAPE SECTIONS (Latest Movies, Series, etc.) ---
     
-    const scrapeSection = (selector: string, title: string) => {
+    // Helper function to scrape a specific section by ID or Class
+    const scrapeSection = (selector: string, sectionTitle: string) => {
         const items: any[] = [];
-        $(selector).find('article').each((i, el) => {
-            if (i > 9) return; // Limit to 10 items
-            const title = $(el).find('.item-title').text().trim();
-            const poster = $(el).find('img').attr('data-src') || $(el).find('img').attr('src');
+        
+        $(selector).find('article, .item').each((i, el) => {
+            if (i > 11) return; // Limit 12 items per row
+
+            const title = $(el).find('.entry-title, .title').text().trim();
             const link = $(el).find('a').attr('href');
-            const rating = $(el).find('.item-rating').text().trim();
-            
-            if (title && link) {
-                items.push({ title, poster, link, rating });
+            // Lazy loaded images often use data-src
+            const poster = $(el).find('img').attr('data-src') || $(el).find('img').attr('src');
+            const rating = $(el).find('.vote, .rating').text().trim() || null;
+            const quality = $(el).find('.quality').text().trim() || "HD";
+
+            if (title && link && poster) {
+                items.push({ title, link, poster, rating, quality });
             }
         });
-        return { title, items };
+
+        if (items.length > 0) {
+            homeData.sections.push({ title: sectionTitle, items });
+        }
     };
 
-    // Movies4u specific selectors (Adjust based on actual site structure)
-    homeData.sections.push(scrapeSection('#latest-movies', 'Latest Movies'));
-    homeData.sections.push(scrapeSection('#latest-tv-shows', 'Web Series'));
-    homeData.sections.push(scrapeSection('#featured-titles', 'Featured'));
+    // Scrape Standard Sections (IDs based on standard themes)
+    scrapeSection('#latest-movies', 'Latest Movies');
+    scrapeSection('#latest-tv-shows', 'Web Series');
+    scrapeSection('#featured-titles', 'Featured');
+    scrapeSection('.latest-updates', 'Recently Added');
 
     return NextResponse.json({ success: true, data: homeData });
 
   } catch (error: any) {
-    console.error("Home Scrape Error:", error.message);
+    console.error("Scraper Error:", error.message);
     return NextResponse.json({ success: false, error: 'Failed to load home data' });
   }
 }
