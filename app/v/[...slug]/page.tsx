@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, Play, HardDrive, Download, Film, CheckCircle, 
+  ArrowLeft, Play, HardDrive, Download, CheckCircle, 
   ImageIcon, Archive, Tv, ImageOff, Loader2
 } from 'lucide-react';
 
@@ -16,126 +16,76 @@ export default function MoviePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // --- Logic State ---
+  // States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [actionType, setActionType] = useState<'watch' | 'download' | null>(null);
   const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
-  
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
 
-  const movieUrl = slug 
-    ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
-    : '';
+  const movieUrl = slug ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) : '';
 
   useEffect(() => {
     if (!movieUrl) return;
-
-    const fetchRealData = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         const res = await fetch(`/api/movie-details?url=${encodeURIComponent(movieUrl)}`);
         if (!res.ok) throw new Error("Failed");
         const result = await res.json();
         setData(result);
-        
-        // Use Backend Detected Seasons
-        if (result.seasons && result.seasons.length > 0) {
-            setAvailableSeasons(result.seasons);
-        }
-      } catch (err) {
-        setError("Content not found.");
-      } finally {
-        setLoading(false);
-      }
+        if (result.seasons?.length > 0) setAvailableSeasons(result.seasons);
+      } catch (e) { setError("Failed to load content"); }
+      finally { setLoading(false); }
     };
-    fetchRealData();
+    fetchData();
   }, [movieUrl]);
 
   // --- FILTER LOGIC ---
-  const isBulkLink = (title: string, label: string) => {
-    const text = (title + " " + label).toLowerCase();
-    return /zip|pack|complete|batch|volume|collection/.test(text);
+  const getFilteredLinks = () => {
+      if (!data?.downloadSections) return [];
+      let links: any[] = [];
+
+      // Flatten all links from all sections
+      data.downloadSections.forEach((sec: any) => {
+          // Season Check
+          if (selectedSeason !== null && sec.season !== null && sec.season !== selectedSeason) return;
+
+          sec.links.forEach((link: any) => {
+              // Quality Check from Link or Section
+              const q = link.quality || sec.quality || 'Standard';
+              const isZip = link.isZip || link.label.toLowerCase().includes('zip') || link.label.toLowerCase().includes('pack');
+
+              // Type Check (Episode vs Bulk)
+              if (actionType === 'download') {
+                  if (downloadType === 'bulk' && !isZip) return;
+                  if (downloadType === 'episode' && isZip) return;
+              } else if (actionType === 'watch' && isZip) return; // No watch for zips
+
+              // Add to list
+              links.push({ ...link, quality: q, sectionTitle: sec.title });
+          });
+      });
+      return links;
   };
 
-  const getProcessedSections = () => {
-    if (!data) return [];
-    
-    // 1. Season Filter
-    let sections = data.downloadSections.filter((sec: any) => {
-        if (selectedSeason === null) return true;
-        // Keep generic sections OR matching season sections
-        return sec.season === selectedSeason || sec.season === null;
-    });
-
-    // 2. Download Type Filter
-    sections = sections.map((sec: any) => {
-        const filteredLinks = sec.links.filter((link: any) => {
-            const isBulk = isBulkLink(sec.title, link.label);
-
-            if (actionType === 'watch') return !isBulk; 
-            if (actionType === 'download') {
-                if (downloadType === 'bulk') return isBulk;
-                if (downloadType === 'episode') return !isBulk;
-            }
-            return true;
-        });
-        return { ...sec, links: filteredLinks };
-    }).filter((sec: any) => sec.links.length > 0);
-
-    return sections;
-  };
-
-  // --- Quality Extraction ---
+  // --- QUALITY EXTRACTION ---
   useEffect(() => {
-    if (!data) return;
-    const currentSections = getProcessedSections(); 
-    
-    const qualities = new Set<string>();
-    currentSections.forEach((sec: any) => {
-        // Prefer backend quality, fallback to detection
-        let q = sec.quality || 'Standard';
-        
-        // Manual Fallback if backend sent 'Standard' but title has info
-        if (q === 'Standard') {
-             const t = sec.title.toLowerCase();
-             if (t.includes('4k')) q = '4K';
-             else if (t.includes('1080p')) q = '1080p';
-             else if (t.includes('720p')) q = '720p';
-             else if (t.includes('480p')) q = '480p';
-        }
-        qualities.add(q);
-    });
+      const links = getFilteredLinks();
+      const quals = new Set<string>();
+      links.forEach(l => quals.add(l.quality));
+      
+      const order = ['4K', '1080p', '720p', '480p', 'Standard'];
+      const sorted = Array.from(quals).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+      setAvailableQualities(sorted);
 
-    const order = ['4K', '1080p', '720p', '480p', 'Standard'];
-    const sorted = Array.from(qualities).sort((a, b) => order.indexOf(a) - order.indexOf(b));
-    setAvailableQualities(sorted);
-
-    // Auto-Select if only 1 quality or invalid current selection
-    if (selectedQuality && !sorted.includes(selectedQuality)) {
-        setSelectedQuality(null);
-    }
+      // Auto Reset Quality
+      if (selectedQuality && !sorted.includes(selectedQuality)) setSelectedQuality(null);
   }, [data, selectedSeason, downloadType, actionType]);
 
-  const finalSections = (() => {
-      let sections = getProcessedSections();
-      if (selectedQuality) {
-          sections = sections.filter((sec: any) => {
-              // Same loose matching logic
-              let q = sec.quality || 'Standard';
-              if (q === 'Standard') {
-                   const t = sec.title.toLowerCase();
-                   if (t.includes('4k')) q = '4K';
-                   else if (t.includes('1080p')) q = '1080p';
-                   else if (t.includes('720p')) q = '720p';
-                   else if (t.includes('480p')) q = '480p';
-              }
-              return q === selectedQuality;
-          });
-      }
-      return sections;
-  })();
+  // --- FINAL DISPLAY LINKS ---
+  const displayLinks = getFilteredLinks().filter(l => !selectedQuality || l.quality === selectedQuality);
 
   const handleLinkClick = (url: string) => {
     const payload = { link: url, title: data?.title, poster: data?.poster, quality: selectedQuality };
@@ -152,7 +102,6 @@ export default function MoviePage() {
   };
 
   if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin w-8 h-8 text-red-600"/></div>;
-  if (error) return <div className="h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
 
   return (
     <div className="min-h-screen bg-black text-white pb-20 animate-fade-in font-sans">
@@ -161,16 +110,14 @@ export default function MoviePage() {
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/95 to-black/80"></div>
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 pt-6">
         <button onClick={() => router.back()} className="mb-8 flex items-center gap-2 text-gray-400 hover:text-white bg-white/5 py-2 px-4 rounded-full border border-white/10"><ArrowLeft size={18} /> Back</button>
         
         <div className="flex flex-col lg:flex-row gap-10">
-          <div className="w-full lg:w-[320px] flex-shrink-0 mx-auto lg:mx-0">
-             <img src={data?.poster} alt={data?.title} className="rounded-2xl shadow-2xl w-full border border-white/10" />
-          </div>
+          <div className="w-full lg:w-[320px] mx-auto lg:mx-0"><img src={data?.poster} className="rounded-2xl shadow-2xl w-full border border-white/10" /></div>
 
           <div className="flex-1 min-w-0">
-            <h1 className="text-3xl md:text-5xl font-bold mb-4 leading-tight">{data?.title}</h1>
+            <h1 className="text-3xl md:text-5xl font-bold mb-4">{data?.title}</h1>
             <p className="text-gray-400 text-lg mb-8 line-clamp-4">{data?.plot}</p>
 
             {/* SCREENSHOTS */}
@@ -179,30 +126,22 @@ export default function MoviePage() {
                 {data?.screenshots?.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {data.screenshots.map((src: string, i: number) => (
-                            <div key={i} className="group relative overflow-hidden rounded-xl border border-gray-800 bg-black aspect-video hover:border-blue-500/50 transition-colors">
-                                <img src={src} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300" loading="lazy"/>
-                            </div>
+                            <div key={i} className="rounded-xl overflow-hidden border border-gray-800"><img src={src} className="w-full h-full object-cover" /></div>
                         ))}
                     </div>
                 ) : (
-                    <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-12 text-center">
-                        <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4"><ImageOff className="w-10 h-10 text-gray-600" /></div>
-                        <h3 className="text-lg font-bold text-gray-300 mb-2">No Screenshots Available</h3>
-                    </div>
+                    <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-8 text-center"><ImageOff className="w-10 h-10 text-gray-600 mx-auto mb-2"/> No Screenshots Available</div>
                 )}
             </div>
 
-            {/* ACTION CARD */}
+            {/* ACTION CONTAINER */}
             <div className="bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl">
-               
-               {/* HEADER */}
                {(selectedSeason || actionType) && (
                  <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
                     <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1"><ArrowLeft size={14}/> Previous</button>
                     <div className="text-sm font-bold text-gray-500 hidden sm:block">
                         {selectedSeason ? `S${selectedSeason}` : ''} 
-                        {actionType ? ` > ${actionType === 'watch' ? 'Stream' : 'DL'}` : ''}
-                        {downloadType ? ` > ${downloadType}` : ''}
+                        {actionType ? ` > ${actionType}` : ''}
                         {selectedQuality ? ` > ${selectedQuality}` : ''}
                     </div>
                  </div>
@@ -210,73 +149,48 @@ export default function MoviePage() {
 
                {/* 1. SEASON */}
                {availableSeasons.length > 0 && selectedSeason === null && (
-                  <div className="animate-fade-in">
-                      <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Film className="text-red-500" /> Select Season</h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                          {availableSeasons.map(s => (
-                              <button key={s} onClick={() => setSelectedSeason(s)} className="p-4 bg-gray-800 rounded-xl hover:bg-red-600 font-bold text-xl transition-all shadow-lg border border-gray-700">Season {s}</button>
-                          ))}
-                      </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {availableSeasons.map(s => <button key={s} onClick={() => setSelectedSeason(s)} className="p-4 bg-gray-800 rounded-xl hover:bg-red-600 font-bold text-xl border border-gray-700">Season {s}</button>)}
                   </div>
                )}
 
                {/* 2. ACTION */}
                {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
-                  <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <button onClick={() => setActionType('download')} className="p-8 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 rounded-2xl text-center group transition-all">
-                         <HardDrive className="mx-auto mb-4 text-blue-400 group-hover:scale-110" size={48} />
-                         <span className="font-bold text-2xl block text-white">Download</span>
-                      </button>
-                      <button onClick={() => setActionType('watch')} className="p-8 bg-green-600/20 hover:bg-green-600/30 border border-green-500/40 rounded-2xl text-center group transition-all">
-                         <Play className="mx-auto mb-4 text-green-400 fill-current group-hover:scale-110" size={48} />
-                         <span className="font-bold text-2xl block text-white">Watch Online</span>
-                      </button>
+                  <div className="grid grid-cols-2 gap-6">
+                      <button onClick={() => setActionType('download')} className="p-8 bg-blue-600/20 border border-blue-500/40 rounded-2xl font-bold text-2xl text-white">Download</button>
+                      <button onClick={() => setActionType('watch')} className="p-8 bg-green-600/20 border border-green-500/40 rounded-2xl font-bold text-2xl text-white">Watch Online</button>
                   </div>
                )}
 
-               {/* 3. TYPE (Download + Series Only) */}
+               {/* 3. TYPE (Download Only) */}
                {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
-                   <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <button onClick={() => setDownloadType('episode')} className="p-8 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 rounded-2xl text-center"><Tv className="mx-auto mb-4 text-purple-400" size={48}/><span className="font-bold text-xl block text-white">Episode Wise</span></button>
-                       <button onClick={() => setDownloadType('bulk')} className="p-8 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/40 rounded-2xl text-center"><Archive className="mx-auto mb-4 text-orange-400" size={48}/><span className="font-bold text-xl block text-white">Bulk / Zip</span></button>
+                   <div className="grid grid-cols-2 gap-6">
+                       <button onClick={() => setDownloadType('episode')} className="p-8 bg-gray-800 rounded-2xl font-bold text-xl hover:bg-gray-700">Episode Wise</button>
+                       <button onClick={() => setDownloadType('bulk')} className="p-8 bg-gray-800 rounded-2xl font-bold text-xl hover:bg-gray-700">Bulk / Zip</button>
                    </div>
                )}
 
                {/* 4. QUALITY */}
                {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
-                   <div className="animate-fade-in">
-                       <h3 className="text-xl font-bold mb-6 text-center">Select Quality</h3>
-                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                           {availableQualities.length > 0 ? availableQualities.map(q => (
-                               <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 hover:border-blue-500 rounded-xl font-bold text-lg transition-all uppercase">{q}</button>
-                           )) : (
-                               <button onClick={() => setSelectedQuality('Standard')} className="col-span-full p-4 bg-blue-600 rounded-xl font-bold">Show All Links</button>
-                           )}
-                       </div>
+                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                       {availableQualities.length > 0 ? availableQualities.map(q => (
+                           <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 rounded-xl font-bold text-lg">{q}</button>
+                       )) : <div className="col-span-full text-center text-gray-500">No options found. Try changing filters.</div>}
                    </div>
                )}
 
-               {/* 5. FINAL LINKS */}
+               {/* 5. LINKS */}
                {selectedQuality !== null && (
-                   <div className="space-y-4 animate-fade-in">
-                       <h3 className="text-green-400 font-bold flex items-center gap-2 mb-4"><CheckCircle size={20}/> Available Links</h3>
-                       {finalSections.length > 0 ? finalSections.map((sec: any, idx: number) => (
-                           <div key={idx} className="bg-black/30 p-5 rounded-xl border border-gray-700 hover:border-blue-500/30 transition-colors">
-                               <h4 className="text-blue-400 font-bold mb-4 text-sm uppercase">{sec.title}</h4>
-                               <div className="flex flex-wrap gap-3">
-                                   {sec.links.map((link: any, i: number) => (
-                                       <button key={i} onClick={() => handleLinkClick(link.url)} className="px-5 py-3 bg-gray-800 hover:bg-blue-600 rounded-lg text-sm font-bold flex items-center gap-2 transition-all hover:-translate-y-1 shadow-lg border border-white/5">
-                                           {actionType === 'watch' ? <Play size={16}/> : <Download size={16}/>} {link.label}
-                                       </button>
-                                   ))}
-                               </div>
-                           </div>
-                       )) : (
-                           <div className="text-center py-12 text-gray-500 border border-dashed border-gray-700 rounded-xl">No links found for {selectedQuality}. <button onClick={() => setSelectedQuality(null)} className="text-blue-400 hover:underline">Change Quality</button></div>
-                       )}
+                   <div className="space-y-3 animate-fade-in">
+                       <h3 className="text-green-400 font-bold mb-4 flex items-center gap-2"><CheckCircle/> Links</h3>
+                       {displayLinks.length > 0 ? displayLinks.map((link: any, idx: number) => (
+                           <button key={idx} onClick={() => handleLinkClick(link.url)} className="w-full text-left p-4 bg-black/40 hover:bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-between group transition-all">
+                               <span className="font-semibold text-sm md:text-base text-gray-200 group-hover:text-white">{link.label}</span>
+                               {actionType === 'watch' ? <Play className="w-5 h-5 text-green-500"/> : <Download className="w-5 h-5 text-blue-500"/>}
+                           </button>
+                       )) : <div className="text-center py-8 text-gray-500">No links available for this selection.</div>}
                    </div>
                )}
-
             </div>
           </div>
         </div>
