@@ -30,7 +30,6 @@ export async function GET(request: Request) {
     });
 
     // --- 3. DETECT SEASONS ---
-    // Check title for "Season 1-5" pattern
     let detectedSeasons = new Set<number>();
     const rangeMatch = title.match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
     if (rangeMatch) {
@@ -49,8 +48,7 @@ export async function GET(request: Request) {
     });
     const uniqueScreenshots = [...new Set(screenshots)].slice(0, 8);
 
-    // --- 5. SMART "STATE MACHINE" LINK PARSER ---
-    // This logic scans elements top-to-bottom and remembers the current context (Season/Quality)
+    // --- 5. SMART LINK PARSER ---
     const downloadSections: any[] = [];
     
     let currentSeason: number | null = null;
@@ -58,7 +56,6 @@ export async function GET(request: Request) {
     let currentSectionTitle = 'Downloads';
     let currentLinks: any[] = [];
 
-    // Save previous group before starting new one
     const saveGroup = () => {
         if (currentLinks.length > 0) {
             downloadSections.push({
@@ -71,25 +68,25 @@ export async function GET(request: Request) {
         }
     };
 
-    // Iterate through all relevant elements in content area
     $('.entry-content').find('h3, h4, h5, h6, p, div, span, strong, b, a').each((i, el) => {
         const text = $(el).text().trim();
         const lowerText = text.toLowerCase();
-        const tagName = $(el).prop('tagName').toLowerCase();
+        
+        // --- FIX IS HERE ---
+        // Humne 'tagName' ko safely access kiya hai (?.) aur fallback diya hai (|| '')
+        const tagName = $(el).prop('tagName')?.toLowerCase() || ''; 
 
-        // 1. DETECT HEADERS (Updates State)
+        // 1. DETECT HEADERS
         if (['h3', 'h4', 'h5', 'h6', 'strong', 'b'].includes(tagName) || (tagName === 'p' && $(el).children('strong').length > 0)) {
             
-            // Is this a Season Header? (e.g. "Season 1")
             const sMatch = text.match(/(?:Season|S)\s*0?(\d+)/i);
             if (sMatch) {
-                saveGroup(); // Save pending links
+                saveGroup();
                 currentSeason = parseInt(sMatch[1]);
                 detectedSeasons.add(currentSeason);
                 currentSectionTitle = text;
             }
 
-            // Is this a Quality Header? (e.g. "720p Links")
             if (lowerText.includes('480p')) { saveGroup(); currentQuality = '480p'; currentSectionTitle = text; }
             else if (lowerText.includes('720p')) { saveGroup(); currentQuality = '720p'; currentSectionTitle = text; }
             else if (lowerText.includes('1080p')) { saveGroup(); currentQuality = '1080p'; currentSectionTitle = text; }
@@ -97,21 +94,16 @@ export async function GET(request: Request) {
         }
 
         // 2. DETECT LINKS
-        // Check if element is a link OR contains links
         const linkEls = $(el).is('a') ? [el] : $(el).find('a').toArray();
         
         linkEls.forEach((linkEl: any) => {
             const href = $(linkEl).attr('href');
             const label = $(linkEl).text().trim();
             
-            // Valid Cloud Link?
             if (href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix') || href.includes('file') || href.includes('pixel') || href.includes('workers.dev'))) {
                 
-                // Smart "Zip/Batch" Detection
-                // Sometimes "Zip" is in the link text, sometimes in the nearby text
                 const isZip = label.toLowerCase().includes('zip') || label.toLowerCase().includes('pack') || label.toLowerCase().includes('batch');
                 
-                // Update Quality for this specific link if label says so (overrides header context)
                 let linkQuality = currentQuality;
                 if (label.includes('480p')) linkQuality = '480p';
                 if (label.includes('720p')) linkQuality = '720p';
@@ -126,9 +118,8 @@ export async function GET(request: Request) {
             }
         });
     });
-    saveGroup(); // Save last group
+    saveGroup();
 
-    // Sort detected seasons
     const sortedSeasons = Array.from(detectedSeasons).sort((a,b) => a - b);
 
     return NextResponse.json({
