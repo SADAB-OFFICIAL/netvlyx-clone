@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -8,142 +7,107 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    // 1. USE PROXY
-    const proxyUrl = `https://proxy.vlyx.workers.dev/?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl, {
+    // 1. CALL OFFICIAL NETVLYX API (Ye LINKS ke liye best hai)
+    const targetApi = `https://netvlyx.pages.dev/api/m4ulinks-scraper?url=${encodeURIComponent(url)}`;
+    
+    const response = await fetch(targetApi, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Referer': 'https://netvlyx.pages.dev/',
+        'Origin': 'https://netvlyx.pages.dev'
+      },
+      next: { revalidate: 300 }
     });
 
-    if (!response.ok) throw new Error("Proxy Failed");
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    let data: any = { title: "Unknown", linkData: [], description: "", screenshots: [] };
+    if (response.ok) {
+        try { 
+            const jsonData = await response.json();
+            data = { ...data, ...jsonData };
+        } catch (e) {}
+    }
 
-    // --- 2. BASIC DETAILS & SMART TITLE ---
-    let title = $('h1.entry-title, .title').first().text().trim();
-    
-    // SMART TITLE FALLBACK: Agar title nahi mila ya "Unknown" hai, to URL se nikalo
-    if (!title || title.toLowerCase().includes('unknown')) {
+    // --- 2. SMART TITLE LOGIC (Jo abhi banaya tha) ---
+    // Agar API ne title nahi diya ya 'Unknown' diya, to URL se nikalo
+    let finalTitle = data.title;
+    let releaseYear = null;
+
+    if (!finalTitle || finalTitle.toLowerCase().includes('unknown')) {
         try {
             const slug = new URL(url).pathname.split('/').filter(Boolean).pop() || "";
-            title = slug
-                .replace(/-/g, ' ') // Hyphens ko space banao
-                .replace(/\b(download|free|movie|hindi|dubbed|dual|audio|season|episode|s\d+|e\d+|480p|720p|1080p|2160p|4k|web-dl|bluray|hdrip|multi|org)\b/gi, '') // Faltu words hatao
-                .replace(/\s+/g, ' ') // Extra spaces hatao
+            
+            // Year nikalne ki koshish (e.g. pathaan-2023)
+            const yearMatch = slug.match(/-(\d{4})-/);
+            if (yearMatch) releaseYear = yearMatch[1];
+
+            // Title Clean karo
+            finalTitle = slug
+                .replace(/-(\d{4})-.*$/, '') 
+                .replace(/-/g, ' ')
+                .replace(/\b(download|movie|hindi|dubbed|dual|audio|season|episode|s\d+|e\d+|480p|720p|1080p|4k|web-dl|bluray|hdrip|multi|org)\b/gi, '')
+                .replace(/\s+/g, ' ')
                 .trim();
-            // Har word ka pehla letter capital karo
-            title = title.replace(/\b\w/g, (l: string) => l.toUpperCase());
+            finalTitle = finalTitle.replace(/\b\w/g, (l: string) => l.toUpperCase());
         } catch (e) {
-            title = "Unknown Movie";
+            finalTitle = "Unknown Movie";
         }
     }
 
-    const poster = $('.post-thumbnail img').attr('src') || $('.entry-content img').first().attr('src');
+    // --- 3. PROCESS LINKS (Official API Data se) ---
+    const downloadSections = (data.linkData || []).map((item: any) => {
+        let season = null;
+        const sMatch = (item.quality || "").match(/(?:Season|S)\s*0?(\d+)/i);
+        if (sMatch) season = parseInt(sMatch[1]);
+
+        let quality = (item.quality || "Standard").replace(/\s*\[.*?\]/g, "").trim();
+        if (quality.match(/4k|2160p/i)) quality = '4K';
+        else if (quality.match(/1080p/i)) quality = '1080p';
+        else if (quality.match(/720p/i)) quality = '720p';
+        else if (quality.match(/480p/i)) quality = '480p';
+
+        // Pack Detection
+        const sectionIsPack = /pack|zip|batch|complete|collection|volume/i.test(item.quality || "");
+
+        return {
+            title: item.quality,
+            quality: quality,
+            size: item.size,
+            season: season,
+            links: (item.links || []).map((l: any) => ({
+                label: l.name || 'Download Server',
+                url: l.url,
+                isZip: sectionIsPack || /zip|pack|batch/i.test(l.name || "")
+            }))
+        };
+    });
+
+    // Detect Seasons
+    const allSeasons = new Set<number>();
+    downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
     
-    // Fallback Plot (Movies4u wala)
-    let plotArr: string[] = [];
-    $('.entry-content p, .post-content p').each((i, el) => {
-        const text = $(el).text().trim();
-        if (text.length > 40 && !text.toLowerCase().includes('download') && !text.toLowerCase().includes('telegram')) {
-            plotArr.push(text);
-        }
-    });
-    const scrapedPlot = plotArr.slice(0, 2).join('\n\n') || "Loading overview...";
-
-    // --- 3. EXTRACTION: IMDb ID ---
-    let imdbId = null;
-    $('a').each((i, el) => {
-        const href = $(el).attr('href');
-        if (href && href.includes('imdb.com/title/tt')) {
-            const match = href.match(/tt\d+/);
-            if (match) {
-                imdbId = match[0];
-                return false; // Break loop
-            }
-        }
-    });
-
-    // --- 4. SCREENSHOTS (FROM SOURCE WEBSITE) ---
-    const screenshots: string[] = [];
-    // Priority 1: Specific screenshot class
-    $('.ss-img img').each((i, el) => {
-        const src = $(el).attr('src') || $(el).attr('data-src');
-        if (src) screenshots.push(src);
-    });
-    // Priority 2: Content images (agar .ss-img na mile)
-    if (screenshots.length === 0) {
-        $('.entry-content img').each((i, el) => {
-            const src = $(el).attr('src') || $(el).attr('data-src');
-            // Poster aur icons ko filter karo
-            if (src && src !== poster && !src.includes('icon') && !src.includes('button')) {
-                screenshots.push(src);
-            }
-        });
-    }
-
-    // --- 5. LINKS & SEASONS ---
-    const downloadSections: any[] = [];
-    let detectedSeasons = new Set<number>();
-
-    const isValidLink = (href: string) => 
-        href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix') || href.includes('file') || href.includes('workers.dev'));
-
-    $('h3, h4, h5, h6, strong, b').each((i, el) => {
-        const headingText = $(el).text().trim();
-        const lowerHeading = headingText.toLowerCase();
-
-        if (lowerHeading.match(/480p|720p|1080p|2160p|4k|season|episode|download|zip|pack/)) {
-            let sectionSeason: number | null = null;
-            const sMatch = headingText.match(/(?:Season|S)\s*0?(\d+)/i);
-            if (sMatch) {
-                sectionSeason = parseInt(sMatch[1]);
-                detectedSeasons.add(sectionSeason);
-            }
-
-            let quality = 'Standard';
-            if (lowerHeading.includes('4k') || lowerHeading.includes('2160p')) quality = '4K';
-            else if (lowerHeading.includes('1080p')) quality = '1080p';
-            else if (lowerHeading.includes('720p')) quality = '720p';
-            else if (lowerHeading.includes('480p')) quality = '480p';
-
-            const links: any[] = [];
-            // Logic to find links under the heading
-            $(el).nextUntil('h3, h4, h5, h6').each((j, sib) => {
-                const processLink = (l: any) => {
-                    const href = $(l).attr('href');
-                    if (isValidLink(href || '')) links.push({ label: $(l).text().trim(), url: href });
-                };
-                if ($(sib).is('a')) processLink(sib);
-                $(sib).find('a').each((k, child) => processLink(child));
-            });
-
-            if (links.length > 0) {
-                downloadSections.push({ title: headingText, season: sectionSeason, quality, links });
-            }
-        }
-    });
-
-    // Detect Season Range from Title if no specific season headings found
-    if (detectedSeasons.size === 0) {
-        const range = title.match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
-        if (range) {
-            for (let i = parseInt(range[1]); i <= parseInt(range[2]); i++) detectedSeasons.add(i);
+    if (allSeasons.size === 0) {
+        const titleRange = (finalTitle || "").match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
+        if (titleRange) {
+            for (let i = parseInt(titleRange[1]); i <= parseInt(titleRange[2]); i++) allSeasons.add(i);
         }
     }
+
+    // --- 4. SCREENSHOTS ---
+    // Official API 'screenshots' ya 'images' bhejti hai jo Source se hote hain
+    let screenshots = Array.isArray(data.screenshots || data.images) ? (data.screenshots || data.images) : [];
 
     return NextResponse.json({
-        title, // Ab ye smart title hoga
-        poster,
-        plot: scrapedPlot,
-        imdbId: imdbId,
-        seasons: Array.from(detectedSeasons).sort((a,b)=>a-b),
-        screenshots: [...new Set(screenshots)].slice(0, 8), // Unique and limited to 8
-        downloadSections
+        title: finalTitle,
+        year: releaseYear,
+        poster: data.image || data.poster || "",
+        plot: data.description || data.plot || "Overview unavailable.",
+        imdbId: null, // Frontend dhoond lega
+        seasons: Array.from(allSeasons).sort((a, b) => a - b),
+        screenshots: screenshots.slice(0, 8),
+        downloadSections: downloadSections
     });
 
   } catch (error) {
-    console.error("Scraper Error:", error);
     return NextResponse.json({ error: 'Failed' });
   }
 }
