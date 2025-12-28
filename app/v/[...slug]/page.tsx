@@ -3,9 +3,51 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  ImageIcon, Archive, Tv, Loader2, Star
+  ArrowLeft, Play, Download, CheckCircle, 
+  Tv, Loader2, Star, Archive 
 } from 'lucide-react';
+
+// --- SKELETON COMPONENT (Premium Dark Style) ---
+const MovieSkeleton = () => (
+  <div className="min-h-screen bg-[#050505] animate-pulse">
+      {/* Hero Skeleton */}
+      <div className="relative w-full h-[85vh] bg-gray-900">
+          <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 flex flex-col items-center justify-end space-y-6">
+              <div className="h-6 w-24 bg-gray-800 rounded-full"></div> {/* Rating */}
+              <div className="h-12 md:h-20 w-3/4 max-w-3xl bg-gray-800 rounded-lg"></div> {/* Title */}
+              <div className="h-4 w-full max-w-2xl bg-gray-800 rounded"></div> {/* Overview Line 1 */}
+              <div className="h-4 w-2/3 max-w-2xl bg-gray-800 rounded"></div> {/* Overview Line 2 */}
+              <div className="flex gap-4 pt-4">
+                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div> {/* Button 1 */}
+                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div> {/* Button 2 */}
+              </div>
+          </div>
+      </div>
+      
+      {/* Poster Skeleton */}
+      <div className="relative z-20 -mt-16 flex justify-center mb-16">
+          <div className="w-[180px] md:w-[260px] h-[270px] md:h-[390px] bg-gray-800 rounded-2xl border-4 border-[#050505] shadow-2xl"></div>
+      </div>
+
+      {/* Content Skeleton */}
+      <div className="max-w-6xl mx-auto px-6 space-y-16 pb-20">
+          {/* Trailer Section */}
+          <div className="space-y-4">
+              <div className="h-8 w-48 bg-gray-800 rounded"></div>
+              <div className="w-full aspect-video bg-gray-900 rounded-2xl border border-gray-800"></div>
+          </div>
+          
+          {/* Gallery Section */}
+          <div className="space-y-4">
+              <div className="h-8 w-32 bg-gray-800 rounded"></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="aspect-video bg-gray-900 rounded-xl"></div>
+                  <div className="aspect-video bg-gray-900 rounded-xl"></div>
+              </div>
+          </div>
+      </div>
+  </div>
+);
 
 export default function MoviePage() {
   const { slug } = useParams();
@@ -15,7 +57,7 @@ export default function MoviePage() {
   // Data States
   const [data, setData] = useState<any>(null);
   const [tmdbData, setTmdbData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Controls the Skeleton
   const [error, setError] = useState('');
 
   // Filter States
@@ -25,17 +67,24 @@ export default function MoviePage() {
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
 
+  // Decode URL
   const movieUrl = slug 
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
 
-  // 1. FETCH MAIN DATA
+  // 1. FETCH MAIN DATA (Backend Scraper)
   useEffect(() => {
     if (!movieUrl) return;
 
-    // Reset UI
-    setData(null); setTmdbData(null); setSelectedSeason(null); setActionType(null);
-    setDownloadType(null); setSelectedQuality(null); setAvailableSeasons([]); setLoading(true);
+    // Reset States
+    setData(null);
+    setTmdbData(null);
+    setSelectedSeason(null);
+    setActionType(null);
+    setDownloadType(null);
+    setSelectedQuality(null);
+    setAvailableSeasons([]);
+    setLoading(true); // START LOADING
 
     const fetchData = async () => {
       try {
@@ -44,6 +93,7 @@ export default function MoviePage() {
         const result = await res.json();
         setData(result);
         
+        // Extract Seasons
         const seasonSet = new Set<number>();
         if (result.seasons) result.seasons.forEach((s: number) => seasonSet.add(s));
         if (result.downloadSections) {
@@ -53,17 +103,25 @@ export default function MoviePage() {
              });
         }
         if (seasonSet.size > 0) setAvailableSeasons(Array.from(seasonSet).sort((a,b)=>a-b));
-      } catch (e) { setError("Failed"); }
-      finally { setLoading(false); }
+
+        // Note: Hum yahan setLoading(false) NAHI karenge. 
+        // Hum wait karenge TMDB fetch hone ka (Effect 2 mein).
+
+      } catch (e) { 
+          setError("Failed to load content");
+          setLoading(false); // Error aaya to loading band kar do
+      }
     };
     fetchData();
   }, [movieUrl]);
 
-  // 2. FETCH TMDB DATA
+  // 2. FETCH TMDB DATA (Wait for this before hiding skeleton)
   useEffect(() => {
+    // Agar Backend Data hi nahi aaya, to kuch mat karo (loading true rahega jab tak error na aaye)
     if (!data) return;
     
     let apiUrl = '';
+    // Priority: IMDb ID > Title + Year > Title Only
     if (data.imdbId) {
         apiUrl = `/api/tmdb-details?imdb_id=${data.imdbId}`;
     } else if (data.title) {
@@ -75,7 +133,14 @@ export default function MoviePage() {
         fetch(apiUrl)
             .then(res => res.json())
             .then(res => { if (res.found) setTmdbData(res); })
-            .catch(err => console.error("TMDB Error", err));
+            .catch(err => console.error("TMDB Error", err))
+            .finally(() => {
+                // AB Skeleton hatayenge (Chahe TMDB mile ya fail ho)
+                setLoading(false); 
+            });
+    } else {
+        // Agar koi API URL hi nahi bana (mtlb title bhi nahi mila), to loading band kar do
+        setLoading(false);
     }
   }, [data]);
 
@@ -86,9 +151,11 @@ export default function MoviePage() {
   const finalBackdrop = tmdbData?.backdrop || data?.poster;
   const finalRating = tmdbData?.rating;
   const trailerKey = tmdbData?.trailerKey;
+  
+  // Prioritize Scraper Screenshots, Fallback to TMDB
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- FILTER LOGIC ---
+  // --- FILTER LOGIC (UNCHANGED) ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
@@ -109,7 +176,8 @@ export default function MoviePage() {
 
       validSections.forEach((sec: any) => {
           sec.links.forEach((link: any) => {
-              const isBatch = (link.isZip === true) || /batch|zip|pack|complete|volume|collection/i.test(sec.title + " " + link.label);
+              const isBatch = (link.isZip === true) || 
+                              /batch|zip|pack|complete|volume|collection/i.test(sec.title + " " + link.label);
 
               if (actionType === 'download') {
                   if (downloadType === 'bulk' && !isBatch) return;
@@ -134,7 +202,11 @@ export default function MoviePage() {
   };
 
   const { links: filteredLinks, qualities: currentQualities } = getFilteredData();
-  useEffect(() => { if (selectedQuality && !currentQualities.includes(selectedQuality)) setSelectedQuality(null); }, [currentQualities, selectedQuality]);
+
+  useEffect(() => { 
+      if (selectedQuality && !currentQualities.includes(selectedQuality)) setSelectedQuality(null); 
+  }, [currentQualities, selectedQuality]);
+
   const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
 
   const handleLinkClick = (url: string) => {
@@ -145,7 +217,6 @@ export default function MoviePage() {
 
   const handleHeroAction = (type: 'watch' | 'download') => {
       setActionType(type);
-      // Slight delay to allow smooth scroll after state update
       setTimeout(() => {
           if (downloadRef.current) {
               downloadRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -161,7 +232,9 @@ export default function MoviePage() {
       else router.back();
   };
 
-  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin w-8 h-8 text-red-600"/></div>;
+  // --- RENDER SKELETON WHILE LOADING ---
+  if (loading) return <MovieSkeleton />;
+  
   if (error) return <div className="h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
 
   return (
@@ -169,7 +242,6 @@ export default function MoviePage() {
       
       {/* 1. HERO SECTION */}
       <div className="relative w-full h-[80vh] md:h-[90vh]">
-          {/* Backdrop - Added pointer-events-none to prevent click blocking */}
           <div className="absolute inset-0 pointer-events-none">
               <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
               <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
@@ -182,7 +254,6 @@ export default function MoviePage() {
              </button>
           </div>
 
-          {/* Content - Z-Index 10 ensures it's above background */}
           <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto animate-slide-up">
               {finalRating && (
                   <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full">
@@ -199,16 +270,15 @@ export default function MoviePage() {
                   {finalOverview}
               </p>
 
-              {/* ACTION BUTTONS - High Z-Index & Cursor Pointer */}
               <div className="flex gap-4 relative z-50">
                   <button 
-                    onClick={() => handleHeroAction('watch')} 
+                    onClick={() => handleHeroAction('watch')}
                     className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)] cursor-pointer active:scale-95"
                   >
                       <Play className="fill-current" size={20}/> Watch Now
                   </button>
                   <button 
-                    onClick={() => handleHeroAction('download')} 
+                    onClick={() => handleHeroAction('download')}
                     className="bg-gray-800/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-gray-800 transition-colors cursor-pointer active:scale-95"
                   >
                       <Download size={20}/> Download
@@ -220,7 +290,6 @@ export default function MoviePage() {
       {/* 2. GLOWING POSTER */}
       <div className="relative z-20 -mt-10 mb-16 flex justify-center px-4">
           <div className="relative group">
-              {/* Glow Effect - Added pointer-events-none so it doesn't block buttons above */}
               <div className="absolute inset-0 bg-cover bg-center blur-3xl opacity-40 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-60 pointer-events-none" style={{ backgroundImage: `url(${finalPoster})` }}></div>
               <img src={finalPoster} alt="Poster" className="relative w-[180px] md:w-[260px] rounded-2xl shadow-2xl border-4 border-[#050505] transform transition-transform duration-500 group-hover:-translate-y-2 pointer-events-none"/>
           </div>
@@ -325,7 +394,6 @@ export default function MoviePage() {
                           )) : <div className="text-center py-10 text-gray-500">No links available.</div>}
                       </div>
                   )}
-
               </div>
           </div>
       </div>
