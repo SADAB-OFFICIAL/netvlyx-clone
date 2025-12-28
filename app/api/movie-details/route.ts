@@ -9,58 +9,56 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    // 1. USE NETVLYX PROXY (The Fix)
-    // Direct fetch block ho sakta hai, isliye proxy use kar rahe hain
+    // 1. USE PROXY
     const proxyUrl = `https://proxy.vlyx.workers.dev/?url=${encodeURIComponent(url)}`;
-    
     const response = await fetch(proxyUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     });
 
-    if (!response.ok) throw new Error("Proxy Fetch Failed");
+    if (!response.ok) throw new Error("Proxy Failed");
     const html = await response.text();
     const $ = cheerio.load(html);
 
     // --- 2. BASIC DETAILS ---
     const title = $('h1.entry-title, .title').first().text().trim();
+    const poster = $('.post-thumbnail img').attr('src') || $('.entry-content img').first().attr('src');
     
-    // Poster Priority: Post Thumbnail -> First Content Image -> Meta Image
-    let poster = $('.post-thumbnail img').attr('src') || 
-                 $('.entry-content img').first().attr('src') ||
-                 $('meta[property="og:image"]').attr('content');
-
-    // --- 3. OVERVIEW / PLOT FIX ---
-    // NetVlyx style: Pehle 1-2 paragraphs ko uthao jo "Download" ya "Join" na ho
+    // Fallback Plot (Movies4u wala)
     let plotArr: string[] = [];
     $('.entry-content p, .post-content p').each((i, el) => {
         const text = $(el).text().trim();
-        // Filter junk text
-        if (text.length > 40 && !text.toLowerCase().includes('download') && !text.toLowerCase().includes('telegram') && !text.toLowerCase().includes('whatsapp')) {
+        if (text.length > 40 && !text.toLowerCase().includes('download') && !text.toLowerCase().includes('telegram')) {
             plotArr.push(text);
         }
     });
-    // Join first 2 paragraphs for a good description
-    const plot = plotArr.slice(0, 2).join('\n\n') || "Overview not available.";
+    const scrapedPlot = plotArr.slice(0, 2).join('\n\n') || "Loading overview...";
 
-    // --- 4. SCREENSHOTS FIX (.ss-img Logic) ---
+    // --- 3. EXTRACTION: IMDb ID (The Missing Piece) ---
+    // NetVlyx logic: Find link containing 'imdb.com/title/tt...'
+    let imdbId = null;
+    $('a').each((i, el) => {
+        const href = $(el).attr('href');
+        if (href && href.includes('imdb.com/title/tt')) {
+            const match = href.match(/tt\d+/);
+            if (match) {
+                imdbId = match[0];
+                return false; // Break loop
+            }
+        }
+    });
+
+    // --- 4. SCREENSHOTS ---
     const screenshots: string[] = [];
-    
-    // Priority 1: NetVlyx ka specific class (.ss-img)
     $('.ss-img img').each((i, el) => {
         const src = $(el).attr('src') || $(el).attr('data-src');
         if (src) screenshots.push(src);
     });
-
-    // Priority 2: Agar .ss-img na mile, to Content images dhoondo
     if (screenshots.length === 0) {
-        $('.entry-content img, .post-content img').each((i, el) => {
+        $('.entry-content img').each((i, el) => {
             const src = $(el).attr('src') || $(el).attr('data-src');
-            // Filter poster and icons
-            if (src && src !== poster && !src.includes('icon') && !src.includes('button') && !src.includes('logo')) {
-                screenshots.push(src);
-            }
+            if (src && src !== poster && !src.includes('icon')) screenshots.push(src);
         });
     }
 
@@ -68,19 +66,14 @@ export async function GET(request: Request) {
     const downloadSections: any[] = [];
     let detectedSeasons = new Set<number>();
 
-    // Helper to check valid links
     const isValidLink = (href: string) => 
         href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix') || href.includes('file') || href.includes('workers.dev'));
 
-    // Scan Headings for Sections
     $('h3, h4, h5, h6, strong, b').each((i, el) => {
         const headingText = $(el).text().trim();
         const lowerHeading = headingText.toLowerCase();
 
-        // Keywords
         if (lowerHeading.match(/480p|720p|1080p|2160p|4k|season|episode|download|zip|pack/)) {
-            
-            // Detect Season
             let sectionSeason: number | null = null;
             const sMatch = headingText.match(/(?:Season|S)\s*0?(\d+)/i);
             if (sMatch) {
@@ -88,60 +81,47 @@ export async function GET(request: Request) {
                 detectedSeasons.add(sectionSeason);
             }
 
-            // Detect Quality
             let quality = 'Standard';
             if (lowerHeading.includes('4k') || lowerHeading.includes('2160p')) quality = '4K';
             else if (lowerHeading.includes('1080p')) quality = '1080p';
             else if (lowerHeading.includes('720p')) quality = '720p';
             else if (lowerHeading.includes('480p')) quality = '480p';
 
-            // Find Links
             const links: any[] = [];
-            
-            // Strategy: Look at siblings until next header
             $(el).nextUntil('h3, h4, h5, h6').each((j, sib) => {
-                // Direct links
-                if ($(sib).is('a')) {
-                    const href = $(sib).attr('href');
-                    if (isValidLink(href || '')) links.push({ label: $(sib).text().trim(), url: href });
-                }
-                // Links inside paragraphs/divs
-                $(sib).find('a').each((k, child) => {
-                    const href = $(child).attr('href');
-                    if (isValidLink(href || '')) links.push({ label: $(child).text().trim(), url: href });
-                });
+                const processLink = (l: any) => {
+                    const href = $(l).attr('href');
+                    if (isValidLink(href || '')) links.push({ label: $(l).text().trim(), url: href });
+                };
+                if ($(sib).is('a')) processLink(sib);
+                $(sib).find('a').each((k, child) => processLink(child));
             });
 
             if (links.length > 0) {
-                downloadSections.push({
-                    title: headingText,
-                    season: sectionSeason,
-                    quality: quality,
-                    links: links
-                });
+                downloadSections.push({ title: headingText, season: sectionSeason, quality, links });
             }
         }
     });
 
-    // Handle Title Ranges (Season 1-5)
-    const rangeMatch = title.match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
-    if (detectedSeasons.size === 0 && rangeMatch) {
-        const start = parseInt(rangeMatch[1]);
-        const end = parseInt(rangeMatch[2]);
-        for (let i = start; i <= end; i++) detectedSeasons.add(i);
+    // Detect Season Range from Title
+    if (detectedSeasons.size === 0) {
+        const range = title.match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
+        if (range) {
+            for (let i = parseInt(range[1]); i <= parseInt(range[2]); i++) detectedSeasons.add(i);
+        }
     }
 
     return NextResponse.json({
         title,
         poster,
-        plot,
-        seasons: Array.from(detectedSeasons).sort((a,b) => a - b),
-        screenshots: [...new Set(screenshots)].slice(0, 10), // Unique & Limited
+        plot: scrapedPlot,
+        imdbId: imdbId, // Sending this to Frontend
+        seasons: Array.from(detectedSeasons).sort((a,b)=>a-b),
+        screenshots: [...new Set(screenshots)].slice(0, 8),
         downloadSections
     });
 
-  } catch (error: any) {
-    console.error("Scraper Error:", error.message);
-    return NextResponse.json({ error: 'Failed to fetch details' });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed' });
   }
 }
