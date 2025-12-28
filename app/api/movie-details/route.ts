@@ -18,12 +18,10 @@ export async function GET(request: Request) {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // --- 1. Basic Details ---
+    // 1. Basic Info
     const title = $('h1.entry-title, .title').first().text().trim();
-    // Try multiple sources for poster
     let poster = $('.post-thumbnail img').attr('src') || 
-                 $('.entry-content img').first().attr('src') ||
-                 $('meta[property="og:image"]').attr('content');
+                 $('.entry-content img').first().attr('src');
 
     let plot = '';
     $('p').each((i, el) => {
@@ -33,71 +31,66 @@ export async function GET(request: Request) {
         }
     });
 
-    // --- 2. SCREENSHOTS (Strict Filter) ---
+    // 2. SCREENSHOTS
     const screenshots: string[] = [];
-    const contentArea = $('.entry-content, .thecontent, .post-content');
-    
-    contentArea.find('img').each((i, el) => {
+    $('.entry-content img, .post-content img').each((i, el) => {
         const src = $(el).attr('src') || $(el).attr('data-src');
-        if (src && src !== poster) {
-            // Filter out icons, buttons, and logos
-            if (!src.includes('icon') && !src.includes('logo') && !src.includes('button') && !src.includes('whatsapp') && !src.includes('telegram')) {
-                screenshots.push(src);
-            }
+        if (src && src !== poster && !src.includes('icon') && !src.includes('button') && !src.includes('logo')) {
+            screenshots.push(src);
         }
     });
     const uniqueScreenshots = [...new Set(screenshots)].slice(0, 8);
 
-    // --- 3. DOWNLOAD LINKS (Structure Based - Fixes Season Filter) ---
+    // 3. DOWNLOAD LINKS (The Fix: Heading Based Logic)
     const downloadSections: any[] = [];
     
-    // Look for headings that define sections (Standard Movies4u structure)
-    $('h3, h4, h5, h6, strong, b').each((i, el) => {
+    // Scan standard headings used by Movies4u/Vega
+    $('h3, h4, h5, h6, strong, p > strong').each((i, el) => {
         const headingText = $(el).text().trim();
         
-        // Valid headings must contain keywords
-        const isRelevant = /480p|720p|1080p|2160p|4k|Season|Episode|Download|Zip|Pack/i.test(headingText);
-
-        if (isRelevant) {
+        // Agar Heading me "Season", "480p", "Download" jaisa kuch hai
+        if (/Season|Episode|480p|720p|1080p|2160p|4k|Download|Zip|Pack/i.test(headingText)) {
+            
             const links: any[] = [];
             
-            // Find links until the next heading
+            // Us heading ke neeche ke links dhundo jab tak agli heading na aaye
             $(el).nextUntil('h3, h4, h5, h6').find('a').each((j, linkEl) => {
-                const linkUrl = $(linkEl).attr('href');
-                const linkText = $(linkEl).text().trim();
+                const href = $(linkEl).attr('href');
+                const text = $(linkEl).text().trim();
                 
-                // Filter drive/cloud links
-                if (linkUrl && (linkUrl.includes('drive') || linkUrl.includes('hub') || linkUrl.includes('cloud') || linkUrl.includes('gdflix') || linkUrl.includes('file'))) {
-                    links.push({ label: linkText || 'Download', url: linkUrl });
+                if (href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix'))) {
+                    links.push({ label: text || 'Download Link', url: href });
                 }
             });
 
-            // Also check immediate siblings (sometimes links are direct siblings)
-            if (links.length === 0) {
-                 $(el).nextUntil('h3, h4, h5, h6').filter('a').each((j, linkEl) => {
-                    const linkUrl = $(linkEl).attr('href');
-                    const linkText = $(linkEl).text().trim();
-                    if (linkUrl && (linkUrl.includes('drive') || linkUrl.includes('hub') || linkUrl.includes('cloud'))) {
-                        links.push({ label: linkText || 'Download', url: linkUrl });
-                    }
-                 });
-            }
-
+            // Agar links mile, to section bana do
             if (links.length > 0) {
                 downloadSections.push({ title: headingText, links });
             }
         }
     });
 
+    // Fallback: Agar upar wala fail ho jaye (rare movie pages)
+    if (downloadSections.length === 0) {
+        const allLinks: any[] = [];
+        $('a').each((i, el) => {
+            const href = $(el).attr('href');
+            if (href && (href.includes('drive') || href.includes('hub'))) {
+                allLinks.push({ label: $(el).text().trim() || 'Download', url: href });
+            }
+        });
+        if (allLinks.length > 0) {
+            downloadSections.push({ title: 'Download Links', links: allLinks });
+        }
+    }
+
     return NextResponse.json({
-        title,
-        poster,
-        plot,
+        title, poster, plot,
         screenshots: uniqueScreenshots,
         downloadSections
     });
 
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch details' });
+    return NextResponse.json({ error: 'Failed' });
   }
 }
