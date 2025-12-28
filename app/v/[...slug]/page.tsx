@@ -5,13 +5,13 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  ImageIcon, Archive, Tv, Loader2, Star, ChevronDown 
+  ImageIcon, Archive, Tv, Loader2, Star
 } from 'lucide-react';
 
 export default function MoviePage() {
   const { slug } = useParams();
   const router = useRouter();
-  const downloadRef = useRef<HTMLDivElement>(null); // For scrolling
+  const downloadRef = useRef<HTMLDivElement>(null);
   
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,21 @@ export default function MoviePage() {
         if (!res.ok) throw new Error("Failed");
         const result = await res.json();
         setData(result);
-        if (result.seasons?.length > 0) setAvailableSeasons(result.seasons);
+        
+        // Robust Season Detection (Purana Logic)
+        const seasonSet = new Set<number>();
+        if (result.seasons && result.seasons.length > 0) {
+            result.seasons.forEach((s: number) => seasonSet.add(s));
+        }
+        // Fallback: Check Section Titles
+        if (result.downloadSections) {
+            result.downloadSections.forEach((sec: any) => {
+                const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
+                if (m) seasonSet.add(parseInt(m[1]));
+            });
+        }
+        if (seasonSet.size > 0) setAvailableSeasons(Array.from(seasonSet).sort((a,b)=>a-b));
+
       } catch (e) { setError("Failed to load content"); }
       finally { setLoading(false); }
     };
@@ -59,59 +73,111 @@ export default function MoviePage() {
     }
   }, [data]);
 
-  // Merge Data
+  // Data Merging
   const finalOverview = tmdbData?.overview || data?.plot;
   const finalPoster = tmdbData?.poster || data?.poster;
   const finalBackdrop = tmdbData?.backdrop || data?.poster;
   const finalRating = tmdbData?.rating;
   const trailerKey = tmdbData?.trailerKey;
-  // Use TMDB images if available, else scraper images
   const galleryImages = (tmdbData?.images && tmdbData.images.length > 0) ? tmdbData.images : data?.screenshots;
 
-  // --- FILTER LOGIC ---
+  // --- HELPER: Is Bulk Link? (Purana Logic Wapas) ---
+  const isBulkLink = (title: string, label: string) => {
+    const text = (title + " " + label).toLowerCase();
+    return /batch|zip|pack|complete|volume|collection/.test(text);
+  };
+
+  // --- HELPER: Detect Quality ---
+  const detectQuality = (text: string) => {
+      const lower = text.toLowerCase();
+      if (lower.includes('4k') || lower.includes('2160p')) return '4K';
+      if (lower.includes('1080p')) return '1080p';
+      if (lower.includes('720p')) return '720p';
+      if (lower.includes('480p')) return '480p';
+      return null;
+  };
+
+  // --- MAIN LOGIC (ROBUST FILTER) ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
+
+      // 1. Filter Sections by Season
       let validSections = data.downloadSections.filter((sec: any) => {
-          if (selectedSeason !== null && sec.season !== null && sec.season !== selectedSeason) return false;
+          if (selectedSeason !== null) {
+              // Try backend 'season' field OR extract from title
+              let secSeason = sec.season;
+              if (!secSeason) {
+                  const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
+                  if (m) secSeason = parseInt(m[1]);
+              }
+              // Logic: If season found, must match. If NO season found, keep it (generic/mixed).
+              if (secSeason !== null && secSeason !== undefined && secSeason !== selectedSeason) return false;
+          }
           return true;
       });
+
       let allLinks: any[] = [];
       let qualSet = new Set<string>();
+
       validSections.forEach((sec: any) => {
           sec.links.forEach((link: any) => {
-              const isBatch = link.isZip || link.label.toLowerCase().includes('zip') || link.label.toLowerCase().includes('pack') || sec.title.toLowerCase().includes('pack');
+              // 2. Identify Type (Batch vs Episode)
+              // Check backend 'isZip' OR use helper function on text
+              const isBatch = (link.isZip === true) || isBulkLink(sec.title || "", link.label || "");
+
+              // 3. Apply Filters
               if (actionType === 'download') {
-                  if (downloadType === 'bulk' && !isBatch) return;
-                  if (downloadType === 'episode' && isBatch) return;
-              } else if (actionType === 'watch' && isBatch) return;
-              qualSet.add(sec.quality);
-              allLinks.push({ ...link, quality: sec.quality, size: sec.size });
+                  if (downloadType === 'bulk' && !isBatch) return; // Need Bulk, got Episode -> Skip
+                  if (downloadType === 'episode' && isBatch) return; // Need Episode, got Bulk -> Skip
+              } else if (actionType === 'watch' && isBatch) return; // Watch shouldn't show Zips
+
+              // 4. Extract Quality (Smart)
+              let q = sec.quality;
+              if (!q || q === 'Standard') {
+                  q = detectQuality(sec.title) || detectQuality(link.label) || 'Standard';
+              }
+              
+              qualSet.add(q);
+              allLinks.push({
+                  ...link,
+                  quality: q,
+                  size: sec.size || link.size, // Fallback if link has size
+                  sectionTitle: sec.title
+              });
           });
       });
-      return { links: allLinks, qualities: Array.from(qualSet).sort((a,b) => ['4K','1080p','720p','480p','Standard'].indexOf(a) - ['4K','1080p','720p','480p','Standard'].indexOf(b)) };
+
+      return {
+          links: allLinks,
+          qualities: Array.from(qualSet).sort((a,b) => ['4K','1080p','720p','480p','Standard'].indexOf(a) - ['4K','1080p','720p','480p','Standard'].indexOf(b))
+      };
   };
 
   const { links: filteredLinks, qualities: currentQualities } = getFilteredData();
-  useEffect(() => { if (selectedQuality && !currentQualities.includes(selectedQuality)) setSelectedQuality(null); }, [currentQualities, selectedQuality]);
+
+  // Reset quality if current selection invalid
+  useEffect(() => { 
+      if (selectedQuality && !currentQualities.includes(selectedQuality)) setSelectedQuality(null); 
+  }, [currentQualities, selectedQuality]);
+
   const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
+
+  const handleLinkClick = (url: string) => {
+    const payload = { link: url, title: data?.title, poster: finalPoster, quality: selectedQuality };
+    const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    router.push(`/vlyxdrive?key=${key}`);
+  };
 
   const scrollToDownloads = () => {
       downloadRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // ✅ Added missing function here
   const goBackStep = () => {
       if (selectedQuality) setSelectedQuality(null);
       else if (downloadType) setDownloadType(null);
       else if (actionType) setActionType(null);
       else if (selectedSeason) setSelectedSeason(null);
       else router.back();
-  };
-
-  const handleLinkClick = (url: string) => {
-    const payload = { link: url, title: data?.title, poster: finalPoster, quality: selectedQuality };
-    const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    router.push(`/vlyxdrive?key=${key}`);
   };
 
   if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin w-8 h-8 text-red-600"/></div>;
@@ -128,7 +194,6 @@ export default function MoviePage() {
                 className="w-full h-full bg-cover bg-center"
                 style={{ backgroundImage: `url(${finalBackdrop})` }}
               ></div>
-              {/* Gradient Overlays */}
               <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
               <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-transparent"></div>
           </div>
@@ -142,7 +207,6 @@ export default function MoviePage() {
           {/* Centered Content */}
           <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto animate-slide-up">
               
-              {/* Rating Badge */}
               {finalRating && (
                   <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full">
                       <Star className="w-4 h-4 text-yellow-400 fill-current"/>
@@ -150,17 +214,14 @@ export default function MoviePage() {
                   </div>
               )}
 
-              {/* Title */}
               <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400">
                   {data?.title}
               </h1>
 
-              {/* Overview (Short) */}
               <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md">
                   {finalOverview}
               </p>
 
-              {/* Fake Buttons (Scroll Targets) */}
               <div className="flex gap-4">
                   <button 
                     onClick={scrollToDownloads}
@@ -181,13 +242,10 @@ export default function MoviePage() {
       {/* --- 2. POSTER SECTION (Glowing) --- */}
       <div className="relative z-20 -mt-10 mb-16 flex justify-center px-4">
           <div className="relative group">
-              {/* Glow Effect Behind */}
               <div 
                 className="absolute inset-0 bg-cover bg-center blur-3xl opacity-40 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-60"
                 style={{ backgroundImage: `url(${finalPoster})` }}
               ></div>
-              
-              {/* Actual Poster */}
               <img 
                 src={finalPoster} 
                 alt="Poster" 
@@ -226,11 +284,7 @@ export default function MoviePage() {
                           const src = typeof img === 'string' ? img : `https://image.tmdb.org/t/p/w780${img.file_path}`;
                           return (
                               <div key={i} className="aspect-video rounded-xl overflow-hidden border border-gray-800 group relative">
-                                  <img 
-                                    src={src} 
-                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                                    loading="lazy"
-                                  />
+                                  <img src={src} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy"/>
                                   <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
                               </div>
                           );
@@ -320,7 +374,7 @@ export default function MoviePage() {
                           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-3xl mx-auto">
                               {currentQualities.length > 0 ? currentQualities.map(q => (
                                   <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 hover:border-blue-500 rounded-xl font-bold text-lg transition-all">{q}</button>
-                              )) : <div className="col-span-full text-center text-gray-500 py-4">No options found.</div>}
+                              )) : <div className="col-span-full text-center text-gray-500 py-4">No options found. Try changing filters.</div>}
                           </div>
                       </div>
                   )}
@@ -334,7 +388,7 @@ export default function MoviePage() {
                                   <div>
                                       <span className="font-bold text-gray-200 group-hover:text-white block text-sm md:text-base">{link.label}</span>
                                       <div className="flex gap-2 text-xs text-gray-500 mt-1">
-                                          <span className="bg-gray-800 px-1.5 rounded">{link.size}</span>
+                                          {link.size && <span className="bg-gray-800 px-1.5 rounded">{link.size}</span>}
                                           {link.sectionTitle && <span className="text-gray-600">• {link.sectionTitle}</span>}
                                       </div>
                                   </div>
