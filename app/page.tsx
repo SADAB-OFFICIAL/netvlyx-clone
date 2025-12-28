@@ -1,11 +1,11 @@
-// app/page.tsx
 'use client';
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { 
-  Play, Info, Search, Bell, CloudLightning, 
-  ChevronRight, Star, Loader2, X 
+  Play, Info, Search, Bell, MonitorPlay, // New Professional Logo Icon
+  ChevronRight, Star, Loader2, X, 
+  Github, Twitter, Instagram, Globe, Mail // Footer Icons
 } from 'lucide-react';
 
 function HomePageContent() {
@@ -39,6 +39,7 @@ function HomePageContent() {
         performSearch(initialQuery);
         setLoadingHome(false);
     }
+   
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -93,10 +94,14 @@ function HomePageContent() {
   const isSearchMode = query.length > 0;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-red-500/30 pb-20">
+    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-red-500/30">
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled || isSearchMode ? 'bg-black/95 backdrop-blur-md border-b border-gray-800' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
          <div className={`flex items-center gap-8 ${isSearchMode ? 'hidden md:flex' : 'flex'}`}>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-1" onClick={() => { clearSearch(); window.scrollTo(0,0); }}><CloudLightning className="text-red-600 fill-current" size={24}/> SADABEFY </h1>
+            {/* UPDATED LOGO: MonitorPlay icon for professional streaming look */}
+            <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-2" onClick={() => { clearSearch(); window.scrollTo(0,0); }}>
+                <MonitorPlay className="text-red-600" size={32} strokeWidth={2.5}/> 
+                SADABEFY 
+            </h1>
          </div>
          <div className={`flex-1 max-w-2xl mx-auto relative transition-all duration-500 ${isSearchMode ? 'w-full' : 'w-auto'}`}>
              <div className={`relative flex items-center bg-gray-900/80 border ${isSearchMode ? 'border-red-600/50 shadow-red-900/20 shadow-lg' : 'border-gray-700'} rounded-full px-4 py-2 transition-all`}>
@@ -112,7 +117,7 @@ function HomePageContent() {
          </div>
          <div className="hidden md:flex items-center gap-5 text-gray-300 ml-4">
             <Bell className="w-5 h-5 cursor-pointer hover:text-white transition" />
-            <div className="w-8 h-8 rounded bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-bold text-xs text-white shadow-lg">U</div>
+            <div className="w-8 h-8 rounded bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-bold text-xs text-white shadow-lg">S</div>
          </div>
       </nav>
 
@@ -155,6 +160,7 @@ function HomePageContent() {
                     </div>
                 </div>
             )}
+           
             <div className="relative z-20 -mt-20 space-y-12 px-4 md:px-12 pb-12">
                 {homeData.sections?.map((section: any, idx: number) => (
                     section.items?.length > 0 && (
@@ -177,6 +183,74 @@ function HomePageContent() {
             </div>
          </>
       )}
+
+      {/* FOOTER SECTION (Added exactly like requested) */}
+      <footer className="bg-[#050505] border-t border-gray-900 pt-16 pb-8 px-4 md:px-12 mt-20">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
+              {/* Brand Column */}
+              <div className="space-y-4">
+                  <h2 className="text-2xl font-bold flex items-center gap-2 text-red-600">
+                      <MonitorPlay size={28} /> SADABEFY
+                  </h2>
+                  <p className="text-gray-400 text-sm leading-relaxed">
+                      Your premium entertainment destination. We help you discover content from across the internet. No content is hosted on our platform.
+                  </p>
+                  <button className="text-red-500 font-bold text-sm hover:underline">Learn More About Us ?</button>
+              </div>
+
+              {/* Quick Links */}
+              <div>
+                  <h3 className="text-white font-bold mb-6">Quick Links</h3>
+                  <ul className="space-y-3 text-gray-400 text-sm">
+                      {['Bollywood Movies', 'South Movies', 'Korean Content', 'Anime', 'Action Movies'].map((item) => (
+                          <li key={item}><a href="#" className="hover:text-red-500 transition-colors">{item}</a></li>
+                      ))}
+                  </ul>
+              </div>
+
+              {/* Legal & Support */}
+              <div>
+                  <h3 className="text-white font-bold mb-6">Legal & Support</h3>
+                  <ul className="space-y-3 text-gray-400 text-sm">
+                      {['About Us', 'Contact Us', 'DMCA Policy', 'Privacy Policy', 'Terms of Service'].map((item) => (
+                          <li key={item}><a href="#" className="hover:text-red-500 transition-colors">{item}</a></li>
+                      ))}
+                  </ul>
+              </div>
+
+              {/* Get in Touch */}
+              <div>
+                  <h3 className="text-white font-bold mb-6">Get in Touch</h3>
+                  <ul className="space-y-4 text-sm">
+                      <li className="flex items-center gap-3 text-gray-400">
+                          <Globe size={18} className="text-blue-500"/> 
+                          <span className="hover:text-white cursor-pointer">sadabefy.vercel.app</span>
+                      </li>
+                      <li className="flex items-center gap-3 text-gray-400">
+                          <Mail size={18} className="text-red-500"/> 
+                          <span className="hover:text-white cursor-pointer">contact@sadabefy.com</span>
+                      </li>
+                      <li className="flex items-center gap-3 text-gray-400">
+                          <Instagram size={18} className="text-purple-500"/> 
+                          <span className="hover:text-white cursor-pointer">@sadab_official</span>
+                      </li>
+                  </ul>
+              </div>
+          </div>
+
+          <div className="border-t border-gray-900 pt-8 mt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="text-gray-500 text-sm">
+                  <p className="mb-1">Developed & Managed By</p>
+                  <h4 className="text-lg font-bold text-purple-400">Sadab Codes</h4>
+                  <p className="text-xs">Professional Web Development</p>
+              </div>
+              
+              <div className="text-gray-600 text-xs text-center md:text-right max-w-md">
+                  <p className="mb-2">© 2025 Sadabefy. All rights reserved.</p>
+                  <p>Disclaimer: Sadabefy does not host any content. We only index and provide links to content that is publicly available on the internet.</p>
+              </div>
+          </div>
+      </footer>
     </div>
   );
 }
