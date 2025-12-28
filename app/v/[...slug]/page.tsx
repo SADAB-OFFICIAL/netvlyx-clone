@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, Play, Download, CheckCircle, 
-  Tv, Loader2, Star, Archive 
+  ArrowLeft, Play, HardDrive, Download, CheckCircle, 
+  ImageIcon, Archive, Tv, Loader2, Star, Users 
 } from 'lucide-react';
 
 // --- SKELETON COMPONENT (Premium Dark Style) ---
@@ -104,12 +104,9 @@ export default function MoviePage() {
         }
         if (seasonSet.size > 0) setAvailableSeasons(Array.from(seasonSet).sort((a,b)=>a-b));
 
-        // Note: Hum yahan setLoading(false) NAHI karenge. 
-        // Hum wait karenge TMDB fetch hone ka (Effect 2 mein).
-
       } catch (e) { 
           setError("Failed to load content");
-          setLoading(false); // Error aaya to loading band kar do
+          setLoading(false); 
       }
     };
     fetchData();
@@ -117,7 +114,6 @@ export default function MoviePage() {
 
   // 2. FETCH TMDB DATA (Wait for this before hiding skeleton)
   useEffect(() => {
-    // Agar Backend Data hi nahi aaya, to kuch mat karo (loading true rahega jab tak error na aaye)
     if (!data) return;
     
     let apiUrl = '';
@@ -139,7 +135,6 @@ export default function MoviePage() {
                 setLoading(false); 
             });
     } else {
-        // Agar koi API URL hi nahi bana (mtlb title bhi nahi mila), to loading band kar do
         setLoading(false);
     }
   }, [data]);
@@ -152,10 +147,10 @@ export default function MoviePage() {
   const finalRating = tmdbData?.rating;
   const trailerKey = tmdbData?.trailerKey;
   
-  // Prioritize Scraper Screenshots, Fallback to TMDB
+  // Prioritize Scraper Screenshots
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- FILTER LOGIC (UNCHANGED) ---
+  // --- FILTER LOGIC ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
@@ -232,9 +227,7 @@ export default function MoviePage() {
       else router.back();
   };
 
-  // --- RENDER SKELETON WHILE LOADING ---
   if (loading) return <MovieSkeleton />;
-  
   if (error) return <div className="h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
 
   return (
@@ -320,7 +313,30 @@ export default function MoviePage() {
               </div>
           )}
 
-          {/* 5. DOWNLOAD SECTION */}
+          {/* 5. CAST & CREW (New Added) */}
+          {tmdbData?.cast && tmdbData.cast.length > 0 && (
+              <div className="animate-fade-in">
+                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-yellow-600 pl-3"><Users size={24}/> Cast & Crew</h2>
+                  <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide">
+                      {tmdbData.cast.slice(0, 10).map((actor: any, i: number) => (
+                          <div key={i} className="flex-shrink-0 w-[130px]">
+                              <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-gray-900 mb-2">
+                                  <img 
+                                    src={actor.profile_image ? actor.profile_image : "https://via.placeholder.com/300x450?text=No+Image"} 
+                                    className="w-full h-full object-cover" 
+                                    loading="lazy"
+                                    alt={actor.name}
+                                  />
+                              </div>
+                              <h3 className="text-sm font-bold text-white leading-tight">{actor.name}</h3>
+                              <p className="text-xs text-gray-400 mt-1">{actor.character}</p>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          )}
+
+          {/* 6. DOWNLOAD SECTION */}
           <div id="download-section" ref={downloadRef} className="pt-10">
               <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none"></div>
@@ -394,6 +410,7 @@ export default function MoviePage() {
                           )) : <div className="text-center py-10 text-gray-500">No links available.</div>}
                       </div>
                   )}
+
               </div>
           </div>
       </div>
