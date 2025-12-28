@@ -42,13 +42,12 @@ export default function MoviePage() {
         const result = await res.json();
         setData(result);
         
-        // --- SEASON DETECTION LOGIC (Restored) ---
+        // --- SEASON DETECTION ---
         const title = result.title || "";
-        // Check 1: Range in Title (e.g., Season 1-5)
         const rangeMatch = title.match(/(?:season|s)\s*(\d+)\s*[-–—]\s*(\d+)/i);
         const sectionSeasons = new Set<number>();
         
-        // Check 2: Scan Sections (e.g., Season 1 720p)
+        // Scan sections for specific season headers
         result.downloadSections.forEach((sec: any) => {
             const m = sec.title.match(/(?:season|s)\s*0?(\d+)/i);
             if (m) sectionSeasons.add(parseInt(m[1]));
@@ -72,7 +71,7 @@ export default function MoviePage() {
     fetchRealData();
   }, [movieUrl]);
 
-  // --- STRICT HELPER: Is Bulk Link? ---
+  // --- HELPER: Is Bulk Link? ---
   const isBulkLink = (sectionTitle: string, linkLabel: string) => {
     const text = (sectionTitle + " " + linkLabel).toLowerCase();
     return /batch|zip|pack|complete|volume|collection/.test(text);
@@ -85,7 +84,6 @@ export default function MoviePage() {
     // Step A: Season Filter
     let sections = data.downloadSections.filter((sec: any) => {
         if (selectedSeason === null) return true;
-        // Match "Season 1" or "S01" in section title
         const seasonRegex = new RegExp(`(?:season|s)[\\s\\-_]*0?${selectedSeason}(?:\\D|$)`, 'i');
         return seasonRegex.test(sec.title);
     });
@@ -117,7 +115,6 @@ export default function MoviePage() {
     
     const qualities = new Set<string>();
     currentSections.forEach((sec: any) => {
-        // Extract 480p, 720p from section title or links
         const qMatch = sec.title.match(/(480p|720p|1080p|2160p|4k)/i);
         if (qMatch) qualities.add(qMatch[1].toLowerCase());
         else {
@@ -134,7 +131,7 @@ export default function MoviePage() {
     const sorted = Array.from(qualities).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     setAvailableQualities(sorted);
 
-    // Reset Quality if filters change context
+    // Reset logic
     if (selectedQuality && !sorted.includes(selectedQuality.toLowerCase()) && selectedQuality !== 'Standard') {
         setSelectedQuality(null);
     }
@@ -163,7 +160,6 @@ export default function MoviePage() {
   const handleLinkClick = (url: string) => {
     const payload = {
         link: url,
-        source: 'netvlyx',
         title: data?.title || 'Unknown',
         poster: data?.poster || '',
         quality: selectedQuality
@@ -198,7 +194,6 @@ export default function MoviePage() {
         </button>
         
         <div className="flex flex-col lg:flex-row gap-10">
-          {/* POSTER */}
           <div className="w-full lg:w-[320px] flex-shrink-0 mx-auto lg:mx-0">
              <img src={data?.poster} alt={data?.title} className="rounded-2xl shadow-2xl w-full border border-white/10" />
           </div>
@@ -207,7 +202,7 @@ export default function MoviePage() {
             <h1 className="text-3xl md:text-5xl font-bold mb-4 leading-tight">{data?.title}</h1>
             <p className="text-gray-400 text-lg mb-8 line-clamp-4">{data?.plot}</p>
 
-            {/* SCREENSHOTS */}
+            {/* SCREENSHOTS (Only show real ones) */}
             <div className="mb-8 animate-fade-in">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><ImageIcon className="text-blue-500"/> Screenshots</h3>
                 {data?.screenshots && data.screenshots.length > 0 ? (
@@ -233,15 +228,11 @@ export default function MoviePage() {
                {(selectedSeason || actionType) && (
                  <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
                     <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1"><ArrowLeft size={14}/> Previous</button>
-                    <div className="text-sm font-bold text-gray-500">
-                        {selectedSeason ? `S${selectedSeason}` : ''} 
-                        {actionType ? ` > ${actionType === 'watch' ? 'Stream' : 'DL'}` : ''}
-                        {selectedQuality ? ` > ${selectedQuality}` : ''}
-                    </div>
+                    <div className="text-sm font-bold text-gray-500">Step {selectedQuality ? '4/4' : '3/4'}</div>
                  </div>
                )}
 
-               {/* STEP 1: SEASON */}
+               {/* 1. SEASON */}
                {availableSeasons.length > 0 && selectedSeason === null && (
                   <div className="animate-fade-in">
                       <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Film className="text-red-500" /> Select Season</h3>
@@ -253,7 +244,7 @@ export default function MoviePage() {
                   </div>
                )}
 
-               {/* STEP 2: ACTION */}
+               {/* 2. ACTION */}
                {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
                   <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-6">
                       <button onClick={() => setActionType('download')} className="p-8 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 rounded-2xl text-center group transition-all">
@@ -267,7 +258,7 @@ export default function MoviePage() {
                   </div>
                )}
 
-               {/* STEP 3: TYPE (DL Only) */}
+               {/* 3. TYPE */}
                {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                    <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-6">
                        <button onClick={() => setDownloadType('episode')} className="p-8 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 rounded-2xl text-center"><Tv className="mx-auto mb-4 text-purple-400" size={48}/><span className="font-bold text-xl block text-white">Episode Wise</span></button>
@@ -275,7 +266,7 @@ export default function MoviePage() {
                    </div>
                )}
 
-               {/* STEP 4: QUALITY */}
+               {/* 4. QUALITY */}
                {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
                    <div className="animate-fade-in">
                        <h3 className="text-xl font-bold mb-6 text-center">Select Quality</h3>
@@ -289,7 +280,7 @@ export default function MoviePage() {
                    </div>
                )}
 
-               {/* STEP 5: FINAL */}
+               {/* 5. LINKS */}
                {selectedQuality !== null && (
                    <div className="space-y-4 animate-fade-in">
                        <h3 className="text-green-400 font-bold flex items-center gap-2 mb-4"><CheckCircle size={20}/> Available Links</h3>
