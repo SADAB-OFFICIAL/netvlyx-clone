@@ -7,10 +7,10 @@ export async function GET(request: Request) {
 
   if (!query) return NextResponse.json({ success: false, error: 'Query required' });
 
-  // NetVlyx API Endpoint
+  // 1. Target Real NetVlyx API
   const TARGET_URL = `https://netvlyx.pages.dev/api/movies4u-search?s=${encodeURIComponent(query)}`;
 
-  // Secret Headers (Jo Python script mein kaam kiye the)
+  // 2. Secret Headers (Bypass Protection)
   const headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "*/*",
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     
     const data = await response.json();
     
-    // NetVlyx returns { results: [...] } for search
+    // NetVlyx returns { results: [...] }
     return NextResponse.json({ success: true, results: data.results || [] });
 
   } catch (error: any) {
