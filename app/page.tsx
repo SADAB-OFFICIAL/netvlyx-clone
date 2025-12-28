@@ -3,10 +3,36 @@
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { 
-  Play, Info, Search, Bell, MonitorPlay, // New Professional Logo Icon
+  Play, Info, Search, Bell, MonitorPlay, 
   ChevronRight, Star, Loader2, X, 
-  Github, Twitter, Instagram, Globe, Mail // Footer Icons
+  Globe, Mail, Instagram 
 } from 'lucide-react';
+
+// --- SKELETON COMPONENTS (For Fast Loading Feel) ---
+const HeroSkeleton = () => (
+  <div className="w-full h-[85vh] bg-gray-900/50 animate-pulse relative">
+      <div className="absolute bottom-0 left-0 p-12 w-full max-w-3xl space-y-4">
+          <div className="h-12 w-3/4 bg-gray-800 rounded-lg"></div>
+          <div className="h-4 w-full bg-gray-800 rounded"></div>
+          <div className="h-4 w-2/3 bg-gray-800 rounded"></div>
+          <div className="flex gap-4 pt-4">
+              <div className="h-12 w-32 bg-gray-800 rounded-lg"></div>
+              <div className="h-12 w-32 bg-gray-800 rounded-lg"></div>
+          </div>
+      </div>
+  </div>
+);
+
+const SectionSkeleton = () => (
+  <div className="px-12 mb-12 space-y-4">
+      <div className="h-6 w-48 bg-gray-800 rounded animate-pulse"></div>
+      <div className="flex gap-4 overflow-hidden">
+          {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-[200px] h-[300px] bg-gray-800 rounded-lg animate-pulse"></div>
+          ))}
+      </div>
+  </div>
+);
 
 function HomePageContent() {
   const router = useRouter();
@@ -93,45 +119,62 @@ function HomePageContent() {
   const activeHero = homeData?.hero?.[heroIndex];
   const isSearchMode = query.length > 0;
 
+  // --- SKELETON LOADER STATE ---
+  if (loadingHome && !isSearchMode) {
+      return (
+          <div className="min-h-screen bg-[#0a0a0a]">
+              <nav className="fixed top-0 w-full z-50 p-6 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
+                  <div className="h-8 w-32 bg-gray-800 rounded animate-pulse"></div>
+                  <div className="h-8 w-8 bg-gray-800 rounded-full animate-pulse"></div>
+              </nav>
+              <HeroSkeleton />
+              <div className="mt-8">
+                  <SectionSkeleton />
+                  <SectionSkeleton />
+              </div>
+          </div>
+      );
+  }
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-red-500/30">
+    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-yellow-500/30">
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled || isSearchMode ? 'bg-black/95 backdrop-blur-md border-b border-gray-800' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
          <div className={`flex items-center gap-8 ${isSearchMode ? 'hidden md:flex' : 'flex'}`}>
-            {/* UPDATED LOGO: MonitorPlay icon for professional streaming look */}
-            <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-2" onClick={() => { clearSearch(); window.scrollTo(0,0); }}>
-                <MonitorPlay className="text-red-600" size={32} strokeWidth={2.5}/> 
+            {/* UPDATED LOGO: Small, Premium Gold */}
+            <h1 className="text-lg md:text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-600 tracking-wide cursor-pointer flex items-center gap-2 drop-shadow-[0_2px_10px_rgba(234,179,8,0.5)]" onClick={() => { clearSearch(); window.scrollTo(0,0); }}>
+                <MonitorPlay className="text-yellow-500" size={24} strokeWidth={2.5}/> 
                 SADABEFY 
             </h1>
          </div>
          <div className={`flex-1 max-w-2xl mx-auto relative transition-all duration-500 ${isSearchMode ? 'w-full' : 'w-auto'}`}>
-             <div className={`relative flex items-center bg-gray-900/80 border ${isSearchMode ? 'border-red-600/50 shadow-red-900/20 shadow-lg' : 'border-gray-700'} rounded-full px-4 py-2 transition-all`}>
-                 <Search className={`w-5 h-5 ${isSearchMode ? 'text-red-500' : 'text-gray-400'}`} />
-                 <input type="text" value={query} onChange={(e) => handleSearchInput(e.target.value)} placeholder="Search movies, shows..." className="bg-transparent border-none outline-none text-white px-3 py-1 w-full placeholder-gray-500"/>
-                 {query && <button onClick={clearSearch}><X className="w-5 h-5 text-gray-400 hover:text-white transition" /></button>}
+             <div className={`relative flex items-center bg-gray-900/80 border ${isSearchMode ? 'border-yellow-500/50 shadow-yellow-900/20 shadow-lg' : 'border-gray-700'} rounded-full px-4 py-2 transition-all`}>
+                 <Search className={`w-4 h-4 ${isSearchMode ? 'text-yellow-500' : 'text-gray-400'}`} />
+                 <input type="text" value={query} onChange={(e) => handleSearchInput(e.target.value)} placeholder="Search movies, shows..." className="bg-transparent border-none outline-none text-white text-sm px-3 py-1 w-full placeholder-gray-500"/>
+                 {query && <button onClick={clearSearch}><X className="w-4 h-4 text-gray-400 hover:text-white transition" /></button>}
              </div>
              {showSuggestions && suggestions.length > 0 && (
                  <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
-                     {suggestions.map((s, i) => (<div key={i} onClick={() => handleSearchInput(s)} className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none"><Search size={14} /> {s}</div>))}
+                     {suggestions.map((s, i) => (<div key={i} onClick={() => handleSearchInput(s)} className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none text-sm"><Search size={12} /> {s}</div>))}
                  </div>
              )}
          </div>
          <div className="hidden md:flex items-center gap-5 text-gray-300 ml-4">
-            <Bell className="w-5 h-5 cursor-pointer hover:text-white transition" />
-            <div className="w-8 h-8 rounded bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-bold text-xs text-white shadow-lg">S</div>
+            <Bell className="w-5 h-5 cursor-pointer hover:text-yellow-500 transition" />
+            <div className="w-8 h-8 rounded bg-gradient-to-br from-yellow-500 to-yellow-700 flex items-center justify-center font-bold text-xs text-black shadow-lg">S</div>
          </div>
       </nav>
 
       {isSearchMode && (
           <div className="pt-28 px-4 md:px-12 min-h-screen">
-              <h2 className="text-xl font-bold text-gray-200 mb-6 flex items-center gap-2">{isSearching ? <Loader2 className="animate-spin text-red-500"/> : 'Search Results'} <span className="text-sm font-normal text-gray-500">{isSearching ? 'Searching...' : `Found ${searchResults.length} items`}</span></h2>
+              <h2 className="text-xl font-bold text-gray-200 mb-6 flex items-center gap-2">{isSearching ? <Loader2 className="animate-spin text-yellow-500"/> : 'Search Results'} <span className="text-sm font-normal text-gray-500">{isSearching ? 'Searching...' : `Found ${searchResults.length} items`}</span></h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
                   {searchResults.map((item, idx) => (
                       <div key={idx} onClick={() => openLink(item.link)} className="group relative cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10">
-                          <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 relative border border-gray-700 group-hover:border-red-500/50 shadow-lg">
+                          <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 relative border border-gray-700 group-hover:border-yellow-500/50 shadow-lg">
                               <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:contrast-110" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
                               <div className="absolute bottom-0 p-3 w-full">
-                                  <h3 className="text-sm font-bold text-white line-clamp-2 leading-tight group-hover:text-red-400 transition-colors">{item.title}</h3>
+                                  <h3 className="text-sm font-bold text-white line-clamp-2 leading-tight group-hover:text-yellow-400 transition-colors">{item.title}</h3>
                                   <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-300"><span className="bg-white/20 px-1.5 rounded">{item.quality?.[0] || 'HD'}</span><span>{item.year || '2024'}</span></div>
                               </div>
                           </div>
@@ -155,7 +198,7 @@ function HomePageContent() {
                         <p className="text-gray-200 mb-8 line-clamp-3 animate-slide-up delay-100">{activeHero.desc}</p>
                         <div className="flex gap-4 animate-slide-up delay-200">
                             <button onClick={() => handleSearchInput(activeHero.title)} className="bg-white text-black px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-105 transition-transform"><Play className="fill-current" size={24}/> Play</button>
-                            <button className="bg-gray-600/40 text-white px-8 py-3 rounded-lg font-bold backdrop-blur-md"><Info size={24}/> Info</button>
+                            <button className="bg-gray-600/40 text-white px-8 py-3 rounded-lg font-bold backdrop-blur-md hover:bg-gray-600/60 transition"><Info size={24}/> Info</button>
                         </div>
                     </div>
                 </div>
@@ -165,7 +208,7 @@ function HomePageContent() {
                 {homeData.sections?.map((section: any, idx: number) => (
                     section.items?.length > 0 && (
                         <div key={idx}>
-                            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-red-600 pl-3">{section.title}</h2>
+                            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-yellow-600 pl-3">{section.title}</h2>
                             <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide">
                                 {section.items.map((item: any, i: number) => (
                                     <div key={i} onClick={() => openLink(item.link)} className="flex-shrink-0 w-[140px] md:w-[200px] cursor-pointer hover:scale-105 transition-transform">
@@ -173,7 +216,7 @@ function HomePageContent() {
                                             <img src={item.poster || item.image} className="w-full h-full object-cover" loading="lazy"/>
                                             <div className="absolute inset-0 bg-black/20 hover:bg-transparent transition-colors"></div>
                                         </div>
-                                        <h3 className="mt-2 text-sm text-gray-300 truncate hover:text-white">{item.title}</h3>
+                                        <h3 className="mt-2 text-sm text-gray-300 truncate hover:text-white group-hover:text-yellow-400 transition-colors">{item.title}</h3>
                                     </div>
                                 ))}
                             </div>
@@ -184,18 +227,18 @@ function HomePageContent() {
          </>
       )}
 
-      {/* FOOTER SECTION (Added exactly like requested) */}
+      {/* FOOTER SECTION (Gold Theme) */}
       <footer className="bg-[#050505] border-t border-gray-900 pt-16 pb-8 px-4 md:px-12 mt-20">
           <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
               {/* Brand Column */}
               <div className="space-y-4">
-                  <h2 className="text-2xl font-bold flex items-center gap-2 text-red-600">
-                      <MonitorPlay size={28} /> SADABEFY
+                  <h2 className="text-xl font-bold flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">
+                      <MonitorPlay size={24} className="text-yellow-500"/> SADABEFY
                   </h2>
                   <p className="text-gray-400 text-sm leading-relaxed">
                       Your premium entertainment destination. We help you discover content from across the internet. No content is hosted on our platform.
                   </p>
-                  <button className="text-red-500 font-bold text-sm hover:underline">Learn More About Us ?</button>
+                  <button className="text-yellow-500 font-bold text-sm hover:underline">Learn More About Us ?</button>
               </div>
 
               {/* Quick Links */}
@@ -203,7 +246,7 @@ function HomePageContent() {
                   <h3 className="text-white font-bold mb-6">Quick Links</h3>
                   <ul className="space-y-3 text-gray-400 text-sm">
                       {['Bollywood Movies', 'South Movies', 'Korean Content', 'Anime', 'Action Movies'].map((item) => (
-                          <li key={item}><a href="#" className="hover:text-red-500 transition-colors">{item}</a></li>
+                          <li key={item}><a href="#" className="hover:text-yellow-500 transition-colors">{item}</a></li>
                       ))}
                   </ul>
               </div>
@@ -213,7 +256,7 @@ function HomePageContent() {
                   <h3 className="text-white font-bold mb-6">Legal & Support</h3>
                   <ul className="space-y-3 text-gray-400 text-sm">
                       {['About Us', 'Contact Us', 'DMCA Policy', 'Privacy Policy', 'Terms of Service'].map((item) => (
-                          <li key={item}><a href="#" className="hover:text-red-500 transition-colors">{item}</a></li>
+                          <li key={item}><a href="#" className="hover:text-yellow-500 transition-colors">{item}</a></li>
                       ))}
                   </ul>
               </div>
@@ -224,15 +267,15 @@ function HomePageContent() {
                   <ul className="space-y-4 text-sm">
                       <li className="flex items-center gap-3 text-gray-400">
                           <Globe size={18} className="text-blue-500"/> 
-                          <span className="hover:text-white cursor-pointer">sadabefy.gt.tc</span>
+                          <span className="hover:text-white cursor-pointer">sadabefy.vercel.app</span>
                       </li>
                       <li className="flex items-center gap-3 text-gray-400">
-                          <Mail size={18} className="text-red-500"/> 
-                          <span className="hover:text-white cursor-pointer">sadabvvip@gmail.com</span>
+                          <Mail size={18} className="text-yellow-500"/> 
+                          <span className="hover:text-white cursor-pointer">contact@sadabefy.com</span>
                       </li>
                       <li className="flex items-center gap-3 text-gray-400">
                           <Instagram size={18} className="text-purple-500"/> 
-                          <span className="hover:text-white cursor-pointer">@sad4b_ali_7</span>
+                          <span className="hover:text-white cursor-pointer">@sadab_official</span>
                       </li>
                   </ul>
               </div>
@@ -241,7 +284,7 @@ function HomePageContent() {
           <div className="border-t border-gray-900 pt-8 mt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="text-gray-500 text-sm">
                   <p className="mb-1">Developed & Managed By</p>
-                  <h4 className="text-lg font-bold text-purple-400">Sadab Codes</h4>
+                  <h4 className="text-lg font-bold text-yellow-500">Sadab Codes</h4>
                   <p className="text-xs">Professional Web Development</p>
               </div>
               
