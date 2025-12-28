@@ -19,82 +19,79 @@ export async function GET(request: Request) {
     const $ = cheerio.load(html);
 
     // --- 1. Basic Details ---
-    const title = $('h1.entry-title, .title').first().text().trim();
-    // Poster: Try multiple selectors
+    const title = $('h1.entry-title').text().trim() || $('.title').text().trim();
+    // Poster: Try finding main poster
     let poster = $('.post-thumbnail img').attr('src') || 
-                 $('.entry-content img').first().attr('src') ||
-                 $('meta[property="og:image"]').attr('content');
+                 $('.entry-content img').first().attr('src');
 
+    // Plot Extraction
     let plot = '';
     $('p').each((i, el) => {
         const text = $(el).text().trim();
-        // Plot usually fits these criteria
-        if (text.length > 60 && !text.includes('Download') && !text.includes('Join') && !plot) {
+        if (text.length > 50 && !text.includes('Download') && !text.includes('Join') && !plot) {
             plot = text;
         }
     });
 
-    // --- 2. ROBUST SCREENSHOTS (Fixed) ---
+    // --- 2. SCREENSHOTS (Restored) ---
+    // Content area se images uthayenge
     const screenshots: string[] = [];
     const contentArea = $('.entry-content, .thecontent, .post-content');
     
     contentArea.find('img').each((i, el) => {
         const src = $(el).attr('src') || $(el).attr('data-src');
         if (src && src !== poster) {
-            // Simple filter: Must be a decent length URL and not an obvious icon
-            if (!src.includes('icon') && !src.includes('logo') && !src.includes('button')) {
+            // Basic filtering to remove icons/buttons
+            if (!src.includes('icon') && !src.includes('logo') && !src.includes('button') && !src.includes('whatsapp')) {
                 screenshots.push(src);
             }
         }
     });
-    // Agar scrape se nahi mile, to fallback mat lagao (User request) - just distinct ones
+    // Remove duplicates & limit
     const uniqueScreenshots = [...new Set(screenshots)].slice(0, 8);
 
 
-    // --- 3. UNIVERSAL LINK FINDER (The Magic Fix) ---
-    // Instead of relying on headings, we scan ALL links and categorize them
-    const tempGroups: Record<string, any[]> = {
-        '480p': [],
-        '720p': [],
-        '1080p': [],
-        '2160p': [],
-        'Standard': []
-    };
-
-    $('a').each((i, el) => {
-        const href = $(el).attr('href');
-        const text = $(el).text().trim();
-        const parentText = $(el).parent().text().trim(); // Context from paragraph
-
-        // Filter for Drive/Hub/Cloud links
-        if (href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix'))) {
-            
-            // Detect Quality from Link Text or Parent Text
-            const combinedText = (text + " " + parentText).toLowerCase();
-            
-            let quality = 'Standard';
-            if (combinedText.includes('4k') || combinedText.includes('2160p')) quality = '2160p';
-            else if (combinedText.includes('1080p')) quality = '1080p';
-            else if (combinedText.includes('720p')) quality = '720p';
-            else if (combinedText.includes('480p')) quality = '480p';
-
-            tempGroups[quality].push({ 
-                label: text || 'Download Link', 
-                url: href 
-            });
-        }
-    });
-
-    // Convert groups to array format
+    // --- 3. DOWNLOAD LINKS (The "Before" Logic - Heading Based) ---
     const downloadSections: any[] = [];
-    Object.keys(tempGroups).forEach(quality => {
-        if (tempGroups[quality].length > 0) {
-            downloadSections.push({
-                title: quality === 'Standard' ? 'Download Links' : `${quality} Links`,
-                links: tempGroups[quality]
+    
+    // Movies4u structure usually uses H3, H4, H5, or Strong tags for sections
+    $('h3, h4, h5, h6, .wp-block-heading').each((i, el) => {
+        const headingText = $(el).text().trim();
+        
+        // Filter valid headings (Must contain Quality or Season or Download keyword)
+        const isRelevant = /480p|720p|1080p|2160p|4k|Season|Episode|Download/i.test(headingText);
+
+        if (isRelevant) {
+            const links: any[] = [];
+            
+            // Find all links between this heading and the next heading
+            $(el).nextUntil('h3, h4, h5, h6, .wp-block-heading').find('a').each((j, linkEl) => {
+                const linkUrl = $(linkEl).attr('href');
+                const linkText = $(linkEl).text().trim();
+                
+                // Validate Drive/Cloud links
+                if (linkUrl && (linkUrl.includes('drive') || linkUrl.includes('hub') || linkUrl.includes('cloud') || linkUrl.includes('gdflix'))) {
+                    links.push({ label: linkText || 'Download', url: linkUrl });
+                }
             });
+
+            if (links.length > 0) {
+                downloadSections.push({ title: headingText, links });
+            }
         }
     });
+
+    // Fallback: If no sections found (rare case), scan all links
+    if (downloadSections.length === 0) {
+        const allLinks: any[] = [];
+        $('a').each((i, el) => {
+            const href = $(el).attr('href');
+            if (href && (href.includes('drive') || href.includes('hub'))) {
+                allLinks.push({ label: $(el).text().trim() || 'Download', url: href });
+            }
+        });
+        if (allLinks.length > 0) downloadSections.push({ title: 'Download Links', links: allLinks });
+    }
 
     return NextResponse.json({
         title,
@@ -105,7 +102,6 @@ export async function GET(request: Request) {
     });
 
   } catch (error) {
-    console.error("Scraper Error:", error);
-    return NextResponse.json({ error: 'Failed to fetch details' });
+    return NextResponse.json({ error: 'Failed to fetch data' });
   }
 }
