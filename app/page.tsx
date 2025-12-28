@@ -224,15 +224,15 @@ function HomePageContent() {
                   <ul className="space-y-4 text-sm">
                       <li className="flex items-center gap-3 text-gray-400">
                           <Globe size={18} className="text-blue-500"/> 
-                          <span className="hover:text-white cursor-pointer">sadabefy.vercel.app</span>
+                          <span className="hover:text-white cursor-pointer">sadabefy.gt.tc</span>
                       </li>
                       <li className="flex items-center gap-3 text-gray-400">
                           <Mail size={18} className="text-red-500"/> 
-                          <span className="hover:text-white cursor-pointer">contact@sadabefy.com</span>
+                          <span className="hover:text-white cursor-pointer">sadabvvip@gmail.com</span>
                       </li>
                       <li className="flex items-center gap-3 text-gray-400">
                           <Instagram size={18} className="text-purple-500"/> 
-                          <span className="hover:text-white cursor-pointer">@sadab_official</span>
+                          <span className="hover:text-white cursor-pointer">@sad4b_ali_7</span>
                       </li>
                   </ul>
               </div>
