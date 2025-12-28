@@ -8,7 +8,8 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    // 1. CALL OFFICIAL NETVLYX API (From your ex.py)
+    // 1. CALL OFFICIAL NETVLYX API (Stable Source)
+    // Ye API saara data (Links, Plot, Images) json format mein deti hai
     const targetApi = `https://netvlyx.pages.dev/api/m4ulinks-scraper?url=${encodeURIComponent(url)}`;
     
     const response = await fetch(targetApi, {
@@ -17,24 +18,31 @@ export async function GET(request: Request) {
         'Referer': 'https://netvlyx.pages.dev/',
         'Origin': 'https://netvlyx.pages.dev'
       },
-      next: { revalidate: 300 } // Cache for 5 mins
+      next: { revalidate: 300 } // Cache data for 5 mins for speed
     });
 
     if (!response.ok) throw new Error("NetVlyx API Failed");
     const data = await response.json();
 
-    // 2. TRANSFORM DATA FOR FRONTEND
-    // API returns 'linkData'. We map it to our 'downloadSections' format.
+    // 2. PROCESS DATA (Cleanup)
     
+    // A. Screenshots Extract Karo
+    // Official API kabhi 'images' bhejti hai, kabhi 'screenshots'
+    let screenshots = data.screenshots || data.images || [];
+    // Agar API ne screenshots nahi diye, to hum empty rakhenge (Frontend 'No Screenshots' dikhayega)
+    if (!Array.isArray(screenshots)) screenshots = [];
+
+    // B. Plot (Story) Extract Karo
+    const plot = data.description || data.plot || data.story || "No overview available.";
+
+    // C. Links & Seasons Process Karo
     const downloadSections = (data.linkData || []).map((item: any) => {
-        // Item looks like: { quality: "720p", size: "1GB", links: [...] }
-        
-        // Detect Season from Quality Label (e.g. "S01 720p")
+        // Season Detection from Quality String (e.g. "S01 720p")
         let season = null;
         const sMatch = (item.quality || "").match(/(?:Season|S)\s*0?(\d+)/i);
         if (sMatch) season = parseInt(sMatch[1]);
 
-        // Clean Quality Label (remove size if present to avoid dupes)
+        // Clean Quality (Remove size info like [1GB])
         let quality = (item.quality || "Standard").replace(/\s*\[.*?\]/g, "").trim();
         if (quality.includes('4k') || quality.includes('2160p')) quality = '4K';
         else if (quality.includes('1080p')) quality = '1080p';
@@ -42,25 +50,28 @@ export async function GET(request: Request) {
         else if (quality.includes('480p')) quality = '480p';
 
         return {
-            title: item.quality, // Full title e.g. "720p [1GB]"
-            quality: quality,    // Normalized e.g. "720p"
+            title: item.quality,
+            quality: quality,
             size: item.size,
             season: season,
             links: (item.links || []).map((l: any) => ({
-                label: l.name || 'Download Server', // e.g. "HubCloud", "V-Cloud"
+                label: l.name || 'Download Server',
                 url: l.url,
-                isZip: (l.name || "").toLowerCase().includes('zip') || (l.name || "").toLowerCase().includes('pack')
+                // Check if it's a Batch/Zip link
+                isZip: (l.name || "").toLowerCase().includes('zip') || 
+                       (l.name || "").toLowerCase().includes('pack') ||
+                       (l.name || "").toLowerCase().includes('batch')
             }))
         };
     });
 
-    // Extract all unique seasons found
+    // Extract all unique seasons found for the filter
     const allSeasons = new Set<number>();
     downloadSections.forEach((sec: any) => {
         if (sec.season) allSeasons.add(sec.season);
     });
     
-    // If no seasons found in sections, but title says "Season 1-5"
+    // Fallback: Check title for season range (e.g. "Season 1-5")
     if (allSeasons.size === 0) {
         const titleRange = (data.title || "").match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
         if (titleRange) {
@@ -73,9 +84,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
         title: data.title || "Unknown Title",
         poster: data.image || data.poster || "",
-        plot: data.description || data.plot || "No description available.",
+        plot: plot, // ✅ Official Plot
         seasons: Array.from(allSeasons).sort((a, b) => a - b),
-        screenshots: data.screenshots || [], // API usually provides this
+        screenshots: screenshots.slice(0, 8), // ✅ Official Screenshots (Max 8)
         downloadSections: downloadSections
     });
 
