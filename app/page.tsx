@@ -96,7 +96,7 @@ function HomePageContent() {
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-red-500/30 pb-20">
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled || isSearchMode ? 'bg-black/95 backdrop-blur-md border-b border-gray-800' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
          <div className={`flex items-center gap-8 ${isSearchMode ? 'hidden md:flex' : 'flex'}`}>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-1" onClick={() => { clearSearch(); window.scrollTo(0,0); }}><CloudLightning className="text-red-600 fill-current" size={24}/> NETVLYX</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-1" onClick={() => { clearSearch(); window.scrollTo(0,0); }}><CloudLightning className="text-red-600 fill-current" size={24}/> SADABEFY </h1>
          </div>
          <div className={`flex-1 max-w-2xl mx-auto relative transition-all duration-500 ${isSearchMode ? 'w-full' : 'w-auto'}`}>
              <div className={`relative flex items-center bg-gray-900/80 border ${isSearchMode ? 'border-red-600/50 shadow-red-900/20 shadow-lg' : 'border-gray-700'} rounded-full px-4 py-2 transition-all`}>
