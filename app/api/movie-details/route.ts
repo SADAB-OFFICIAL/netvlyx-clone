@@ -9,8 +9,7 @@ export async function GET(request: Request) {
   if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
   try {
-    // 1. USE VLYX PROXY (As requested)
-    // This bypasses Cloudflare/Geo-blocking effectively
+    // 1. USE VLYX PROXY (Bypass Protection)
     const proxyUrl = `https://proxy.vlyx.workers.dev/?url=${encodeURIComponent(url)}`;
     
     const response = await fetch(proxyUrl, {
@@ -27,7 +26,8 @@ export async function GET(request: Request) {
     // --- 2. BASIC DETAILS ---
     const title = $('h1.entry-title, .title').first().text().trim();
     let poster = $('.post-thumbnail img').attr('src') || 
-                 $('.entry-content img').first().attr('src');
+                 $('.entry-content img').first().attr('src') ||
+                 $('meta[property="og:image"]').attr('content');
     
     let plot = '';
     $('p').each((i, el) => {
@@ -37,10 +37,9 @@ export async function GET(request: Request) {
         }
     });
 
-    // --- 3. DETECT TYPE & SEASONS ---
-    // Check if title contains "Season" or structure implies series
-    const titleSeasonMatch = title.match(/Season\s*(\d+)/i);
-    const rangeMatch = title.match(/Season\s*(\d+)\s*[-–—]\s*(\d+)/i);
+    // --- 3. DETECT TYPE (Movie/Series) & SEASONS ---
+    const titleSeasonMatch = title.match(/(?:Season|S)\s*(\d+)/i);
+    const rangeMatch = title.match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
     
     let isSeries = !!titleSeasonMatch || !!rangeMatch;
     let detectedSeasons = new Set<number>();
@@ -49,77 +48,97 @@ export async function GET(request: Request) {
     const screenshots: string[] = [];
     $('.entry-content img, .post-content img, .ss-img img').each((i, el) => {
         const src = $(el).attr('src') || $(el).attr('data-src');
-        if (src && src !== poster && !src.includes('icon') && !src.includes('button')) {
+        if (src && src !== poster && !src.includes('icon') && !src.includes('button') && !src.includes('logo')) {
             screenshots.push(src);
         }
     });
     const uniqueScreenshots = [...new Set(screenshots)].slice(0, 8);
 
-    // --- 5. SMART DOWNLOAD LINK PARSER ---
+    // --- 5. DEEP LINK EXTRACTION ---
     const downloadSections: any[] = [];
     
-    // Iterate over headings to find sections
+    // Helper: Valid link checker
+    const isValidLink = (href: string) => 
+        href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix') || href.includes('file') || href.includes('pixel'));
+
+    // Scan headers to identify sections
     $('h3, h4, h5, h6, strong, b').each((i, el) => {
         const headingText = $(el).text().trim();
         const lowerHeading = headingText.toLowerCase();
 
-        // Keywords to identify a download section
+        // Valid section keywords
         if (lowerHeading.match(/480p|720p|1080p|2160p|4k|season|episode|download|zip|pack/)) {
             
-            // A. Detect Season from Heading
+            // A. Detect Season
             let sectionSeason: number | null = null;
             const sMatch = headingText.match(/(?:Season|S)\s*0?(\d+)/i);
             if (sMatch) {
                 sectionSeason = parseInt(sMatch[1]);
                 detectedSeasons.add(sectionSeason);
-                isSeries = true;
+                isSeries = true; // Section confirms series
             }
 
-            // B. Detect Quality from Heading
+            // B. Detect Quality
             let quality = 'Standard';
             if (lowerHeading.includes('4k') || lowerHeading.includes('2160p')) quality = '4K';
             else if (lowerHeading.includes('1080p')) quality = '1080p';
             else if (lowerHeading.includes('720p')) quality = '720p';
             else if (lowerHeading.includes('480p')) quality = '480p';
 
-            // C. Find Links
+            // C. Find Links (Deep Search)
             const links: any[] = [];
             
-            // Helper to check valid link
-            const isValidLink = (href: string) => 
-                href && (href.includes('drive') || href.includes('hub') || href.includes('cloud') || href.includes('gdflix') || href.includes('file'));
-
-            // Look in next siblings until next header
-            $(el).nextUntil('h3, h4, h5, h6').find('a').each((j, linkEl) => {
-                const href = $(linkEl).attr('href');
-                const text = $(linkEl).text().trim();
-                if (isValidLink(href || '')) {
-                    links.push({ label: text || 'Download Link', url: href });
+            // Get all siblings until next header
+            const siblings = $(el).nextUntil('h3, h4, h5, h6');
+            
+            siblings.each((j, sib) => {
+                // 1. Check if the sibling itself is a link
+                if ($(sib).is('a')) {
+                    const href = $(sib).attr('href');
+                    const text = $(sib).text().trim();
+                    if (isValidLink(href || '')) links.push({ label: text || 'Download', url: href });
                 }
+                
+                // 2. Search inside the sibling (e.g. paragraph or div)
+                $(sib).find('a').each((k, childLink) => {
+                    const href = $(childLink).attr('href');
+                    const text = $(childLink).text().trim();
+                    if (isValidLink(href || '')) links.push({ label: text || 'Download', url: href });
+                });
             });
-
-            // Fallback for direct siblings
-            if (links.length === 0) {
-                 $(el).nextUntil('h3, h4, h5, h6').filter('a').each((j, linkEl) => {
-                    const href = $(linkEl).attr('href');
-                    if (isValidLink(href || '')) {
-                        links.push({ label: $(linkEl).text().trim() || 'Download', url: href });
-                    }
-                 });
-            }
 
             if (links.length > 0) {
                 downloadSections.push({
                     title: headingText,
-                    season: sectionSeason, // Backend ne identify kar liya
-                    quality: quality,      // Backend ne identify kar liya
+                    season: sectionSeason, 
+                    quality: quality,
                     links: links
                 });
             }
         }
     });
 
-    // Handle Title Ranges (e.g. Season 1-5) if specific headers missing
+    // Fallback: If no sections found, scan whole content area
+    if (downloadSections.length === 0) {
+        const allLinks: any[] = [];
+        $('.entry-content a, .post-content a').each((i, el) => {
+            const href = $(el).attr('href');
+            const text = $(el).text().trim();
+            if (isValidLink(href || '')) {
+                allLinks.push({ label: text || 'Download Link', url: href });
+            }
+        });
+        if (allLinks.length > 0) {
+            downloadSections.push({ 
+                title: 'Download Links', 
+                season: null, 
+                quality: 'Standard', 
+                links: allLinks 
+            });
+        }
+    }
+
+    // Handle Title Ranges (e.g. Season 1-5)
     if (detectedSeasons.size === 0 && rangeMatch) {
         const start = parseInt(rangeMatch[1]);
         const end = parseInt(rangeMatch[2]);
