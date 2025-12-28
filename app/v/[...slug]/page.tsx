@@ -13,12 +13,13 @@ export default function MoviePage() {
   const router = useRouter();
   const downloadRef = useRef<HTMLDivElement>(null);
   
+  // Data States
   const [data, setData] = useState<any>(null);
+  const [tmdbData, setTmdbData] = useState<any>(null); // TMDB Data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [tmdbData, setTmdbData] = useState<any>(null);
 
-  // Filters
+  // Filter States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [actionType, setActionType] = useState<'watch' | 'download' | null>(null);
   const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
@@ -29,18 +30,29 @@ export default function MoviePage() {
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
 
-  // 1. Fetch Main Data (Official Proxy)
+  // 1. MAIN DATA FETCH (With State Reset Fix)
   useEffect(() => {
     if (!movieUrl) return;
+
+    // --- FIX 1: RESET ALL STATES ON URL CHANGE ---
+    // Isse "Same UI" wali problem khatam ho jayegi
+    setData(null);
+    setTmdbData(null);
+    setSelectedSeason(null);
+    setActionType(null);
+    setDownloadType(null);
+    setSelectedQuality(null);
+    setAvailableSeasons([]);
+    setLoading(true);
+
     const fetchData = async () => {
       try {
-        setLoading(true);
         const res = await fetch(`/api/movie-details?url=${encodeURIComponent(movieUrl)}`);
         if (!res.ok) throw new Error("Failed");
         const result = await res.json();
         setData(result);
         
-        // Seasons Setup
+        // Seasons extraction
         const seasonSet = new Set<number>();
         if (result.seasons) result.seasons.forEach((s: number) => seasonSet.add(s));
         if (result.downloadSections) {
@@ -57,11 +69,10 @@ export default function MoviePage() {
     fetchData();
   }, [movieUrl]);
 
-  // 2. Fetch TMDB Data (By ID or Title)
+  // 2. TMDB Data Fetch (Logic Same)
   useEffect(() => {
     if (!data) return;
     
-    // Logic: ID hai to ID se dhoondo, nahi to Title se
     let apiUrl = '';
     if (data.imdbId) apiUrl = `/api/tmdb-details?imdb_id=${data.imdbId}`;
     else if (data.title) apiUrl = `/api/tmdb-details?query=${encodeURIComponent(data.title)}`;
@@ -78,20 +89,18 @@ export default function MoviePage() {
   const finalTitle = tmdbData?.title || data?.title;
   const finalOverview = tmdbData?.overview || data?.plot;
   const finalPoster = tmdbData?.poster || data?.poster;
-  const finalBackdrop = tmdbData?.backdrop || data?.poster; // Fallback to poster if no backdrop
+  const finalBackdrop = tmdbData?.backdrop || data?.poster;
   const finalRating = tmdbData?.rating;
   const trailerKey = tmdbData?.trailerKey;
   const galleryImages = (tmdbData?.images && tmdbData.images.length > 0) ? tmdbData.images : data?.screenshots;
 
-  // --- LOGIC (Robust Link/Quality Filter) ---
+  // --- FILTER LOGIC ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
-      // Filter Sections
       let validSections = data.downloadSections.filter((sec: any) => {
           if (selectedSeason !== null) {
               let secSeason = sec.season;
-              // Double check season from title if backend missed it
               if (!secSeason) {
                   const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
                   if (m) secSeason = parseInt(m[1]);
@@ -106,17 +115,14 @@ export default function MoviePage() {
 
       validSections.forEach((sec: any) => {
           sec.links.forEach((link: any) => {
-              // Batch Detection
               const isBatch = (link.isZip === true) || 
                               /batch|zip|pack|complete|volume|collection/i.test(sec.title + " " + link.label);
 
-              // Filters
               if (actionType === 'download') {
                   if (downloadType === 'bulk' && !isBatch) return;
                   if (downloadType === 'episode' && isBatch) return;
               } else if (actionType === 'watch' && isBatch) return;
 
-              // Quality Detection
               let q = sec.quality;
               if (!q || q === 'Standard') {
                   const t = (sec.title + " " + link.label).toLowerCase();
@@ -126,7 +132,6 @@ export default function MoviePage() {
                   else if (t.includes('480p')) q = '480p';
                   else q = 'Standard';
               }
-              
               qualSet.add(q);
               allLinks.push({ ...link, quality: q, size: sec.size || link.size, sectionTitle: sec.title });
           });
@@ -152,16 +157,21 @@ export default function MoviePage() {
     router.push(`/vlyxdrive?key=${key}`);
   };
 
-  const scrollToDownloads = () => {
-      downloadRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   const goBackStep = () => {
       if (selectedQuality) setSelectedQuality(null);
       else if (downloadType) setDownloadType(null);
       else if (actionType) setActionType(null);
       else if (selectedSeason) setSelectedSeason(null);
       else router.back();
+  };
+
+  // --- FIX 2: SMART HERO ACTIONS ---
+  // Ye function scroll bhi karega aur Action bhi select karega
+  const handleHeroAction = (type: 'watch' | 'download') => {
+      setActionType(type);
+      setTimeout(() => {
+          downloadRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
   };
 
   if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin w-8 h-8 text-red-600"/></div>;
@@ -177,16 +187,41 @@ export default function MoviePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
               <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-transparent"></div>
           </div>
+
           <div className="absolute top-6 left-6 z-50">
              <button onClick={() => router.back()} className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all"><ArrowLeft size={20}/> Back</button>
           </div>
+
           <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto animate-slide-up">
-              {finalRating && <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full"><Star className="w-4 h-4 text-yellow-400 fill-current"/><span className="text-yellow-400 font-bold text-sm">{finalRating} IMDb</span></div>}
-              <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400">{finalTitle}</h1>
-              <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md">{finalOverview}</p>
+              {finalRating && (
+                  <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full">
+                      <Star className="w-4 h-4 text-yellow-400 fill-current"/>
+                      <span className="text-yellow-400 font-bold text-sm">{finalRating} IMDb</span>
+                  </div>
+              )}
+
+              <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400">
+                  {data?.title}
+              </h1>
+
+              <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md">
+                  {finalOverview}
+              </p>
+
+              {/* SMART HERO BUTTONS (Fix for double tap) */}
               <div className="flex gap-4">
-                  <button onClick={scrollToDownloads} className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform"><Play className="fill-current" size={20}/> Watch Now</button>
-                  <button onClick={scrollToDownloads} className="bg-gray-800/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-gray-800 transition-colors"><Download size={20}/> Download</button>
+                  <button 
+                    onClick={() => handleHeroAction('watch')}
+                    className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                  >
+                      <Play className="fill-current" size={20}/> Watch Now
+                  </button>
+                  <button 
+                    onClick={() => handleHeroAction('download')}
+                    className="bg-gray-800/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-gray-800 transition-colors"
+                  >
+                      <Download size={20}/> Download
+                  </button>
               </div>
           </div>
       </div>
@@ -223,7 +258,7 @@ export default function MoviePage() {
               </div>
           )}
 
-          {/* DOWNLOADS */}
+          {/* DOWNLOAD SECTION */}
           <div id="download-section" ref={downloadRef} className="pt-10">
               <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full"></div>
