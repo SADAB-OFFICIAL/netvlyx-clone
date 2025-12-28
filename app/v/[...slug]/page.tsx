@@ -13,53 +13,47 @@ export default function MoviePage() {
   const router = useRouter();
   const downloadRef = useRef<HTMLDivElement>(null);
   
-  // Data States
   const [data, setData] = useState<any>(null);
-  const [tmdbData, setTmdbData] = useState<any>(null); // TMDB Data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // TMDB & Data States
+  const [tmdbData, setTmdbData] = useState<any>(null);
 
-  // Filter States
+  // Filters
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [actionType, setActionType] = useState<'watch' | 'download' | null>(null);
   const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
+  const [availableQualities, setAvailableQualities] = useState<string[]>([]);
 
   const movieUrl = slug 
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
     : '';
 
-  // 1. MAIN DATA FETCH (With State Reset Fix)
+  // 1. Fetch Main Data
   useEffect(() => {
     if (!movieUrl) return;
-
-    // --- FIX 1: RESET ALL STATES ON URL CHANGE ---
-    // Isse "Same UI" wali problem khatam ho jayegi
-    setData(null);
-    setTmdbData(null);
-    setSelectedSeason(null);
-    setActionType(null);
-    setDownloadType(null);
-    setSelectedQuality(null);
-    setAvailableSeasons([]);
-    setLoading(true);
-
     const fetchData = async () => {
       try {
+        setLoading(true);
         const res = await fetch(`/api/movie-details?url=${encodeURIComponent(movieUrl)}`);
         if (!res.ok) throw new Error("Failed");
         const result = await res.json();
         setData(result);
         
-        // Seasons extraction
+        // Robust Season Detection (Purana Logic)
         const seasonSet = new Set<number>();
-        if (result.seasons) result.seasons.forEach((s: number) => seasonSet.add(s));
+        if (result.seasons && result.seasons.length > 0) {
+            result.seasons.forEach((s: number) => seasonSet.add(s));
+        }
+        // Fallback: Check Section Titles
         if (result.downloadSections) {
-             result.downloadSections.forEach((sec: any) => {
-                 const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
-                 if (m) seasonSet.add(parseInt(m[1]));
-             });
+            result.downloadSections.forEach((sec: any) => {
+                const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
+                if (m) seasonSet.add(parseInt(m[1]));
+            });
         }
         if (seasonSet.size > 0) setAvailableSeasons(Array.from(seasonSet).sort((a,b)=>a-b));
 
@@ -69,24 +63,17 @@ export default function MoviePage() {
     fetchData();
   }, [movieUrl]);
 
-  // 2. TMDB Data Fetch (Logic Same)
+  // 2. Fetch TMDB Data
   useEffect(() => {
-    if (!data) return;
-    
-    let apiUrl = '';
-    if (data.imdbId) apiUrl = `/api/tmdb-details?imdb_id=${data.imdbId}`;
-    else if (data.title) apiUrl = `/api/tmdb-details?query=${encodeURIComponent(data.title)}`;
-
-    if (apiUrl && !tmdbData) {
-        fetch(apiUrl)
+    if (data?.imdbId && !tmdbData) {
+        fetch(`/api/tmdb-details?imdb_id=${data.imdbId}`)
             .then(res => res.json())
             .then(res => { if (res.found) setTmdbData(res); })
             .catch(err => console.error("TMDB Error", err));
     }
   }, [data]);
 
-  // UI Data Merging
-  const finalTitle = tmdbData?.title || data?.title;
+  // Data Merging
   const finalOverview = tmdbData?.overview || data?.plot;
   const finalPoster = tmdbData?.poster || data?.poster;
   const finalBackdrop = tmdbData?.backdrop || data?.poster;
@@ -94,17 +81,36 @@ export default function MoviePage() {
   const trailerKey = tmdbData?.trailerKey;
   const galleryImages = (tmdbData?.images && tmdbData.images.length > 0) ? tmdbData.images : data?.screenshots;
 
-  // --- FILTER LOGIC ---
+  // --- HELPER: Is Bulk Link? (Purana Logic Wapas) ---
+  const isBulkLink = (title: string, label: string) => {
+    const text = (title + " " + label).toLowerCase();
+    return /batch|zip|pack|complete|volume|collection/.test(text);
+  };
+
+  // --- HELPER: Detect Quality ---
+  const detectQuality = (text: string) => {
+      const lower = text.toLowerCase();
+      if (lower.includes('4k') || lower.includes('2160p')) return '4K';
+      if (lower.includes('1080p')) return '1080p';
+      if (lower.includes('720p')) return '720p';
+      if (lower.includes('480p')) return '480p';
+      return null;
+  };
+
+  // --- MAIN LOGIC (ROBUST FILTER) ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
+      // 1. Filter Sections by Season
       let validSections = data.downloadSections.filter((sec: any) => {
           if (selectedSeason !== null) {
+              // Try backend 'season' field OR extract from title
               let secSeason = sec.season;
               if (!secSeason) {
                   const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
                   if (m) secSeason = parseInt(m[1]);
               }
+              // Logic: If season found, must match. If NO season found, keep it (generic/mixed).
               if (secSeason !== null && secSeason !== undefined && secSeason !== selectedSeason) return false;
           }
           return true;
@@ -115,25 +121,29 @@ export default function MoviePage() {
 
       validSections.forEach((sec: any) => {
           sec.links.forEach((link: any) => {
-              const isBatch = (link.isZip === true) || 
-                              /batch|zip|pack|complete|volume|collection/i.test(sec.title + " " + link.label);
+              // 2. Identify Type (Batch vs Episode)
+              // Check backend 'isZip' OR use helper function on text
+              const isBatch = (link.isZip === true) || isBulkLink(sec.title || "", link.label || "");
 
+              // 3. Apply Filters
               if (actionType === 'download') {
-                  if (downloadType === 'bulk' && !isBatch) return;
-                  if (downloadType === 'episode' && isBatch) return;
-              } else if (actionType === 'watch' && isBatch) return;
+                  if (downloadType === 'bulk' && !isBatch) return; // Need Bulk, got Episode -> Skip
+                  if (downloadType === 'episode' && isBatch) return; // Need Episode, got Bulk -> Skip
+              } else if (actionType === 'watch' && isBatch) return; // Watch shouldn't show Zips
 
+              // 4. Extract Quality (Smart)
               let q = sec.quality;
               if (!q || q === 'Standard') {
-                  const t = (sec.title + " " + link.label).toLowerCase();
-                  if (t.includes('4k') || t.includes('2160p')) q = '4K';
-                  else if (t.includes('1080p')) q = '1080p';
-                  else if (t.includes('720p')) q = '720p';
-                  else if (t.includes('480p')) q = '480p';
-                  else q = 'Standard';
+                  q = detectQuality(sec.title) || detectQuality(link.label) || 'Standard';
               }
+              
               qualSet.add(q);
-              allLinks.push({ ...link, quality: q, size: sec.size || link.size, sectionTitle: sec.title });
+              allLinks.push({
+                  ...link,
+                  quality: q,
+                  size: sec.size || link.size, // Fallback if link has size
+                  sectionTitle: sec.title
+              });
           });
       });
 
@@ -145,6 +155,7 @@ export default function MoviePage() {
 
   const { links: filteredLinks, qualities: currentQualities } = getFilteredData();
 
+  // Reset quality if current selection invalid
   useEffect(() => { 
       if (selectedQuality && !currentQualities.includes(selectedQuality)) setSelectedQuality(null); 
   }, [currentQualities, selectedQuality]);
@@ -152,9 +163,13 @@ export default function MoviePage() {
   const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
 
   const handleLinkClick = (url: string) => {
-    const payload = { link: url, title: finalTitle, poster: finalPoster, quality: selectedQuality };
+    const payload = { link: url, title: data?.title, poster: finalPoster, quality: selectedQuality };
     const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     router.push(`/vlyxdrive?key=${key}`);
+  };
+
+  const scrollToDownloads = () => {
+      downloadRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const goBackStep = () => {
@@ -165,34 +180,33 @@ export default function MoviePage() {
       else router.back();
   };
 
-  // --- FIX 2: SMART HERO ACTIONS ---
-  // Ye function scroll bhi karega aur Action bhi select karega
-  const handleHeroAction = (type: 'watch' | 'download') => {
-      setActionType(type);
-      setTimeout(() => {
-          downloadRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-  };
-
   if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin w-8 h-8 text-red-600"/></div>;
   if (error) return <div className="h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans pb-20 overflow-x-hidden">
       
-      {/* HERO SECTION */}
+      {/* --- 1. HERO SECTION (Backdrop + Title + Info) --- */}
       <div className="relative w-full h-[80vh] md:h-[90vh]">
+          {/* Backdrop Image */}
           <div className="absolute inset-0">
-              <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
+              <div 
+                className="w-full h-full bg-cover bg-center"
+                style={{ backgroundImage: `url(${finalBackdrop})` }}
+              ></div>
               <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
               <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-transparent"></div>
           </div>
 
           <div className="absolute top-6 left-6 z-50">
-             <button onClick={() => router.back()} className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all"><ArrowLeft size={20}/> Back</button>
+             <button onClick={() => router.back()} className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all">
+                 <ArrowLeft size={20}/> Back
+             </button>
           </div>
 
+          {/* Centered Content */}
           <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto animate-slide-up">
+              
               {finalRating && (
                   <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full">
                       <Star className="w-4 h-4 text-yellow-400 fill-current"/>
@@ -208,16 +222,15 @@ export default function MoviePage() {
                   {finalOverview}
               </p>
 
-              {/* SMART HERO BUTTONS (Fix for double tap) */}
               <div className="flex gap-4">
                   <button 
-                    onClick={() => handleHeroAction('watch')}
+                    onClick={scrollToDownloads}
                     className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)]"
                   >
                       <Play className="fill-current" size={20}/> Watch Now
                   </button>
                   <button 
-                    onClick={() => handleHeroAction('download')}
+                    onClick={scrollToDownloads}
                     className="bg-gray-800/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-gray-800 transition-colors"
                   >
                       <Download size={20}/> Download
@@ -226,103 +239,168 @@ export default function MoviePage() {
           </div>
       </div>
 
-      {/* POSTER */}
+      {/* --- 2. POSTER SECTION (Glowing) --- */}
       <div className="relative z-20 -mt-10 mb-16 flex justify-center px-4">
           <div className="relative group">
-              <div className="absolute inset-0 bg-cover bg-center blur-3xl opacity-40 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-60" style={{ backgroundImage: `url(${finalPoster})` }}></div>
-              <img src={finalPoster} alt="Poster" className="relative w-[180px] md:w-[260px] rounded-2xl shadow-2xl border-4 border-[#050505] transform transition-transform duration-500 group-hover:-translate-y-2"/>
+              <div 
+                className="absolute inset-0 bg-cover bg-center blur-3xl opacity-40 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-60"
+                style={{ backgroundImage: `url(${finalPoster})` }}
+              ></div>
+              <img 
+                src={finalPoster} 
+                alt="Poster" 
+                className="relative w-[180px] md:w-[260px] rounded-2xl shadow-2xl border-4 border-[#050505] transform transition-transform duration-500 group-hover:-translate-y-2"
+              />
           </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 md:px-8 space-y-16">
-          {/* TRAILER */}
+          
+          {/* --- 3. TRAILER SECTION --- */}
           {trailerKey && (
               <div className="animate-fade-in">
-                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-red-600 pl-3">Official Trailer</h2>
+                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-red-600 pl-3">
+                      Official Trailer
+                  </h2>
                   <div className="aspect-video w-full rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-black">
-                      <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${trailerKey}?rel=0&showinfo=0`} title="Trailer" allowFullScreen></iframe>
+                      <iframe 
+                        className="w-full h-full"
+                        src={`https://www.youtube.com/embed/${trailerKey}?rel=0&showinfo=0`}
+                        title="Trailer"
+                        allowFullScreen
+                      ></iframe>
                   </div>
               </div>
           )}
 
-          {/* GALLERY */}
+          {/* --- 4. GALLERY SECTION --- */}
           {galleryImages && galleryImages.length > 0 && (
               <div className="animate-fade-in">
-                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-blue-600 pl-3">Gallery</h2>
+                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-blue-600 pl-3">
+                      Gallery
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       {galleryImages.slice(0, 4).map((img: any, i: number) => {
                           const src = typeof img === 'string' ? img : `https://image.tmdb.org/t/p/w780${img.file_path}`;
-                          return <div key={i} className="aspect-video rounded-xl overflow-hidden border border-gray-800"><img src={src} className="w-full h-full object-cover" loading="lazy"/></div>
+                          return (
+                              <div key={i} className="aspect-video rounded-xl overflow-hidden border border-gray-800 group relative">
+                                  <img src={src} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy"/>
+                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
+                              </div>
+                          );
                       })}
                   </div>
               </div>
           )}
 
-          {/* DOWNLOAD SECTION */}
+          {/* --- 5. MAIN DOWNLOAD SECTION --- */}
           <div id="download-section" ref={downloadRef} className="pt-10">
               <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full"></div>
-                  <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Download & Watch Options</h2>
+                  
+                  <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                      Download & Watch Options
+                  </h2>
 
+                  {/* Header Steps */}
                   {(selectedSeason || actionType) && (
                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800">
-                        <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1"><ArrowLeft size={16}/> Go Back</button>
-                        <div className="text-xs font-mono text-gray-500 uppercase tracking-widest">{selectedSeason ? `S${selectedSeason}` : ''} {actionType ? `/ ${actionType}` : ''} {selectedQuality ? `/ ${selectedQuality}` : ''}</div>
+                        <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1 transition-colors">
+                            <ArrowLeft size={16}/> Go Back
+                        </button>
+                        <div className="text-xs font-mono text-gray-500 uppercase tracking-widest">
+                            {selectedSeason ? `S${selectedSeason}` : ''} {actionType ? `/ ${actionType}` : ''} {selectedQuality ? `/ ${selectedQuality}` : ''}
+                        </div>
                      </div>
                   )}
 
+                  {/* A. SEASON SELECTOR */}
                   {availableSeasons.length > 0 && selectedSeason === null && (
                       <div className="animate-fade-in">
-                          <h3 className="text-lg font-semibold text-gray-400 mb-4 flex items-center gap-2"><Tv size={18}/> Select Season</h3>
+                          <h3 className="text-lg font-semibold text-gray-400 mb-4 flex items-center gap-2">
+                              <Tv size={18}/> Select Season
+                          </h3>
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                               {availableSeasons.map(s => (
-                                  <button key={s} onClick={() => setSelectedSeason(s)} className="p-4 bg-gray-800 hover:bg-red-600 border border-gray-700 rounded-xl font-bold text-lg transition-all">Season {s}</button>
+                                  <button 
+                                    key={s} 
+                                    onClick={() => setSelectedSeason(s)} 
+                                    className="p-4 bg-gray-800 hover:bg-red-600 border border-gray-700 hover:border-red-500 rounded-xl font-bold text-lg transition-all shadow-lg group"
+                                  >
+                                      <span className="text-sm font-normal text-gray-400 block group-hover:text-white/80">Season</span>
+                                      {s}
+                                  </button>
                               ))}
                           </div>
                       </div>
                   )}
 
+                  {/* B. ACTION SELECTOR */}
                   {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 animate-fade-in max-w-2xl mx-auto">
-                          <button onClick={() => setActionType('download')} className="p-8 bg-gradient-to-br from-blue-600/20 to-blue-900/20 border border-blue-500/30 rounded-2xl hover:border-blue-400 transition-all text-center"><h3 className="text-2xl font-bold text-white">Download</h3></button>
-                          <button onClick={() => setActionType('watch')} className="p-8 bg-gradient-to-br from-green-600/20 to-green-900/20 border border-green-500/30 rounded-2xl hover:border-green-400 transition-all text-center"><h3 className="text-2xl font-bold text-white">Watch Online</h3></button>
+                          <button onClick={() => setActionType('download')} className="p-8 bg-gradient-to-br from-blue-600/20 to-blue-900/20 border border-blue-500/30 rounded-2xl hover:border-blue-400 hover:from-blue-600/30 transition-all group text-center">
+                              <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                                  <Download className="w-8 h-8 text-blue-400"/>
+                              </div>
+                              <h3 className="text-2xl font-bold text-white mb-1">Download</h3>
+                              <p className="text-sm text-gray-400">Save to device</p>
+                          </button>
+                          <button onClick={() => setActionType('watch')} className="p-8 bg-gradient-to-br from-green-600/20 to-green-900/20 border border-green-500/30 rounded-2xl hover:border-green-400 hover:from-green-600/30 transition-all group text-center">
+                              <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                                  <Play className="w-8 h-8 text-green-400 fill-current"/>
+                              </div>
+                              <h3 className="text-2xl font-bold text-white mb-1">Watch Online</h3>
+                              <p className="text-sm text-gray-400">Stream instantly</p>
+                          </button>
                       </div>
                   )}
 
+                  {/* C. TYPE SELECTOR (Episode/Bulk) */}
                   {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in max-w-2xl mx-auto">
-                          <button onClick={() => setDownloadType('episode')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-all flex items-center justify-center gap-3"><Tv size={24} className="text-purple-400"/> Episode Wise</button>
-                          <button onClick={() => setDownloadType('bulk')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-all flex items-center justify-center gap-3"><Archive size={24} className="text-orange-400"/> Bulk / Zip</button>
+                          <button onClick={() => setDownloadType('episode')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-all flex items-center justify-center gap-3">
+                              <Tv size={24} className="text-purple-400"/> Episode Wise
+                          </button>
+                          <button onClick={() => setDownloadType('bulk')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-all flex items-center justify-center gap-3">
+                              <Archive size={24} className="text-orange-400"/> Bulk / Zip
+                          </button>
                       </div>
                   )}
 
+                  {/* D. QUALITY SELECTOR */}
                   {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
                       <div className="animate-fade-in">
                           <h3 className="text-lg font-semibold text-gray-400 mb-4 text-center">Select Quality</h3>
                           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-3xl mx-auto">
                               {currentQualities.length > 0 ? currentQualities.map(q => (
-                                  <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 rounded-xl font-bold text-lg transition-all">{q}</button>
-                              )) : <div className="col-span-full text-center text-gray-500 py-4">No options found.</div>}
+                                  <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 hover:border-blue-500 rounded-xl font-bold text-lg transition-all">{q}</button>
+                              )) : <div className="col-span-full text-center text-gray-500 py-4">No options found. Try changing filters.</div>}
                           </div>
                       </div>
                   )}
 
+                  {/* E. LINKS LIST */}
                   {selectedQuality !== null && (
                       <div className="space-y-3 animate-fade-in max-w-3xl mx-auto">
                           <h3 className="text-green-400 font-bold mb-4 flex items-center gap-2"><CheckCircle size={20}/> Available Links</h3>
                           {displayLinks.length > 0 ? displayLinks.map((link: any, idx: number) => (
-                              <button key={idx} onClick={() => handleLinkClick(link.url)} className="w-full text-left p-4 bg-black/40 hover:bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-between group transition-all">
+                              <button key={idx} onClick={() => handleLinkClick(link.url)} className="w-full text-left p-4 bg-black/40 hover:bg-gray-800 border border-gray-700 hover:border-blue-500 rounded-xl flex items-center justify-between group transition-all">
                                   <div>
                                       <span className="font-bold text-gray-200 group-hover:text-white block text-sm md:text-base">{link.label}</span>
-                                      <div className="flex gap-2 text-xs text-gray-500 mt-1">{link.size && <span className="bg-gray-800 px-1.5 rounded">{link.size}</span>}{link.sectionTitle && <span className="text-gray-600">• {link.sectionTitle}</span>}</div>
+                                      <div className="flex gap-2 text-xs text-gray-500 mt-1">
+                                          {link.size && <span className="bg-gray-800 px-1.5 rounded">{link.size}</span>}
+                                          {link.sectionTitle && <span className="text-gray-600">• {link.sectionTitle}</span>}
+                                      </div>
                                   </div>
-                                  {actionType === 'watch' ? <Play className="w-5 h-5 text-green-500"/> : <Download className="w-5 h-5 text-blue-500"/>}
+                                  {actionType === 'watch' ? <Play className="w-5 h-5 text-green-500 group-hover:scale-110 transition-transform"/> : <Download className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform"/>}
                               </button>
-                          )) : <div className="text-center py-10 text-gray-500">No links available.</div>}
+                          )) : <div className="text-center py-10 text-gray-500">No links available for this selection.</div>}
                       </div>
                   )}
+
               </div>
           </div>
+
       </div>
     </div>
   );
