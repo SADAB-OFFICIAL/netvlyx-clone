@@ -8,12 +8,9 @@ import {
   ChevronRight, Star, Loader2, X 
 } from 'lucide-react';
 
-// --- Components ---
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
-  // URL se search query uthao (Refresh karne par bhi search rahega)
   const initialQuery = searchParams.get('search') || '';
 
   // --- States ---
@@ -29,15 +26,14 @@ function HomePageContent() {
   const [heroIndex, setHeroIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
 
-  // Debounce Timers
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // --- 1. LOAD HOME DATA (Initial) ---
+  // --- 1. LOAD HOME DATA ---
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
 
-    // Agar URL me search nahi hai, to Home Data lao
+    // Agar URL me search nahi hai, to Home Data fetch karo
     if (!initialQuery) {
         fetch('/api/home')
           .then(res => res.json())
@@ -46,7 +42,6 @@ function HomePageContent() {
              setLoadingHome(false);
           });
     } else {
-        // Agar URL me search hai, to direct search karo
         performSearch(initialQuery);
         setLoadingHome(false);
     }
@@ -54,23 +49,20 @@ function HomePageContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // --- 2. SEARCH HANDLERS (NetVlyx Logic) ---
-  
-  // A. Type Handler
+  // --- 2. SEARCH LOGIC ---
   const handleSearchInput = (text: string) => {
     setQuery(text);
     
-    // 1. Update URL (without reload)
+    // URL Update
     const params = new URLSearchParams(window.location.search);
-    if (text) {
-        params.set('search', text);
-    } else {
+    if (text) params.set('search', text);
+    else {
         params.delete('search');
-        setSearchResults([]); // Clear results if empty
+        setSearchResults([]); 
     }
     router.replace(`/?${params.toString()}`, { scroll: false });
 
-    // 2. Fetch TMDB Suggestions (Live)
+    // Live Suggestions (TMDB)
     if (text.length > 2) {
         fetch(`https://api.themoviedb.org/3/search/multi?api_key=848d4c9db9d3f19d0229dc95735190d3&query=${encodeURIComponent(text)}`)
            .then(res => res.json())
@@ -83,24 +75,20 @@ function HomePageContent() {
         setShowSuggestions(false);
     }
 
-    // 3. Debounced Main Search (300ms delay like NetVlyx)
+    // Debounced Main Search
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    
     searchTimeout.current = setTimeout(() => {
         if (text) performSearch(text);
     }, 500);
   };
 
-  // B. Main Search Executor (Calls our Proxy)
   const performSearch = async (text: string) => {
       setIsSearching(true);
       setShowSuggestions(false);
       try {
           const res = await fetch(`/api/search?s=${encodeURIComponent(text)}`);
           const data = await res.json();
-          if (data.success) {
-              setSearchResults(data.results);
-          }
+          if (data.success) setSearchResults(data.results);
       } catch (e) {
           console.error("Search Failed", e);
       } finally {
@@ -113,7 +101,6 @@ function HomePageContent() {
       setSearchResults([]);
       setShowSuggestions(false);
       router.replace('/', { scroll: false });
-      // Reload home data if missing
       if (!homeData) window.location.reload(); 
   };
 
@@ -123,7 +110,7 @@ function HomePageContent() {
     router.push(`/v/${encoded}`);
   };
 
-  // Auto Slider for Home
+  // Auto Slider
   useEffect(() => {
     if (!homeData?.hero?.length || query) return;
     const interval = setInterval(() => {
@@ -132,25 +119,21 @@ function HomePageContent() {
     return () => clearInterval(interval);
   }, [homeData, query]);
 
-
-  // --- RENDER ---
   const activeHero = homeData?.hero?.[heroIndex];
-  const isSearchMode = query.length > 0; // Toggle UI based on this
+  const isSearchMode = query.length > 0;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-red-500/30 pb-20">
       
-      {/* --- NAVBAR WITH SEARCH --- */}
+      {/* NAVBAR */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled || isSearchMode ? 'bg-black/95 backdrop-blur-md border-b border-gray-800' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
-         
-         {/* Logo (Hidden on mobile search) */}
          <div className={`flex items-center gap-8 ${isSearchMode ? 'hidden md:flex' : 'flex'}`}>
             <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-1" onClick={() => { clearSearch(); window.scrollTo(0,0); }}>
                <CloudLightning className="text-red-600 fill-current" size={24}/> NETVLYX
             </h1>
          </div>
 
-         {/* Search Bar (Center) */}
+         {/* Search Bar */}
          <div className={`flex-1 max-w-2xl mx-auto relative transition-all duration-500 ${isSearchMode ? 'w-full' : 'w-auto'}`}>
              <div className={`relative flex items-center bg-gray-900/80 border ${isSearchMode ? 'border-red-600/50 shadow-red-900/20 shadow-lg' : 'border-gray-700'} rounded-full px-4 py-2 transition-all`}>
                  <Search className={`w-5 h-5 ${isSearchMode ? 'text-red-500' : 'text-gray-400'}`} />
@@ -172,11 +155,7 @@ function HomePageContent() {
              {showSuggestions && suggestions.length > 0 && (
                  <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
                      {suggestions.map((s, i) => (
-                         <div 
-                            key={i} 
-                            onClick={() => handleSearchInput(s)}
-                            className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none"
-                         >
+                         <div key={i} onClick={() => handleSearchInput(s)} className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none">
                              <Search size={14} /> {s}
                          </div>
                      ))}
@@ -184,44 +163,28 @@ function HomePageContent() {
              )}
          </div>
 
-         {/* Right Icons */}
          <div className="hidden md:flex items-center gap-5 text-gray-300 ml-4">
             <Bell className="w-5 h-5 cursor-pointer hover:text-white transition" />
             <div className="w-8 h-8 rounded bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-bold text-xs text-white shadow-lg">U</div>
          </div>
       </nav>
 
-      {/* --- MAIN CONTENT SWITCHER --- */}
-      
-      {/* 1. SEARCH RESULTS GRID (Shows when searching) */}
+      {/* --- SEARCH RESULTS --- */}
       {isSearchMode && (
           <div className="pt-28 px-4 md:px-12 min-h-screen">
               <h2 className="text-xl font-bold text-gray-200 mb-6 flex items-center gap-2">
                   {isSearching ? <Loader2 className="animate-spin text-red-500"/> : 'Search Results'}
-                  <span className="text-sm font-normal text-gray-500">
-                      {isSearching ? 'Searching...' : `Found ${searchResults.length} items`}
-                  </span>
+                  <span className="text-sm font-normal text-gray-500">{isSearching ? 'Searching...' : `Found ${searchResults.length} items`}</span>
               </h2>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
                   {searchResults.map((item, idx) => (
-                      <div 
-                          key={idx} 
-                          onClick={() => openLink(item.link)}
-                          className="group relative cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10"
-                      >
+                      <div key={idx} onClick={() => openLink(item.link)} className="group relative cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10">
                           <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 relative border border-gray-700 group-hover:border-red-500/50 shadow-lg">
-                              <img 
-                                  src={item.image} 
-                                  alt={item.title} 
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:contrast-110" 
-                              />
+                              <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:contrast-110" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                              
                               <div className="absolute bottom-0 p-3 w-full">
-                                  <h3 className="text-sm font-bold text-white line-clamp-2 leading-tight group-hover:text-red-400 transition-colors">
-                                      {item.title}
-                                  </h3>
+                                  <h3 className="text-sm font-bold text-white line-clamp-2 leading-tight group-hover:text-red-400 transition-colors">{item.title}</h3>
                                   <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-300">
                                       <span className="bg-white/20 px-1.5 rounded">{item.quality?.[0] || 'HD'}</span>
                                       <span>{item.year || '2024'}</span>
@@ -231,16 +194,10 @@ function HomePageContent() {
                       </div>
                   ))}
               </div>
-
-              {!isSearching && searchResults.length === 0 && (
-                  <div className="text-center py-20 text-gray-500">
-                      <p>No results found for "{query}"</p>
-                  </div>
-              )}
           </div>
       )}
 
-      {/* 2. HOME PAGE (Shows when NOT searching) */}
+      {/* --- HOME CONTENT --- */}
       {!isSearchMode && !loadingHome && homeData && (
          <>
             {/* Hero Slider */}
@@ -262,7 +219,7 @@ function HomePageContent() {
                 </div>
             )}
 
-            {/* Content Sections */}
+            {/* Rows */}
             <div className="relative z-20 -mt-20 space-y-12 px-4 md:px-12 pb-12">
                 {homeData.sections?.map((section: any, idx: number) => (
                     section.items?.length > 0 && (
@@ -285,14 +242,6 @@ function HomePageContent() {
             </div>
          </>
       )}
-
-      {/* Loading State */}
-      {loadingHome && !isSearchMode && (
-          <div className="h-screen flex items-center justify-center">
-              <div className="w-16 h-16 border-4 border-red-600 rounded-full animate-spin border-t-transparent"></div>
-          </div>
-      )}
-
     </div>
   );
 }
