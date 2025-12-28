@@ -53,7 +53,7 @@ export default function MoviePage() {
     fetchRealData();
   }, [movieUrl]);
 
-  // --- SMART FILTER LOGIC ---
+  // --- FILTER LOGIC ---
   const isBulkLink = (title: string, label: string) => {
     const text = (title + " " + label).toLowerCase();
     return /zip|pack|complete|batch|volume|collection/.test(text);
@@ -62,19 +62,19 @@ export default function MoviePage() {
   const getProcessedSections = () => {
     if (!data) return [];
     
-    // 1. Filter by Season (Matches backend 'season' field OR generic sections)
+    // 1. Season Filter
     let sections = data.downloadSections.filter((sec: any) => {
         if (selectedSeason === null) return true;
-        // Keep section if it matches season OR has no season assigned
+        // Keep generic sections OR matching season sections
         return sec.season === selectedSeason || sec.season === null;
     });
 
-    // 2. Filter by Download Type (Episode vs Bulk)
+    // 2. Download Type Filter
     sections = sections.map((sec: any) => {
         const filteredLinks = sec.links.filter((link: any) => {
             const isBulk = isBulkLink(sec.title, link.label);
 
-            if (actionType === 'watch') return !isBulk; // Watch: No Zips
+            if (actionType === 'watch') return !isBulk; 
             if (actionType === 'download') {
                 if (downloadType === 'bulk') return isBulk;
                 if (downloadType === 'episode') return !isBulk;
@@ -87,30 +87,32 @@ export default function MoviePage() {
     return sections;
   };
 
-  // --- Extract Qualities from Filtered Data ---
+  // --- Quality Extraction ---
   useEffect(() => {
     if (!data) return;
     const currentSections = getProcessedSections(); 
     
     const qualities = new Set<string>();
     currentSections.forEach((sec: any) => {
-        if (sec.quality) qualities.add(sec.quality);
-        else {
-            // Fallback Regex if backend missed it
-            const t = sec.title.toLowerCase();
-            if (t.includes('4k')) qualities.add('4K');
-            else if (t.includes('1080p')) qualities.add('1080p');
-            else if (t.includes('720p')) qualities.add('720p');
-            else if (t.includes('480p')) qualities.add('480p');
-            else qualities.add('Standard');
+        // Prefer backend quality, fallback to detection
+        let q = sec.quality || 'Standard';
+        
+        // Manual Fallback if backend sent 'Standard' but title has info
+        if (q === 'Standard') {
+             const t = sec.title.toLowerCase();
+             if (t.includes('4k')) q = '4K';
+             else if (t.includes('1080p')) q = '1080p';
+             else if (t.includes('720p')) q = '720p';
+             else if (t.includes('480p')) q = '480p';
         }
+        qualities.add(q);
     });
 
     const order = ['4K', '1080p', '720p', '480p', 'Standard'];
     const sorted = Array.from(qualities).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     setAvailableQualities(sorted);
 
-    // Auto-select standard/reset if unavailable
+    // Auto-Select if only 1 quality or invalid current selection
     if (selectedQuality && !sorted.includes(selectedQuality)) {
         setSelectedQuality(null);
     }
@@ -120,20 +122,23 @@ export default function MoviePage() {
       let sections = getProcessedSections();
       if (selectedQuality) {
           sections = sections.filter((sec: any) => {
-              const secQ = sec.quality || (sec.title.includes('480p')?'480p':sec.title.includes('720p')?'720p':'Standard');
-              return secQ === selectedQuality || sec.title.includes(selectedQuality);
+              // Same loose matching logic
+              let q = sec.quality || 'Standard';
+              if (q === 'Standard') {
+                   const t = sec.title.toLowerCase();
+                   if (t.includes('4k')) q = '4K';
+                   else if (t.includes('1080p')) q = '1080p';
+                   else if (t.includes('720p')) q = '720p';
+                   else if (t.includes('480p')) q = '480p';
+              }
+              return q === selectedQuality;
           });
       }
       return sections;
   })();
 
   const handleLinkClick = (url: string) => {
-    const payload = { 
-        link: url, 
-        title: data?.title, 
-        poster: data?.poster, 
-        quality: selectedQuality 
-    };
+    const payload = { link: url, title: data?.title, poster: data?.poster, quality: selectedQuality };
     const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     router.push(`/vlyxdrive?key=${key}`);
   };
@@ -187,7 +192,7 @@ export default function MoviePage() {
                 )}
             </div>
 
-            {/* INTERACTION CARD */}
+            {/* ACTION CARD */}
             <div className="bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl">
                
                {/* HEADER */}
@@ -203,7 +208,7 @@ export default function MoviePage() {
                  </div>
                )}
 
-               {/* 1. SEASON (Only if Series) */}
+               {/* 1. SEASON */}
                {availableSeasons.length > 0 && selectedSeason === null && (
                   <div className="animate-fade-in">
                       <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><Film className="text-red-500" /> Select Season</h3>
@@ -229,7 +234,7 @@ export default function MoviePage() {
                   </div>
                )}
 
-               {/* 3. TYPE (Download Only & Series) */}
+               {/* 3. TYPE (Download + Series Only) */}
                {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                    <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-6">
                        <button onClick={() => setDownloadType('episode')} className="p-8 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 rounded-2xl text-center"><Tv className="mx-auto mb-4 text-purple-400" size={48}/><span className="font-bold text-xl block text-white">Episode Wise</span></button>
@@ -267,7 +272,7 @@ export default function MoviePage() {
                                </div>
                            </div>
                        )) : (
-                           <div className="text-center py-12 text-gray-500 border border-dashed border-gray-700 rounded-xl">No links found for {selectedQuality}.</div>
+                           <div className="text-center py-12 text-gray-500 border border-dashed border-gray-700 rounded-xl">No links found for {selectedQuality}. <button onClick={() => setSelectedQuality(null)} className="text-blue-400 hover:underline">Change Quality</button></div>
                        )}
                    </div>
                )}
