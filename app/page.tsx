@@ -1,190 +1,190 @@
 // app/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Play, Info, Search, Bell, CloudLightning, 
-  ChevronRight, Star, Loader2 
+  ChevronRight, Star, Loader2, X 
 } from 'lucide-react';
 
-export default function HomePage() {
+function HomePageContent() {
   const router = useRouter();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get('search') || '';
+
+  const [query, setQuery] = useState(initialQuery);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  const [homeData, setHomeData] = useState<any>(null);
+  const [loadingHome, setLoadingHome] = useState(true);
   const [heroIndex, setHeroIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
 
-  // 1. Fetch from our secure API Route
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
 
-    const init = async () => {
-      try {
-        const res = await fetch('/api/home');
-        const result = await res.json();
-        if (result.success) setData(result.data);
-      } catch (e) {
-        console.error("Error:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
+    if (!initialQuery) {
+        fetch('/api/home').then(res => res.json()).then(res => {
+             if(res.success) setHomeData(res.data);
+             setLoadingHome(false);
+        });
+    } else {
+        performSearch(initialQuery);
+        setLoadingHome(false);
+    }
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 2. Auto Slider
-  useEffect(() => {
-    if (!data?.hero?.length) return;
-    const timer = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % data.hero.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [data]);
+  const handleSearchInput = (text: string) => {
+    setQuery(text);
+    const params = new URLSearchParams(window.location.search);
+    if (text) params.set('search', text); else { params.delete('search'); setSearchResults([]); }
+    router.replace(`/?${params.toString()}`, { scroll: false });
 
-  // 3. Smart Link Handler
-  const handleItemClick = (item: any) => {
-    if (item.link) {
-      // Direct Link hai (Movies4u wala) -> Go to V-Page
-      const encoded = btoa(item.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      router.push(`/v/${encoded}`);
-    } else {
-      // Link nahi hai (TMDB wala) -> Search karo
-      router.push(`/search?q=${encodeURIComponent(item.title)}`);
-    }
+    if (text.length > 2) {
+        fetch(`https://api.themoviedb.org/3/search/multi?api_key=848d4c9db9d3f19d0229dc95735190d3&query=${encodeURIComponent(text)}`)
+           .then(res => res.json())
+           .then(data => {
+               const names = data.results?.slice(0, 5).map((item: any) => item.title || item.name) || [];
+               setSuggestions(names); setShowSuggestions(true);
+           });
+    } else { setShowSuggestions(false); }
+
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => { if (text) performSearch(text); }, 500);
   };
 
-  if (loading) return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
-       <div className="w-16 h-16 border-4 border-red-600 rounded-full animate-spin border-t-transparent mb-4"></div>
-       <p className="animate-pulse text-gray-400">Loading Library...</p>
-    </div>
-  );
+  const performSearch = async (text: string) => {
+      setIsSearching(true); setShowSuggestions(false);
+      try {
+          const res = await fetch(`/api/search?s=${encodeURIComponent(text)}`);
+          const data = await res.json();
+          if (data.success) setSearchResults(data.results);
+      } catch (e) { console.error("Search Failed", e); } 
+      finally { setIsSearching(false); }
+  };
 
-  const activeHero = data?.hero?.[heroIndex];
+  const clearSearch = () => {
+      setQuery(''); setSearchResults([]); setShowSuggestions(false);
+      router.replace('/', { scroll: false });
+      if (!homeData) window.location.reload(); 
+  };
+
+  const openLink = (link: string) => {
+    if (!link) return;
+    const encoded = btoa(link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    router.push(`/v/${encoded}`);
+  };
+
+  useEffect(() => {
+    if (!homeData?.hero?.length || query) return;
+    const interval = setInterval(() => { setHeroIndex((prev) => (prev + 1) % homeData.hero.length); }, 6000);
+    return () => clearInterval(interval);
+  }, [homeData, query]);
+
+  const activeHero = homeData?.hero?.[heroIndex];
+  const isSearchMode = query.length > 0;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-red-500/30 pb-20">
-      
-      {/* NAVBAR */}
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-500 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled ? 'bg-black/90 backdrop-blur-md shadow-lg border-b border-white/5' : 'bg-gradient-to-b from-black/90 to-transparent'}`}>
-         <div className="flex items-center gap-8">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-1" onClick={() => window.scrollTo(0,0)}>
-               <CloudLightning className="text-red-600 fill-current" size={24}/> NETVLYX
-            </h1>
-            <ul className="hidden md:flex gap-6 text-sm font-medium text-gray-300">
-               <li className="text-white font-bold cursor-pointer">Home</li>
-               <li className="cursor-pointer hover:text-white transition">TV Shows</li>
-               <li className="cursor-pointer hover:text-white transition">Movies</li>
-               <li className="cursor-pointer hover:text-white transition">My List</li>
-            </ul>
+      <nav className={`fixed top-0 w-full z-50 transition-all duration-300 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled || isSearchMode ? 'bg-black/95 backdrop-blur-md border-b border-gray-800' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
+         <div className={`flex items-center gap-8 ${isSearchMode ? 'hidden md:flex' : 'flex'}`}>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-500 tracking-tighter cursor-pointer flex items-center gap-1" onClick={() => { clearSearch(); window.scrollTo(0,0); }}><CloudLightning className="text-red-600 fill-current" size={24}/> NETVLYX</h1>
          </div>
-         <div className="flex items-center gap-5 text-gray-300">
-            <Search className="w-5 h-5 cursor-pointer hover:text-white transition" />
+         <div className={`flex-1 max-w-2xl mx-auto relative transition-all duration-500 ${isSearchMode ? 'w-full' : 'w-auto'}`}>
+             <div className={`relative flex items-center bg-gray-900/80 border ${isSearchMode ? 'border-red-600/50 shadow-red-900/20 shadow-lg' : 'border-gray-700'} rounded-full px-4 py-2 transition-all`}>
+                 <Search className={`w-5 h-5 ${isSearchMode ? 'text-red-500' : 'text-gray-400'}`} />
+                 <input type="text" value={query} onChange={(e) => handleSearchInput(e.target.value)} placeholder="Search movies, shows..." className="bg-transparent border-none outline-none text-white px-3 py-1 w-full placeholder-gray-500"/>
+                 {query && <button onClick={clearSearch}><X className="w-5 h-5 text-gray-400 hover:text-white transition" /></button>}
+             </div>
+             {showSuggestions && suggestions.length > 0 && (
+                 <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
+                     {suggestions.map((s, i) => (<div key={i} onClick={() => handleSearchInput(s)} className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none"><Search size={14} /> {s}</div>))}
+                 </div>
+             )}
+         </div>
+         <div className="hidden md:flex items-center gap-5 text-gray-300 ml-4">
+            <Bell className="w-5 h-5 cursor-pointer hover:text-white transition" />
             <div className="w-8 h-8 rounded bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-bold text-xs text-white shadow-lg">U</div>
          </div>
       </nav>
 
-      {/* HERO SECTION */}
-      {activeHero && (
-         <div className="relative w-full h-[85vh] md:h-[95vh] overflow-hidden group">
-            <div className="absolute inset-0">
-               <div 
-                 className="w-full h-full bg-cover bg-center transition-all duration-[1500ms] transform scale-105 group-hover:scale-100"
-                 style={{ backgroundImage: `url(${activeHero.poster})` }}
-               ></div>
-               <div className="absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent"></div>
-               <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/10 to-transparent"></div>
-            </div>
-
-            <div className="relative z-10 h-full flex flex-col justify-end pb-24 px-4 md:px-12 max-w-3xl">
-               <div className="flex items-center gap-3 mb-4 animate-fade-in">
-                  <span className="bg-red-600 text-white px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider shadow-lg">
-                     TOP 10
-                  </span>
-                  <span className="text-green-400 font-bold text-sm flex items-center gap-1 bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded border border-white/10">
-                     <Star size={12} className="fill-current"/> {activeHero.rating}
-                  </span>
-               </div>
-
-               <h1 className="text-4xl md:text-7xl font-black mb-4 leading-none drop-shadow-2xl animate-slide-up text-white">
-                  {activeHero.title}
-               </h1>
-
-               <p className="text-gray-200 text-sm md:text-lg mb-8 line-clamp-3 drop-shadow-md animate-slide-up delay-100 max-w-xl leading-relaxed">
-                  {activeHero.desc}
-               </p>
-
-               <div className="flex items-center gap-4 animate-slide-up delay-200">
-                  <button 
-                     onClick={() => handleItemClick(activeHero)}
-                     className="bg-white text-black px-8 py-3.5 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-200 transition-all transform hover:scale-105 shadow-xl"
-                  >
-                     <Play className="fill-current" size={24} /> Play
-                  </button>
-                  <button className="bg-gray-600/40 text-white px-8 py-3.5 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-600/60 transition-all backdrop-blur-md border border-white/10">
-                     <Info size={24} /> More Info
-                  </button>
-               </div>
-            </div>
-         </div>
+      {isSearchMode && (
+          <div className="pt-28 px-4 md:px-12 min-h-screen">
+              <h2 className="text-xl font-bold text-gray-200 mb-6 flex items-center gap-2">{isSearching ? <Loader2 className="animate-spin text-red-500"/> : 'Search Results'} <span className="text-sm font-normal text-gray-500">{isSearching ? 'Searching...' : `Found ${searchResults.length} items`}</span></h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
+                  {searchResults.map((item, idx) => (
+                      <div key={idx} onClick={() => openLink(item.link)} className="group relative cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10">
+                          <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 relative border border-gray-700 group-hover:border-red-500/50 shadow-lg">
+                              <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:contrast-110" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+                              <div className="absolute bottom-0 p-3 w-full">
+                                  <h3 className="text-sm font-bold text-white line-clamp-2 leading-tight group-hover:text-red-400 transition-colors">{item.title}</h3>
+                                  <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-300"><span className="bg-white/20 px-1.5 rounded">{item.quality?.[0] || 'HD'}</span><span>{item.year || '2024'}</span></div>
+                              </div>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
       )}
 
-      {/* SECTIONS */}
-      <div className="relative z-20 -mt-20 md:-mt-32 space-y-12 px-4 md:px-12">
-         {data?.sections?.map((section: any, idx: number) => (
-            section.items && section.items.length > 0 && (
-                <div key={idx} className="space-y-4">
-                   <h2 className="text-lg md:text-2xl font-bold text-white flex items-center gap-2 cursor-pointer group">
-                      <div className="w-1 h-6 bg-red-600 rounded-full"></div>
-                      {section.title}
-                      <span className="text-xs font-semibold text-gray-400 group-hover:text-white transition-all opacity-0 group-hover:opacity-100 flex items-center translate-y-1 group-hover:translate-y-0">
-                          Explore <ChevronRight size={14}/>
-                      </span>
-                   </h2>
-                   
-                   <div className="flex gap-4 overflow-x-auto pb-8 pt-2 scrollbar-hide scroll-smooth px-1">
-                      {section.items.map((item: any, i: number) => (
-                         <div 
-                            key={i} 
-                            onClick={() => handleItemClick(item)}
-                            className="group relative flex-shrink-0 w-[140px] md:w-[200px] cursor-pointer transition-all duration-300 hover:z-30 hover:scale-110 hover:-translate-y-2"
-                         >
-                            <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 shadow-lg relative border border-white/5">
-                               <img 
-                                  src={item.image || item.poster} 
-                                  alt={item.title} 
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:contrast-110" 
-                                  loading="lazy"
-                               />
-                               
-                               {/* Card Overlay */}
-                               <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
-                                   <div className="flex items-center gap-2 mb-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                                       <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-lg">
-                                           <Play className="fill-black text-black ml-0.5" size={12}/>
-                                       </div>
-                                   </div>
-                                   <h3 className="text-xs font-bold text-white leading-tight mb-1 line-clamp-2">
-                                       {item.title}
-                                   </h3>
-                                   <div className="flex flex-wrap gap-1">
-                                       {item.quality?.slice(0,1).map((q: string) => (
-                                           <span key={q} className="text-[9px] border border-gray-500 px-1 rounded text-gray-300">{q}</span>
-                                       ))}
-                                   </div>
-                               </div>
-                            </div>
-                         </div>
-                      ))}
-                   </div>
+      {!isSearchMode && !loadingHome && homeData && (
+         <>
+            {activeHero && (
+                <div className="relative w-full h-[85vh] group">
+                    <div className="absolute inset-0">
+                        <div className="w-full h-full bg-cover bg-center transition-all duration-1000" style={{ backgroundImage: `url(${activeHero.poster})` }}></div>
+                        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/10 to-transparent"></div>
+                    </div>
+                    <div className="relative z-10 h-full flex flex-col justify-end pb-24 px-4 md:px-12 max-w-3xl">
+                        <h1 className="text-4xl md:text-7xl font-black mb-4 text-white drop-shadow-2xl animate-slide-up">{activeHero.title}</h1>
+                        <p className="text-gray-200 mb-8 line-clamp-3 animate-slide-up delay-100">{activeHero.desc}</p>
+                        <div className="flex gap-4 animate-slide-up delay-200">
+                            <button onClick={() => handleSearchInput(activeHero.title)} className="bg-white text-black px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-105 transition-transform"><Play className="fill-current" size={24}/> Play</button>
+                            <button className="bg-gray-600/40 text-white px-8 py-3 rounded-lg font-bold backdrop-blur-md"><Info size={24}/> Info</button>
+                        </div>
+                    </div>
                 </div>
-            )
-         ))}
-      </div>
-
+            )}
+            <div className="relative z-20 -mt-20 space-y-12 px-4 md:px-12 pb-12">
+                {homeData.sections?.map((section: any, idx: number) => (
+                    section.items?.length > 0 && (
+                        <div key={idx}>
+                            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-red-600 pl-3">{section.title}</h2>
+                            <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide">
+                                {section.items.map((item: any, i: number) => (
+                                    <div key={i} onClick={() => openLink(item.link)} className="flex-shrink-0 w-[140px] md:w-[200px] cursor-pointer hover:scale-105 transition-transform">
+                                        <div className="aspect-[2/3] rounded-lg overflow-hidden relative">
+                                            <img src={item.poster || item.image} className="w-full h-full object-cover" loading="lazy"/>
+                                            <div className="absolute inset-0 bg-black/20 hover:bg-transparent transition-colors"></div>
+                                        </div>
+                                        <h3 className="mt-2 text-sm text-gray-300 truncate hover:text-white">{item.title}</h3>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )
+                ))}
+            </div>
+         </>
+      )}
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="h-screen bg-black text-white flex items-center justify-center">Loading...</div>}>
+      <HomePageContent />
+    </Suspense>
   );
 }
