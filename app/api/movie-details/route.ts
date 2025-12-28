@@ -18,39 +18,54 @@ export async function GET(request: Request) {
       next: { revalidate: 300 }
     });
 
-    // --- TYPE FIX: Explicitly set type to 'any' ---
     let data: any = { title: "Unknown", linkData: [], description: "", screenshots: [] };
-    
     if (response.ok) {
         try { 
             const jsonData = await response.json();
-            // Merge defaults with response
             data = { ...data, ...jsonData };
-        } catch (e) {
-            console.error("JSON Parse Error", e);
-        }
+        } catch (e) {}
     }
 
-    // --- SMART TITLE FALLBACK ---
+    // --- 1. HIDDEN IMDB ID SEARCH ---
+    // Kabhi-kabhi description mein ID hoti hai
+    let imdbId = null;
+    const allText = JSON.stringify(data).toLowerCase();
+    const idMatch = allText.match(/tt\d{7,}/); // Looks for tt1234567
+    if (idMatch) imdbId = idMatch[0];
+
+    // --- 2. SMART TITLE & YEAR EXTRACTION ---
     let finalTitle = data.title;
-    if (!finalTitle || finalTitle.toLowerCase().includes('unknown')) {
+    let releaseYear = null;
+
+    if (!finalTitle || finalTitle.toLowerCase().includes('unknown') || !imdbId) {
         try {
             const slug = new URL(url).pathname.split('/').filter(Boolean).pop() || "";
+            
+            // A. Extract Year (e.g. pathaan-2023-download)
+            const yearMatch = slug.match(/-(\d{4})-/);
+            if (yearMatch) {
+                releaseYear = yearMatch[1];
+            }
+
+            // B. Clean Title
             finalTitle = slug
+                .replace(/-(\d{4})-.*$/, '') // Remove year and everything after
                 .replace(/-/g, ' ')
-                .replace(/\b(download|movie|hindi|dual|audio|480p|720p|1080p|4k|season|episode|s\d+|e\d+|web-dl|bluray|hdrip)\b/gi, '')
+                .replace(/\b(download|movie|hindi|dubbed|dual|audio|season|episode|s\d+|e\d+|480p|720p|1080p|4k|web-dl|bluray|hdrip|multi|org)\b/gi, '')
                 .replace(/\s+/g, ' ')
                 .trim();
+                
+            // Capitalize
             finalTitle = finalTitle.replace(/\b\w/g, (l: string) => l.toUpperCase());
         } catch (e) {
             finalTitle = "Unknown Movie";
         }
     }
 
-    const plot = data.description || data.plot || data.story || "Overview unavailable.";
+    // 3. Process Data
+    const plot = data.description || data.plot || "Overview unavailable.";
     let screenshots = Array.isArray(data.screenshots || data.images) ? (data.screenshots || data.images) : [];
 
-    // Process Links
     const downloadSections = (data.linkData || []).map((item: any) => {
         let season = null;
         const sMatch = (item.quality || "").match(/(?:Season|S)\s*0?(\d+)/i);
@@ -77,6 +92,7 @@ export async function GET(request: Request) {
         };
     });
 
+    // Detect Seasons
     const allSeasons = new Set<number>();
     downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
     
@@ -89,9 +105,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
         title: finalTitle,
+        year: releaseYear, // ✅ Bheja frontend ko
         poster: data.image || data.poster || "",
         plot: plot,
-        imdbId: null, 
+        imdbId: imdbId, // ✅ Agar mila to bheja
         seasons: Array.from(allSeasons).sort((a, b) => a - b),
         screenshots: screenshots.slice(0, 8),
         downloadSections: downloadSections
