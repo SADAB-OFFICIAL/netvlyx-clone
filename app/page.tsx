@@ -39,6 +39,7 @@ function HomePageContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('search') || '';
 
+  // --- AAPKA ORIGINAL LOGIC (NO CHANGES) ---
   const [query, setQuery] = useState(initialQuery);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -119,201 +120,168 @@ function HomePageContent() {
   const activeHero = homeData?.hero?.[heroIndex];
   const isSearchMode = query.length > 0;
 
-  // --- SKELETON LOADER STATE ---
+  // --- SKELETON LOADING STATE ---
   if (loadingHome && !isSearchMode) {
       return (
           <div className="min-h-screen bg-[#0a0a0a]">
-              <nav className="fixed top-0 w-full z-50 p-6 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
+              <nav className="fixed top-0 w-full z-50 p-6 flex justify-between items-center bg-black/50 backdrop-blur-md">
                   <div className="h-8 w-32 bg-gray-800 rounded animate-pulse"></div>
+                  <div className="h-10 w-64 bg-gray-800 rounded-full animate-pulse"></div>
                   <div className="h-8 w-8 bg-gray-800 rounded-full animate-pulse"></div>
               </nav>
               <HeroSkeleton />
-              <div className="mt-8">
-                  <SectionSkeleton />
-                  <SectionSkeleton />
-              </div>
+              <div className="mt-8"><SectionSkeleton /><SectionSkeleton /></div>
           </div>
       );
   }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-yellow-500/30">
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-300 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled || isSearchMode ? 'bg-black/95 backdrop-blur-md border-b border-gray-800' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
-         <div className={`flex items-center gap-8 ${isSearchMode ? 'hidden md:flex' : 'flex'}`}>
-            {/* LOGO: Small, Premium Gold */}
-            <h1 className="text-lg md:text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-600 tracking-wide cursor-pointer flex items-center gap-2 drop-shadow-[0_2px_10px_rgba(234,179,8,0.5)]" onClick={() => { clearSearch(); window.scrollTo(0,0); }}>
-                <MonitorPlay className="text-yellow-500" size={24} strokeWidth={2.5}/> 
-                SADABEFY 
-            </h1>
-         </div>
-         
-         <div className={`flex-1 max-w-2xl mx-auto relative transition-all duration-500 ${isSearchMode ? 'w-full' : 'w-auto'}`}>
-             
-             {/* LIQUID GLASS SEARCH BAR */}
-             {/* bg-white/5 -> Very sheer background (glass tint)
-                 backdrop-blur-2xl -> Heavy blur behind the element (frosted glass)
-                 border-white/10 -> Subtle border
-                 shadow-[inset_...] -> Top inner highlight for 3D glass effect
-             */}
-             <div className={`
-                relative flex items-center rounded-full px-5 py-2.5 transition-all duration-300
-                backdrop-blur-2xl border
-                ${isSearchMode 
-                    ? 'bg-black/60 border-yellow-500/50 shadow-[0_0_30px_rgba(234,179,8,0.2)]' 
-                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] shadow-lg'
-                }
-             `}>
-                 <Search className={`w-4 h-4 ${isSearchMode ? 'text-yellow-500' : 'text-gray-400'}`} />
-                 <input 
-                    type="text" 
-                    value={query} 
-                    onChange={(e) => handleSearchInput(e.target.value)} 
-                    placeholder="Search movies, shows..." 
-                    className="bg-transparent border-none outline-none text-white text-sm px-3 py-1 w-full placeholder-gray-400 focus:placeholder-gray-500"
-                 />
-                 {query && <button onClick={clearSearch}><X className="w-4 h-4 text-gray-400 hover:text-white transition" /></button>}
-             </div>
+      
+      {/* NAVBAR */}
+      <nav className={`fixed top-0 w-full z-50 px-6 py-4 flex justify-between items-center transition-all duration-500 ${scrolled || isSearchMode ? 'bg-black/90 backdrop-blur-xl border-b border-white/10' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
+        <div className="flex items-center gap-2 cursor-pointer text-yellow-500" onClick={clearSearch}>
+            <MonitorPlay size={28} />
+            <h1 className="text-xl font-black tracking-tighter text-white">SADABEFY</h1>
+        </div>
 
-             {showSuggestions && suggestions.length > 0 && (
-                 <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900/90 backdrop-blur-xl border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
-                     {suggestions.map((s, i) => (<div key={i} onClick={() => handleSearchInput(s)} className="px-4 py-3 hover:bg-white/5 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none text-sm"><Search size={12} /> {s}</div>))}
-                 </div>
-             )}
-         </div>
+        {/* UPDATED SEARCH BAR */}
+        <div className="relative flex-1 max-w-md mx-8 group">
+          <div className="relative flex items-center bg-white/5 border border-white/10 rounded-full px-5 py-2.5 focus-within:bg-white/10 focus-within:border-yellow-500/50 transition-all shadow-lg">
+            <Search className={`w-4 h-4 ${isSearchMode ? 'text-yellow-500' : 'text-gray-400'}`} />
+            <input 
+              type="text"
+              value={query}
+              onChange={(e) => handleSearchInput(e.target.value)}
+              placeholder="Search movies, series..."
+              className="bg-transparent border-none outline-none px-3 w-full text-sm placeholder:text-gray-500"
+            />
+            {query && <X className="w-4 h-4 cursor-pointer hover:text-red-400" onClick={clearSearch} />}
+          </div>
+          
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 w-full mt-2 bg-[#121212] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-[100]">
+              {suggestions.map((s, i) => (
+                <div key={i} className="px-4 py-3 hover:bg-yellow-500 hover:text-black cursor-pointer text-sm border-b border-white/5 last:border-none transition-colors" onClick={() => { setQuery(s); performSearch(s); }}>
+                  {s}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-         <div className="hidden md:flex items-center gap-5 text-gray-300 ml-4">
-            <Bell className="w-5 h-5 cursor-pointer hover:text-yellow-500 transition" />
-            <div className="w-8 h-8 rounded bg-gradient-to-br from-yellow-500 to-yellow-700 flex items-center justify-center font-bold text-xs text-black shadow-lg">S</div>
-         </div>
+        <div className="hidden md:flex items-center gap-6">
+          <Bell className="w-5 h-5 text-gray-400 hover:text-white cursor-pointer" />
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center font-bold text-black shadow-lg">S</div>
+        </div>
       </nav>
 
-      {isSearchMode && (
-          <div className="pt-28 px-4 md:px-12 min-h-screen">
-              <h2 className="text-xl font-bold text-gray-200 mb-6 flex items-center gap-2">{isSearching ? <Loader2 className="animate-spin text-yellow-500"/> : 'Search Results'} <span className="text-sm font-normal text-gray-500">{isSearching ? 'Searching...' : `Found ${searchResults.length} items`}</span></h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
-                  {searchResults.map((item, idx) => (
-                      <div key={idx} onClick={() => openLink(item.link)} className="group relative cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10">
-                          <div className="aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 relative border border-gray-700 group-hover:border-yellow-500/50 shadow-lg">
-                              <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:contrast-110" />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                              <div className="absolute bottom-0 p-3 w-full">
-                                  <h3 className="text-sm font-bold text-white line-clamp-2 leading-tight group-hover:text-yellow-400 transition-colors">{item.title}</h3>
-                                  <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-300"><span className="bg-white/20 px-1.5 rounded">{item.quality?.[0] || 'HD'}</span><span>{item.year || '2024'}</span></div>
-                              </div>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      )}
-
-      {!isSearchMode && !loadingHome && homeData && (
-         <>
-            {activeHero && (
-                <div className="relative w-full h-[85vh] group">
-                    <div className="absolute inset-0">
-                        <div className="w-full h-full bg-cover bg-center transition-all duration-1000" style={{ backgroundImage: `url(${activeHero.poster})` }}></div>
-                        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/10 to-transparent"></div>
+      {/* MAIN CONTENT */}
+      <main>
+        {isSearchMode ? (
+          /* SEARCH RESULTS */
+          <div className="pt-32 px-12 pb-20 min-h-screen">
+            <h2 className="text-2xl font-bold mb-8 flex items-center gap-3">
+              {isSearching ? <Loader2 className="animate-spin text-yellow-500" /> : <Search className="text-yellow-500" />}
+              Results for: <span className="text-yellow-500">{query}</span>
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+              {searchResults.map((item, idx) => (
+                <div key={idx} className="group relative rounded-xl overflow-hidden cursor-pointer bg-white/5 hover:scale-105 transition-all duration-300 border border-white/5 hover:border-yellow-500/50 shadow-xl" onClick={() => openLink(item.link)}>
+                  <img src={item.image || item.poster} alt={item.title} className="w-full aspect-[2/3] object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent p-4 flex flex-col justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-sm font-bold truncate">{item.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
+                        <span className="text-xs text-yellow-500">{item.rating || '8.5'}</span>
                     </div>
-                    <div className="relative z-10 h-full flex flex-col justify-end pb-24 px-4 md:px-12 max-w-3xl">
-                        <h1 className="text-4xl md:text-7xl font-black mb-4 text-white drop-shadow-2xl animate-slide-up">{activeHero.title}</h1>
-                        <p className="text-gray-200 mb-8 line-clamp-3 animate-slide-up delay-100">{activeHero.desc}</p>
-                        <div className="flex gap-4 animate-slide-up delay-200">
-                            <button onClick={() => handleSearchInput(activeHero.title)} className="bg-white text-black px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-105 transition-transform"><Play className="fill-current" size={24}/> Play</button>
-                            <button className="bg-gray-600/40 text-white px-8 py-3 rounded-lg font-bold backdrop-blur-md hover:bg-gray-600/60 transition"><Info size={24}/> Info</button>
-                        </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* HOME PAGE */
+          <>
+            <section className="relative h-[85vh] w-full flex items-end overflow-hidden">
+                <img src={activeHero?.poster} className="absolute inset-0 w-full h-full object-cover brightness-[0.4] transition-all duration-1000 scale-105" alt="" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent"></div>
+                <div className="relative z-10 p-12 w-full max-w-4xl space-y-6 mb-10">
+                    <div className="flex items-center gap-3">
+                        <span className="bg-yellow-500 text-black px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">Trending</span>
+                        <span className="text-gray-400 text-sm">{activeHero?.year || '2024'}</span>
+                    </div>
+                    <h1 className="text-5xl md:text-8xl font-black uppercase tracking-tighter drop-shadow-2xl">{activeHero?.title}</h1>
+                    <p className="text-lg text-gray-300 line-clamp-2 max-w-2xl">{activeHero?.desc}</p>
+                    <div className="flex gap-4 pt-2">
+                        <button onClick={() => openLink(activeHero?.link)} className="bg-white text-black px-10 py-4 rounded-xl font-black flex items-center gap-2 hover:bg-yellow-500 transition-all hover:scale-105 shadow-2xl">
+                            <Play className="fill-black" /> PLAY NOW
+                        </button>
+                        <button className="bg-white/10 backdrop-blur-md px-10 py-4 rounded-xl font-bold flex items-center gap-2 border border-white/10 hover:bg-white/20 transition-all">
+                            <Info /> DETAILS
+                        </button>
                     </div>
                 </div>
-            )}
-           
-            <div className="relative z-20 -mt-20 space-y-12 px-4 md:px-12 pb-12">
-                {homeData.sections?.map((section: any, idx: number) => (
-                    section.items?.length > 0 && (
-                        <div key={idx}>
-                            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-yellow-600 pl-3">{section.title}</h2>
-                            <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide">
-                                {section.items.map((item: any, i: number) => (
-                                    <div key={i} onClick={() => openLink(item.link)} className="flex-shrink-0 w-[140px] md:w-[200px] cursor-pointer hover:scale-105 transition-transform">
-                                        <div className="aspect-[2/3] rounded-lg overflow-hidden relative">
-                                            <img src={item.poster || item.image} className="w-full h-full object-cover" loading="lazy"/>
-                                            <div className="absolute inset-0 bg-black/20 hover:bg-transparent transition-colors"></div>
-                                        </div>
-                                        <h3 className="mt-2 text-sm text-gray-300 truncate hover:text-white group-hover:text-yellow-400 transition-colors">{item.title}</h3>
-                                    </div>
-                                ))}
-                            </div>
+            </section>
+
+            <div className="relative z-20 -mt-24 pb-32 space-y-16">
+              {homeData?.sections?.map((section: any, idx: number) => (
+                <div key={idx} className="px-12 group">
+                  <h3 className="text-xl font-black mb-6 flex items-center gap-2 group-hover:text-yellow-500 transition-colors">
+                    <div className="w-1 h-6 bg-yellow-500 rounded-full"></div>
+                    {section.title} <ChevronRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-all" />
+                  </h3>
+                  <div className="flex gap-5 overflow-x-auto no-scrollbar pb-4">
+                    {section.items.map((item: any, i: number) => (
+                      <div key={i} className="flex-shrink-0 w-[180px] md:w-[220px] rounded-2xl overflow-hidden relative group/card cursor-pointer hover:scale-105 transition-all duration-500 shadow-lg border border-white/5 hover:border-yellow-500/30" onClick={() => openLink(item.link)}>
+                        <img src={item.poster || item.image} className="w-full h-full object-cover aspect-[2/3]" alt="" loading="lazy" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/card:opacity-100 transition-all flex flex-col justify-center items-center p-4 text-center backdrop-blur-[2px]">
+                           <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mb-3 shadow-2xl">
+                              <Play className="text-black fill-black ml-1" size={24} />
+                           </div>
+                           <p className="text-sm font-bold uppercase tracking-tight">{item.title}</p>
                         </div>
-                    )
-                ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-         </>
-      )}
+          </>
+        )}
+      </main>
 
-      {/* FOOTER SECTION (Gold Theme) */}
-      <footer className="bg-[#050505] border-t border-gray-900 pt-16 pb-8 px-4 md:px-12 mt-20">
-          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-              {/* Brand Column */}
+      {/* FOOTER */}
+      <footer className="bg-black border-t border-white/5 py-20 px-12">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+              <div className="space-y-6">
+                  <h2 className="text-2xl font-black text-yellow-500">SADABEFY</h2>
+                  <p className="text-gray-500 text-sm leading-relaxed">Your premium destination for exploring the best content online. Discover, search, and stream effortlessly.</p>
+                  <div className="flex gap-5">
+                      <Instagram className="w-5 h-5 text-gray-500 hover:text-white transition-colors" />
+                      <Mail className="w-5 h-5 text-gray-500 hover:text-white transition-colors" />
+                      <Globe className="w-5 h-5 text-gray-500 hover:text-white transition-colors" />
+                  </div>
+              </div>
               <div className="space-y-4">
-                  <h2 className="text-xl font-bold flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">
-                      <MonitorPlay size={24} className="text-yellow-500"/> SADABEFY
-                  </h2>
-                  <p className="text-gray-400 text-sm leading-relaxed">
-                      Your premium entertainment destination. We help you discover content from across the internet. No content is hosted on our platform.
-                  </p>
-                  <button className="text-yellow-500 font-bold text-sm hover:underline">Learn More About Us ?</button>
-              </div>
-
-              {/* Quick Links */}
-              <div>
-                  <h3 className="text-white font-bold mb-6">Quick Links</h3>
-                  <ul className="space-y-3 text-gray-400 text-sm">
-                      {['Bollywood Movies', 'South Movies', 'Korean Content', 'Anime', 'Action Movies'].map((item) => (
-                          <li key={item}><a href="#" className="hover:text-yellow-500 transition-colors">{item}</a></li>
-                      ))}
+                  <h4 className="font-bold text-white">Links</h4>
+                  <ul className="text-gray-500 space-y-2 text-sm">
+                      <li className="hover:text-yellow-500 cursor-pointer transition-colors">Movies</li>
+                      <li className="hover:text-yellow-500 cursor-pointer transition-colors">Web Series</li>
+                      <li className="hover:text-yellow-500 cursor-pointer transition-colors">Korean Drama</li>
                   </ul>
               </div>
-
-              {/* Legal & Support */}
-              <div>
-                  <h3 className="text-white font-bold mb-6">Legal & Support</h3>
-                  <ul className="space-y-3 text-gray-400 text-sm">
-                      {['About Us', 'Contact Us', 'DMCA Policy', 'Privacy Policy', 'Terms of Service'].map((item) => (
-                          <li key={item}><a href="#" className="hover:text-yellow-500 transition-colors">{item}</a></li>
-                      ))}
+              <div className="space-y-4">
+                  <h4 className="font-bold text-white">Support</h4>
+                  <ul className="text-gray-500 space-y-2 text-sm">
+                      <li className="hover:text-yellow-500 cursor-pointer transition-colors">DMCA</li>
+                      <li className="hover:text-yellow-500 cursor-pointer transition-colors">Privacy Policy</li>
+                      <li className="hover:text-yellow-500 cursor-pointer transition-colors">Contact Us</li>
                   </ul>
               </div>
-
-              {/* Get in Touch */}
-              <div>
-                  <h3 className="text-white font-bold mb-6">Get in Touch</h3>
-                  <ul className="space-y-4 text-sm">
-                      <li className="flex items-center gap-3 text-gray-400">
-                          <Globe size={18} className="text-blue-500"/> 
-                          <span className="hover:text-white cursor-pointer">sadabefy.gt.tc</span>
-                      </li>
-                      <li className="flex items-center gap-3 text-gray-400">
-                          <Mail size={18} className="text-yellow-500"/> 
-                          <span className="hover:text-white cursor-pointer">contact@sadabefy.com</span>
-                      </li>
-                      <li className="flex items-center gap-3 text-gray-400">
-                          <Instagram size={18} className="text-purple-500"/> 
-                          <span className="hover:text-white cursor-pointer">@sad4b_ali_7</span>
-                      </li>
-                  </ul>
-              </div>
-          </div>
-
-          <div className="border-t border-gray-900 pt-8 mt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="text-gray-500 text-sm">
-                  <p className="mb-1">Developed & Managed By</p>
-                  <h4 className="text-lg font-bold text-yellow-500">Sadab Codes</h4>
-                  <p className="text-xs">Professional Web Development</p>
-              </div>
-              
-              <div className="text-gray-600 text-xs text-center md:text-right max-w-md">
-                  <p className="mb-2">© 2025 Sadabefy. All rights reserved.</p>
-                  <p>Disclaimer: Sadabefy does not host any content. We only index and provide links to content that is publicly available on the internet.</p>
+              <div className="space-y-4">
+                  <p className="text-xs text-gray-600">© 2025 Sadabefy. Built with precision for the best user experience.</p>
+                  <div className="text-xs text-gray-700">Disclaimer: This site does not host files on its server. All contents are provided by non-affiliated third parties.</div>
               </div>
           </div>
       </footer>
@@ -323,7 +291,7 @@ function HomePageContent() {
 
 export default function HomePage() {
   return (
-    <Suspense fallback={<div className="h-screen bg-black text-white flex items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<div className="h-screen bg-[#0a0a0a] flex items-center justify-center"><Loader2 className="animate-spin text-yellow-500" size={40} /></div>}>
       <HomePageContent />
     </Suspense>
   );
