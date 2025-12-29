@@ -123,7 +123,7 @@ function NCloudPlayer() {
                     <CloudLightning className="text-blue-400" size={20}/>
                 </div>
                 <div>
-                    <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">S-CLOUD</h1>
+                    <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">N-CLOUD</h1>
                     <div className="flex items-center gap-2 text-[10px] md:text-xs font-mono text-gray-400">
                         <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
                         ENCRYPTED • {currentStream.server}
