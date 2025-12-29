@@ -3,9 +3,9 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { 
-  Play, Download, CloudLightning, Loader2, AlertTriangle, 
-  Copy, CheckCircle, Server, HardDrive, ExternalLink, 
-  Cast, MonitorPlay, Wifi
+  Play, Download, CloudLightning, AlertTriangle, 
+  Copy, CheckCircle, Wifi, HardDrive, ExternalLink, 
+  Cast, MonitorPlay
 } from 'lucide-react';
 
 interface Stream {
@@ -18,7 +18,7 @@ function NCloudPlayer() {
   const params = useSearchParams();
   const key = params.get('key');
   
-  // --- SAME LOGIC (NO CHANGES) ---
+  // --- STATE & LOGIC ---
   const [loading, setLoading] = useState(true);
   const [streams, setStreams] = useState<Stream[]>([]); 
   const [currentStream, setCurrentStream] = useState<Stream | null>(null);
@@ -32,10 +32,12 @@ function NCloudPlayer() {
     if (key) {
       const init = async () => {
         try {
+          // Decoding Logic
           const json = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
           const payload = JSON.parse(json);
           setMetaData(payload);
 
+          // API Call
           const res = await fetch(`/api/ncloud?url=${payload.url}`);
           const result = await res.json();
           
@@ -45,10 +47,10 @@ function NCloudPlayer() {
              setApiTitle(result.title);
              setLoading(false);
           } else {
-             throw new Error("No playable streams found");
+             throw new Error("No streams found");
           }
         } catch (e) {
-          console.error("Stream Fetch Error", e);
+          console.error("Fetch Error", e);
           setLoading(false);
         }
       };
@@ -56,11 +58,10 @@ function NCloudPlayer() {
     }
   }, [key]);
 
+  // --- HANDLERS ---
   const handleServerClick = (stream: Stream) => {
       setCurrentStream(stream);
-      if (tab === 'download') {
-          window.open(stream.link, '_blank');
-      }
+      if (tab === 'download') window.open(stream.link, '_blank');
   };
 
   const copyLink = () => {
@@ -77,190 +78,174 @@ function NCloudPlayer() {
     window.location.href = intent;
   };
 
-  // --- NEW PREMIUM UI ---
-
-  // 1. Loading Screen with Animation
+  // --- 1. LOADING UI ---
   if (loading) return (
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
-      <div className="absolute inset-0 bg-blue-600/5 blur-[100px] animate-pulse"></div>
-      <div className="relative z-10 flex flex-col items-center">
-         <div className="w-20 h-20 relative mb-6">
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden px-4">
+      <div className="relative z-10 flex flex-col items-center text-center">
+         <div className="w-16 h-16 md:w-20 md:h-20 relative mb-6">
             <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
             <div className="absolute inset-2 border-b-4 border-purple-500 rounded-full animate-spin-reverse"></div>
             <CloudLightning className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white" />
          </div>
-         <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 animate-pulse">
-            Establishing Secure Connection...
+         <h2 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 animate-pulse">
+            Connecting Securely...
          </h2>
-         <p className="text-gray-500 text-sm mt-2 font-mono">Resolving High-Speed Streams</p>
       </div>
     </div>
   );
 
-  // 2. Error Screen
+  // --- 2. ERROR UI ---
   if (!currentStream) return (
-    <div className="min-h-screen bg-black flex items-center justify-center text-red-500">
-      <div className="text-center p-8 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-xl">
-        <AlertTriangle className="w-16 h-16 mx-auto mb-4 animate-bounce" />
-        <h3 className="text-xl font-bold text-white mb-2">Stream Offline</h3>
-        <p className="text-gray-400 mb-6">We couldn't reach the cloud servers.</p>
-        <button onClick={() => window.location.reload()} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold transition-all hover:scale-105">Retry Connection</button>
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="w-full max-w-sm text-center p-6 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-xl">
+        <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+        <h3 className="text-lg font-bold text-white mb-2">Stream Unavailable</h3>
+        <button onClick={() => window.location.reload()} className="mt-4 w-full py-3 bg-red-600 rounded-xl font-bold text-white">Retry</button>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#050505] text-white font-sans overflow-x-hidden relative pb-10">
       
-      {/* Dynamic Background Blur */}
-      <div className="fixed inset-0 z-0">
-          <div 
-            className="absolute inset-0 bg-cover bg-center opacity-30 blur-[80px] scale-110 transition-all duration-1000"
-            style={{ backgroundImage: `url(${metaData?.poster || ''})` }}
-          ></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/90 to-[#050505]/60"></div>
+      {/* Background Ambience */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+          <div className="absolute inset-0 bg-cover bg-center opacity-20 blur-[60px]" style={{ backgroundImage: `url(${metaData?.poster || ''})` }}></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/95 to-[#050505]/80"></div>
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 py-8 md:py-12">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10">
         
-        {/* HEADER */}
-        <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-10 animate-fade-in-down">
-            <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md shadow-2xl shadow-blue-500/10">
-                    <CloudLightning className="text-blue-400" size={24}/>
+        {/* HEADER: Stacked on Mobile, Row on Desktop */}
+        <header className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center backdrop-blur-md shadow-lg">
+                    <CloudLightning className="text-blue-400" size={20}/>
                 </div>
                 <div>
-                    <h1 className="text-2xl font-black tracking-tight text-white">N-CLOUD <span className="text-blue-500">PREMIUM</span></h1>
-                    <div className="flex items-center gap-2 text-xs font-mono text-gray-400 mt-1">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]"></span>
-                        SECURE • ENCRYPTED • {currentStream.server}
+                    <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">N-CLOUD</h1>
+                    <div className="flex items-center gap-2 text-[10px] md:text-xs font-mono text-gray-400">
+                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                        ENCRYPTED • {currentStream.server}
                     </div>
                 </div>
             </div>
             
-            {/* Tab Switcher (Glassy) */}
-            <div className="bg-black/40 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl flex shadow-xl">
+            {/* Tab Switcher: Full width on mobile */}
+            <div className="w-full md:w-auto bg-white/5 border border-white/10 p-1 rounded-xl flex">
                 <button 
                     onClick={() => setTab('stream')} 
-                    className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all duration-300 ${tab === 'stream' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/25' : 'text-gray-400 hover:text-white'}`}
+                    className={`flex-1 md:flex-none px-6 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${tab === 'stream' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}
                 >
-                    <Play size={16} className={tab === 'stream' ? 'fill-current' : ''} /> Stream
+                    <Play size={16} /> Stream
                 </button>
                 <button 
                     onClick={() => setTab('download')} 
-                    className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all duration-300 ${tab === 'download' ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg shadow-green-500/25' : 'text-gray-400 hover:text-white'}`}
+                    className={`flex-1 md:flex-none px-6 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${tab === 'download' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400'}`}
                 >
-                    <Download size={16} /> Download
+                    <Download size={16} /> Save
                 </button>
             </div>
         </header>
 
-        <div className="grid lg:grid-cols-12 gap-8">
+        {/* MAIN GRID: 1 Col Mobile, 12 Cols Desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
            
-           {/* LEFT: PLAYER AREA (8 Cols) */}
-           <div className="lg:col-span-8 space-y-6 animate-fade-in-up">
+           {/* PLAYER SECTION (Top on Mobile) */}
+           <div className="lg:col-span-8 space-y-4">
               
-              {/* Player Container */}
-              <div className="relative aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-[0_0_50px_-10px_rgba(59,130,246,0.15)] group">
+              {/* Aspect Ratio Container */}
+              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                  {tab === 'stream' ? (
                      <video 
                         key={currentStream.link} 
                         controls 
                         autoPlay
+                        playsInline 
                         className="w-full h-full object-contain" 
                         poster={metaData?.poster || ''}
                         src={currentStream.link}
                      >
                      </video>
                  ) : (
-                     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-black relative overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-                        <div className="relative z-10 p-8 bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 text-center transform group-hover:scale-105 transition-transform duration-500">
-                             <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(34,197,94,0.3)]">
-                                <Download size={40} className="text-green-400 animate-bounce" />
-                             </div>
-                             <h3 className="text-2xl font-bold text-white mb-2">Ready to Download</h3>
-                             <p className="text-gray-400 max-w-sm mx-auto">
-                                Select a server from the list to begin your high-speed secure download.
-                             </p>
+                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900/40 p-6 text-center">
+                        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-4 animate-bounce">
+                           <Download size={32} className="text-green-400" />
                         </div>
+                        <h3 className="text-lg md:text-xl font-bold text-white">Download Ready</h3>
+                        <p className="text-xs md:text-sm text-gray-400 mt-2">Select a server below to start.</p>
                      </div>
                  )}
               </div>
 
-              {/* Movie Info */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
-                  <h2 className="text-2xl font-bold text-white leading-tight mb-2">
+              {/* Title Info */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 md:p-6 backdrop-blur-sm">
+                  <h2 className="text-lg md:text-2xl font-bold text-white leading-tight mb-2 line-clamp-2">
                       {metaData?.title || apiTitle || 'Unknown Title'}
                   </h2>
-                  <div className="flex flex-wrap gap-3">
-                      <span className="px-3 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold flex items-center gap-2">
-                          <HardDrive size={12}/> {apiTitle || 'HD Source'}
+                  <div className="flex flex-wrap gap-2">
+                      <span className="px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] md:text-xs font-bold flex items-center gap-1">
+                          <HardDrive size={10}/> HD Source
                       </span>
-                      <span className="px-3 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold flex items-center gap-2">
-                          <Cast size={12}/> Cloud Stream
+                      <span className="px-2 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] md:text-xs font-bold flex items-center gap-1">
+                          <Cast size={10}/> Cloud
                       </span>
                   </div>
               </div>
            </div>
 
-           {/* RIGHT: CONTROLS & SERVERS (4 Cols) */}
-           <div className="lg:col-span-4 space-y-6 animate-fade-in-up delay-100">
+           {/* CONTROLS SECTION (Bottom on Mobile) */}
+           <div className="lg:col-span-4 space-y-4 md:space-y-6">
               
-              {/* Server List */}
-              <div className="bg-black/40 border border-white/10 rounded-3xl p-6 backdrop-blur-xl flex flex-col h-[400px]">
-                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                     <Wifi size={14} /> Available Servers
+              {/* Server List: Fixed Height with Scroll */}
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-4 md:p-6 backdrop-blur-xl flex flex-col h-[300px] md:h-[400px]">
+                 <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                     <Wifi size={12} /> {tab === 'download' ? 'Download Servers' : 'Stream Servers'}
                  </h3>
                  
-                 <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
+                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-hide">
                     {streams.map((stream, idx) => {
                         const isActive = currentStream.link === stream.link;
                         return (
                             <button 
                                 key={idx}
                                 onClick={() => handleServerClick(stream)}
-                                className={`w-full p-4 rounded-xl flex items-center justify-between transition-all duration-300 border relative overflow-hidden group/btn ${
+                                className={`w-full p-3 rounded-xl flex items-center justify-between transition-all border ${
                                     isActive 
-                                    ? (tab === 'download' ? 'bg-green-500/10 border-green-500/50 text-white shadow-[0_0_20px_rgba(34,197,94,0.1)]' : 'bg-blue-600 border-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)]') 
-                                    : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'
+                                    ? (tab === 'download' ? 'bg-green-500/10 border-green-500/50 text-white' : 'bg-blue-600 border-blue-500 text-white') 
+                                    : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
                                 }`}
                             >
-                                <div className="flex items-center gap-4 relative z-10">
-                                    <div className={`w-3 h-3 rounded-full shadow-lg ${isActive ? 'bg-white animate-pulse' : 'bg-gray-600'}`}></div>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-600'}`}></div>
                                     <div className="text-left">
-                                        <p className="font-bold text-sm">{stream.server}</p>
-                                        <p className="text-[10px] opacity-60 font-mono">{stream.type || 'HLS'}</p>
+                                        <p className="font-bold text-xs md:text-sm">{stream.server}</p>
+                                        <p className="text-[9px] opacity-60 font-mono uppercase">{stream.type || 'FAST'}</p>
                                     </div>
                                 </div>
-                                
-                                {tab === 'download' ? (
-                                    <ExternalLink size={16} className={`relative z-10 ${isActive ? 'text-green-300' : 'text-gray-600 group-hover/btn:text-white'}`} />
-                                ) : (
-                                    isActive && <MonitorPlay size={16} className="relative z-10 text-blue-200" />
-                                )}
+                                {isActive && <MonitorPlay size={14} />}
                             </button>
                         );
                     })}
                  </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons: Big Touch Targets */}
               <div className="space-y-3">
                  {tab === 'stream' ? (
                     <>
-                       <button onClick={() => playInApp('org.videolan.vlc')} className="w-full py-3.5 bg-[#ff6b00]/10 border border-[#ff6b00]/20 hover:bg-[#ff6b00] hover:text-black hover:border-[#ff6b00] rounded-xl flex items-center justify-center gap-3 text-[#ff6b00] font-bold transition-all duration-300 group">
-                          <img src="https://upload.wikimedia.org/wikipedia/commons/e/e6/VLC_Icon.svg" className="w-5 h-5 drop-shadow-md" alt="VLC" />
-                          Play in VLC Player
+                       {/* Mobile First: Stacked Buttons */}
+                       <button onClick={() => playInApp('org.videolan.vlc')} className="w-full py-3.5 bg-[#ff6b00]/10 border border-[#ff6b00]/20 active:bg-[#ff6b00]/30 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold text-sm md:text-base transition-all">
+                          Play in VLC
                        </button>
-                       <button onClick={() => playInApp('com.mxtech.videoplayer.ad')} className="w-full py-3.5 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-600 hover:text-white hover:border-blue-600 rounded-xl flex items-center justify-center gap-3 text-blue-400 font-bold transition-all duration-300">
-                          <Play size={18} className="fill-current"/> Play in MX Player
+                       <button onClick={() => playInApp('com.mxtech.videoplayer.ad')} className="w-full py-3.5 bg-blue-500/10 border border-blue-500/20 active:bg-blue-500/30 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold text-sm md:text-base transition-all">
+                          Play in MX Player
                        </button>
                     </>
                  ) : (
-                    <button onClick={copyLink} className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 rounded-xl flex items-center justify-center gap-3 text-white transition-all duration-300 group">
-                          {copied ? <CheckCircle size={20} className="text-green-500"/> : <Copy size={20} className="text-gray-400 group-hover:text-white"/>}
-                          <span className={copied ? 'text-green-500 font-bold' : 'font-medium'}>{copied ? 'Link Copied!' : 'Copy Direct Link'}</span>
+                    <button onClick={copyLink} className="w-full py-4 bg-white/5 active:bg-white/10 border border-white/10 rounded-xl flex items-center justify-center gap-2 text-white transition-all">
+                          {copied ? <CheckCircle size={18} className="text-green-500"/> : <Copy size={18} className="text-gray-400"/>}
+                          <span className={copied ? 'text-green-500 font-bold' : 'font-medium'}>{copied ? 'Copied!' : 'Copy Link'}</span>
                     </button>
                  )}
               </div>
@@ -268,28 +253,13 @@ function NCloudPlayer() {
            </div>
         </div>
       </div>
-      
-      {/* CSS Animations (Inline for simplicity) */}
-      <style jsx global>{`
-        @keyframes fade-in-down {
-          from { opacity: 0; transform: translateY(-20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in-down { animation: fade-in-down 0.6s ease-out forwards; }
-        .animate-fade-in-up { animation: fade-in-up 0.6s ease-out forwards; }
-        .animate-spin-reverse { animation: spin 1.5s linear infinite reverse; }
-      `}</style>
     </div>
   );
 }
 
 export default function NCloud() {
   return (
-    <Suspense fallback={<div className="h-screen bg-black flex items-center justify-center text-white">Initializing N-Cloud...</div>}>
+    <Suspense fallback={<div className="h-screen bg-black flex items-center justify-center text-white text-sm">Loading App...</div>}>
       <NCloudPlayer />
     </Suspense>
   );
