@@ -8,7 +8,7 @@ import {
   Globe, Mail, Instagram 
 } from 'lucide-react';
 
-// --- SKELETON COMPONENTS (For Fast Loading Feel) ---
+// --- SKELETON COMPONENTS ---
 const HeroSkeleton = () => (
   <div className="w-full h-[85vh] bg-gray-900/50 animate-pulse relative">
       <div className="absolute bottom-0 left-0 p-12 w-full max-w-3xl space-y-4">
@@ -140,24 +140,47 @@ function HomePageContent() {
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-yellow-500/30">
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 px-4 md:px-12 py-4 flex items-center justify-between ${scrolled || isSearchMode ? 'bg-black/95 backdrop-blur-md border-b border-gray-800' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
          <div className={`flex items-center gap-8 ${isSearchMode ? 'hidden md:flex' : 'flex'}`}>
-            {/* UPDATED LOGO: Small, Premium Gold */}
+            {/* LOGO: Small, Premium Gold */}
             <h1 className="text-lg md:text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-600 tracking-wide cursor-pointer flex items-center gap-2 drop-shadow-[0_2px_10px_rgba(234,179,8,0.5)]" onClick={() => { clearSearch(); window.scrollTo(0,0); }}>
                 <MonitorPlay className="text-yellow-500" size={24} strokeWidth={2.5}/> 
                 SADABEFY 
             </h1>
          </div>
+         
          <div className={`flex-1 max-w-2xl mx-auto relative transition-all duration-500 ${isSearchMode ? 'w-full' : 'w-auto'}`}>
-             <div className={`relative flex items-center bg-gray-900/80 border ${isSearchMode ? 'border-yellow-500/50 shadow-yellow-900/20 shadow-lg' : 'border-gray-700'} rounded-full px-4 py-2 transition-all`}>
+             
+             {/* LIQUID GLASS SEARCH BAR */}
+             {/* bg-white/5 -> Very sheer background (glass tint)
+                 backdrop-blur-2xl -> Heavy blur behind the element (frosted glass)
+                 border-white/10 -> Subtle border
+                 shadow-[inset_...] -> Top inner highlight for 3D glass effect
+             */}
+             <div className={`
+                relative flex items-center rounded-full px-5 py-2.5 transition-all duration-300
+                backdrop-blur-2xl border
+                ${isSearchMode 
+                    ? 'bg-black/60 border-yellow-500/50 shadow-[0_0_30px_rgba(234,179,8,0.2)]' 
+                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] shadow-lg'
+                }
+             `}>
                  <Search className={`w-4 h-4 ${isSearchMode ? 'text-yellow-500' : 'text-gray-400'}`} />
-                 <input type="text" value={query} onChange={(e) => handleSearchInput(e.target.value)} placeholder="Search movies, shows..." className="bg-transparent border-none outline-none text-white text-sm px-3 py-1 w-full placeholder-gray-500"/>
+                 <input 
+                    type="text" 
+                    value={query} 
+                    onChange={(e) => handleSearchInput(e.target.value)} 
+                    placeholder="Search movies, shows..." 
+                    className="bg-transparent border-none outline-none text-white text-sm px-3 py-1 w-full placeholder-gray-400 focus:placeholder-gray-500"
+                 />
                  {query && <button onClick={clearSearch}><X className="w-4 h-4 text-gray-400 hover:text-white transition" /></button>}
              </div>
+
              {showSuggestions && suggestions.length > 0 && (
-                 <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
-                     {suggestions.map((s, i) => (<div key={i} onClick={() => handleSearchInput(s)} className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none text-sm"><Search size={12} /> {s}</div>))}
+                 <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900/90 backdrop-blur-xl border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
+                     {suggestions.map((s, i) => (<div key={i} onClick={() => handleSearchInput(s)} className="px-4 py-3 hover:bg-white/5 cursor-pointer text-gray-300 hover:text-white flex items-center gap-3 border-b border-gray-800 last:border-none text-sm"><Search size={12} /> {s}</div>))}
                  </div>
              )}
          </div>
+
          <div className="hidden md:flex items-center gap-5 text-gray-300 ml-4">
             <Bell className="w-5 h-5 cursor-pointer hover:text-yellow-500 transition" />
             <div className="w-8 h-8 rounded bg-gradient-to-br from-yellow-500 to-yellow-700 flex items-center justify-center font-bold text-xs text-black shadow-lg">S</div>
