@@ -1,255 +1,207 @@
-// app/ncloud/page.tsx
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import React, { useState } from 'react';
 import { 
-  Play, Download, CloudLightning, Loader2, AlertTriangle, 
-  Copy, CheckCircle, Server, HardDrive, ExternalLink
+  Cloud, HardDrive, File, Image as ImageIcon, Music, Video, 
+  MoreVertical, Search, Plus, Folder, Clock, Trash2, 
+  Settings, ChevronRight, UploadCloud, CheckCircle
 } from 'lucide-react';
 
-interface Stream {
-  server: string;
-  link: string;
-  type: string;
-}
+export default function NCloudPage() {
+  const [activeTab, setActiveTab] = useState('All Files');
+  const [storageUsed, setStorageUsed] = useState(65); // 65% used
 
-function NCloudPlayer() {
-  const params = useSearchParams();
-  const key = params.get('key');
-  
-  const [loading, setLoading] = useState(true);
-  const [streams, setStreams] = useState<Stream[]>([]); 
-  const [currentStream, setCurrentStream] = useState<Stream | null>(null);
-  const [metaData, setMetaData] = useState<any>(null);
-  const [apiTitle, setApiTitle] = useState('');
-  
-  const [tab, setTab] = useState<'stream' | 'download'>('stream');
-  const [copied, setCopied] = useState(false);
-  
-  useEffect(() => {
-    if (key) {
-      const init = async () => {
-        try {
-          const json = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
-          const payload = JSON.parse(json);
-          setMetaData(payload);
+  // Mock Data for Files
+  const files = [
+    { id: 1, name: 'Project_Netvlyx_Final.zip', type: 'zip', size: '1.2 GB', date: 'Just now', icon: <Folder className="text-yellow-500" /> },
+    { id: 2, name: 'Avengers_Endgame_4K.mkv', type: 'video', size: '4.5 GB', date: '2 mins ago', icon: <Video className="text-blue-500" /> },
+    { id: 3, name: 'Design_Mockups_v2.fig', type: 'image', size: '12 MB', date: '1 hour ago', icon: <ImageIcon className="text-purple-500" /> },
+    { id: 4, name: 'Resume_Sadab.pdf', type: 'doc', size: '2.4 MB', date: 'Yesterday', icon: <File className="text-red-500" /> },
+    { id: 5, name: 'Audio_Podcast_Ep1.mp3', type: 'audio', size: '45 MB', date: '2 days ago', icon: <Music className="text-green-500" /> },
+  ];
 
-          // Fetch Streams from Backend
-          const res = await fetch(`/api/ncloud?url=${payload.url}`);
-          const result = await res.json();
-          
-          if (result.success && result.streams.length > 0) {
-             setStreams(result.streams);
-             setCurrentStream(result.streams[0]);
-             setApiTitle(result.title);
-             setLoading(false);
-          } else {
-             throw new Error("No playable streams found");
-          }
-        } catch (e) {
-          console.error("Stream Fetch Error", e);
-          setLoading(false);
-        }
-      };
-      init();
-    }
-  }, [key]);
-
-  // --- Main Logic: Click Handling ---
-  const handleServerClick = (stream: Stream) => {
-      // 1. Update active stream for UI highlighting
-      setCurrentStream(stream);
-
-      // 2. Logic based on Tab
-      if (tab === 'download') {
-          // DOWNLOAD MODE: Open Link Directly (Browser Popup)
-          window.open(stream.link, '_blank');
-      } else {
-          // STREAM MODE: Just update player (Automatic via state)
-      }
-  };
-
-  const copyLink = () => {
-    if (currentStream?.link) {
-      navigator.clipboard.writeText(currentStream.link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  // External Players (VLC/MX) for Stream Tab
-  const playInApp = (pkg: string) => {
-    if (!currentStream?.link) return;
-    const intent = `intent:${currentStream.link}#Intent;package=${pkg};type=video/*;scheme=https;end`;
-    window.location.href = intent;
-  };
-
-  if (loading) return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
-      <div className="relative mb-4">
-         <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-500"></div>
-         <CloudLightning className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-blue-400" size={24}/>
-      </div>
-      <p className="text-gray-400 font-mono text-sm">Connecting to Cloud...</p>
-    </div>
-  );
-
-  if (!currentStream) return (
-    <div className="min-h-screen bg-black flex items-center justify-center text-red-500">
-      <div className="text-center">
-        <AlertTriangle className="w-12 h-12 mx-auto mb-2" />
-        <p>No Streams Available</p>
-        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-gray-800 rounded text-white text-sm">Retry</button>
-      </div>
-    </div>
-  );
+  // Storage Categories
+  const storageStats = [
+    { label: 'Images', size: '12 GB', color: 'bg-purple-500', icon: <ImageIcon size={16}/> },
+    { label: 'Videos', size: '45 GB', color: 'bg-blue-500', icon: <Video size={16}/> },
+    { label: 'Docs', size: '5 GB', color: 'bg-red-500', icon: <File size={16}/> },
+    { label: 'Others', size: '18 GB', color: 'bg-yellow-500', icon: <Folder size={16}/> },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans">
-      <div className="max-w-6xl mx-auto p-4 md:p-6">
-        
+    <div className="flex h-screen bg-[#050505] text-white font-sans overflow-hidden selection:bg-blue-500/30">
+      
+      {/* --- SIDEBAR (Glassy) --- */}
+      <aside className="w-64 bg-[#0a0a0a]/50 backdrop-blur-xl border-r border-white/5 flex flex-col hidden md:flex">
+        {/* Logo */}
+        <div className="p-6 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <Cloud className="text-white" size={20} />
+          </div>
+          <h1 className="text-xl font-bold tracking-tight">N-Cloud</h1>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-4 space-y-2 mt-4">
+          {[
+            { name: 'My Drive', icon: HardDrive },
+            { name: 'Recent', icon: Clock },
+            { name: 'Starred', icon: Folder },
+            { name: 'Trash', icon: Trash2 },
+          ].map((item) => (
+            <button 
+              key={item.name}
+              onClick={() => setActiveTab(item.name)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === item.name ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+            >
+              <item.icon size={18} />
+              {item.name}
+            </button>
+          ))}
+        </nav>
+
+        {/* Storage Widget */}
+        <div className="p-6 mt-auto">
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/5 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="flex justify-between items-center mb-2 relative z-10">
+              <span className="text-xs font-bold text-gray-400">Storage</span>
+              <span className="text-xs font-bold text-blue-400">80 GB / 120 GB</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden relative z-10">
+              <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{ width: `${storageUsed}%` }}></div>
+            </div>
+            <button className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-bold transition-colors relative z-10">Upgrade Plan</button>
+          </div>
+        </div>
+      </aside>
+
+      {/* --- MAIN CONTENT --- */}
+      <main className="flex-1 flex flex-col relative">
+        {/* Background Gradients */}
+        <div className="absolute top-0 left-0 w-full h-96 bg-blue-900/10 blur-[100px] pointer-events-none"></div>
+
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <CloudLightning className="text-white" size={20}/>
-            </div>
-            <div>
-                <h1 className="text-xl font-bold">N-Cloud</h1>
-                <p className="text-xs text-blue-400 flex items-center gap-1">
-                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                Connected: <span className="text-white font-bold">{currentStream.server}</span>
-                </p>
-            </div>
-        </div>
+        <header className="h-20 px-8 flex items-center justify-between border-b border-white/5 bg-[#050505]/80 backdrop-blur-md z-20">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            My Drive <ChevronRight size={16} className="text-gray-600" /> <span className="text-base font-normal text-gray-400">Overview</span>
+          </h2>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-           
-           {/* LEFT COLUMN: PLAYER / INFO */}
-           <div className="lg:col-span-2 space-y-4">
-              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl group">
-                 {/* Only render video if in Stream tab, saves data/resources in Download tab */}
-                 {tab === 'stream' ? (
-                     <video 
-                        key={currentStream.link} 
-                        controls 
-                        autoPlay
-                        className="w-full h-full" 
-                        poster={metaData?.poster || ''}
-                        src={currentStream.link}
-                     >
-                     </video>
-                 ) : (
-                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900/50">
-                        <Download size={48} className="text-green-500 mb-4 animate-bounce" />
-                        <h3 className="text-xl font-bold text-white">Download Mode</h3>
-                        <p className="text-gray-400 text-sm mt-2">Click any server button to start download</p>
-                     </div>
-                 )}
+          <div className="flex items-center gap-6">
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-400 transition-colors" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search files..." 
+                className="bg-white/5 border border-white/10 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-500/50 focus:bg-white/10 w-64 transition-all"
+              />
+            </div>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center font-bold text-black shadow-lg shadow-orange-500/20 cursor-pointer">S</div>
+          </div>
+        </header>
+
+        {/* Dashboard Content */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
+          
+          {/* Quick Stats Row */}
+          <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {storageStats.map((stat, idx) => (
+              <div key={idx} className="bg-white/5 border border-white/5 p-4 rounded-2xl hover:bg-white/10 transition-colors cursor-pointer group">
+                <div className={`w-10 h-10 rounded-lg ${stat.color} bg-opacity-20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                   <div className={`${stat.color.replace('bg-', 'text-')} opacity-100`}>{stat.icon}</div>
+                </div>
+                <h4 className="text-gray-400 text-xs font-bold uppercase tracking-wider">{stat.label}</h4>
+                <p className="text-xl font-bold mt-1">{stat.size}</p>
               </div>
-              
+            ))}
+          </section>
+
+          {/* Upload Area & Recent */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Upload Zone */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="border-2 border-dashed border-white/10 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer group bg-white/[0.02]">
+                <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <UploadCloud className="text-blue-500" size={32} />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Drag & Drop files here</h3>
+                <p className="text-gray-500 text-sm mb-6">Supported formats: JPG, PNG, MP4, PDF, ZIP</p>
+                <button className="px-6 py-2.5 bg-white text-black rounded-full font-bold text-sm hover:bg-blue-500 hover:text-white transition-all shadow-lg flex items-center gap-2">
+                  <Plus size={16} /> Upload New
+                </button>
+              </div>
+
+              {/* Recent Files Table */}
               <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">
-                      {metaData?.title || apiTitle || 'Unknown Title'}
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-1 break-all font-mono bg-gray-900/50 p-2 rounded border border-gray-800">
-                      <HardDrive size={12} className="inline mr-2"/>
-                      {apiTitle || 'File details unavailable'}
-                  </p>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Clock size={18} className="text-blue-500"/> Recent Uploads</h3>
+                <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
+                        <th className="p-4 font-medium">Name</th>
+                        <th className="p-4 font-medium">Size</th>
+                        <th className="p-4 font-medium">Modified</th>
+                        <th className="p-4 font-medium text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {files.map((file) => (
+                        <tr key={file.id} className="hover:bg-white/5 transition-colors group">
+                          <td className="p-4 flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-black/50 flex items-center justify-center">{file.icon}</div>
+                            <span className="font-medium text-sm group-hover:text-blue-400 transition-colors">{file.name}</span>
+                          </td>
+                          <td className="p-4 text-sm text-gray-400">{file.size}</td>
+                          <td className="p-4 text-sm text-gray-400">{file.date}</td>
+                          <td className="p-4 text-right">
+                            <button className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+                              <MoreVertical size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-           </div>
+            </div>
 
-           {/* RIGHT COLUMN: ACTIONS & SERVERS */}
-           <div className="lg:col-span-1 space-y-4">
-              
-              {/* TABS */}
-              <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-2">
-                 <div className="flex p-1 bg-black/40 rounded-xl">
-                    <button 
-                        onClick={() => setTab('stream')} 
-                        className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${tab === 'stream' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        <Play size={16} /> Stream
-                    </button>
-                    <button 
-                        onClick={() => setTab('download')} 
-                        className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${tab === 'download' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        <Download size={16} /> Download
-                    </button>
-                 </div>
-              </div>
+            {/* Quick Access / Details Panel */}
+            <div className="bg-gradient-to-b from-blue-900/20 to-transparent border border-white/5 rounded-3xl p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-3 opacity-10">
+                   <Cloud size={120} />
+                </div>
+                <h3 className="text-xl font-bold mb-6 relative z-10">Your Cloud</h3>
+                
+                <div className="space-y-6 relative z-10">
+                   <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/5">
+                      <div className="flex items-center gap-3 mb-2">
+                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                         <span className="text-sm font-bold text-gray-300">System Status</span>
+                      </div>
+                      <p className="text-xs text-green-400 font-medium">All Systems Operational</p>
+                   </div>
 
-              {/* SERVER LIST (BEHAVIOR CHANGES BASED ON TAB) */}
-              <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
-                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                     <Server size={14} /> {tab === 'download' ? 'Select Server to Download' : 'Switch Server'}
-                 </h3>
-                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-700">
-                    {streams.map((stream, idx) => (
-                        <button 
-                            key={idx}
-                            onClick={() => handleServerClick(stream)}
-                            className={`w-full py-3 px-4 rounded-xl flex items-center justify-between transition-all border group ${
-                                currentStream.link === stream.link 
-                                ? (tab === 'download' ? 'bg-green-600/20 border-green-500 text-green-400' : 'bg-blue-600 border-blue-500 text-white shadow-lg') 
-                                : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white'
-                            }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className={`w-2 h-2 rounded-full ${currentStream.link === stream.link ? 'bg-current animate-pulse' : 'bg-gray-500'}`}></div>
-                                <span className="font-semibold text-sm">{stream.server}</span>
+                   <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/5">
+                      <h4 className="text-sm font-bold text-gray-300 mb-4">Storage Distribution</h4>
+                      <div className="flex items-end justify-between h-32 gap-2">
+                         {[40, 75, 30, 55].map((h, i) => (
+                            <div key={i} className="w-full bg-gray-800 rounded-t-lg relative group">
+                               <div className="absolute bottom-0 w-full bg-blue-600 rounded-t-lg transition-all duration-1000 group-hover:bg-blue-400" style={{ height: `${h}%` }}></div>
                             </div>
-                            
-                            {/* Icon changes based on Tab */}
-                            {tab === 'download' ? (
-                                <ExternalLink size={16} className="text-gray-500 group-hover:text-green-400" />
-                            ) : (
-                                idx === 0 && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white font-bold">BEST</span>
-                            )}
-                        </button>
-                    ))}
-                 </div>
-              </div>
+                         ))}
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500 mt-2">
+                         <span>img</span><span>vid</span><span>doc</span><span>oth</span>
+                      </div>
+                   </div>
+                </div>
+            </div>
 
-              {/* EXTRA ACTIONS */}
-              <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
-                 {tab === 'stream' ? (
-                    <div className="space-y-3 animate-fade-in">
-                       <button onClick={() => playInApp('org.videolan.vlc')} className="w-full py-3 bg-[#ff6b00]/10 border border-[#ff6b00]/30 hover:bg-[#ff6b00]/20 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold transition-all">
-                          Play in VLC
-                       </button>
-                       <button onClick={() => playInApp('com.mxtech.videoplayer.ad')} className="w-full py-3 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold transition-all">
-                          Play in MX Player
-                       </button>
-                    </div>
-                 ) : (
-                    <div className="space-y-3 animate-fade-in">
-                       <div className="bg-green-500/10 p-3 rounded-lg border border-green-500/20 text-center">
-                           <p className="text-xs text-green-400">
-                               Clicking a server above will open the download popup directly.
-                           </p>
-                       </div>
-                       <button onClick={copyLink} className="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-xl flex items-center justify-center gap-2 text-gray-300 transition-all border border-gray-700">
-                          {copied ? <CheckCircle size={18} className="text-green-500"/> : <Copy size={18}/>}
-                          {copied ? 'Copied' : 'Copy Direct Link'}
-                       </button>
-                    </div>
-                 )}
-              </div>
-
-           </div>
+          </section>
         </div>
-
-      </div>
+      </main>
     </div>
-  );
-}
-
-export default function NCloud() {
-  return (
-    <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
-      <NCloudPlayer />
-    </Suspense>
   );
 }
