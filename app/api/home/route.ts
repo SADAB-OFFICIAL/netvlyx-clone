@@ -7,17 +7,7 @@ export async function GET(request: Request) {
   const host = request.headers.get('host');
 
   // Agar direct access hai, to aysa error do jo bilkul real lage
-  if (!referer || !referer.includes(host as string)) {
-    return NextResponse.json(
-      { 
-        status: "error",
-        code: 500,
-        message: "Internal Server Error: Failed to establish connection to upstream database cluster. Please try again later."
-      }, 
-      { status: 500 } // 403 ki jagah 500 denge taaki shak na ho
-    );
-  }
-  // --- END ---
+  
 
   const BASE_URL = "https://netvlyx.pages.dev";
 
