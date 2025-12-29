@@ -2,22 +2,22 @@
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  // --- SECURITY LAYER START ---
+  // --- STEALTH SECURITY LAYER ---
   const referer = request.headers.get('referer');
   const host = request.headers.get('host');
 
-  // Agar request direct browser se hai (no referer) ya host match nahi karta
+  // Agar direct access hai, to aysa error do jo bilkul real lage
   if (!referer || !referer.includes(host as string)) {
     return NextResponse.json(
       { 
-        success: false, 
-        message: "API Not Working. Working on it...", 
-        status: 403 
+        status: "error",
+        code: 500,
+        message: "Internal Server Error: Failed to establish connection to upstream database cluster. Please try again later."
       }, 
-      { status: 403 }
+      { status: 500 } // 403 ki jagah 500 denge taaki shak na ho
     );
   }
-  // --- SECURITY LAYER END ---
+  // --- END ---
 
   const BASE_URL = "https://netvlyx.pages.dev";
 
@@ -38,20 +38,14 @@ export async function GET(request: Request) {
       const json = await res.json();
       return json.results || json.movies || []; 
     } catch (e) {
-      console.error(`Failed to fetch ${endpoint}`, e);
       return [];
     }
   };
 
   try {
     const [
-      trendingData,
-      latestData,
-      bollywoodData,
-      hollywoodData,
-      southData,
-      animeData,
-      koreanData
+      trendingData, latestData, bollywoodData, 
+      hollywoodData, southData, animeData, koreanData
     ] = await Promise.all([
       fetchCategory("/api/tmdb-popular-india"),
       fetchCategory("/api/category/latest"),
@@ -84,6 +78,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: finalData });
 
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message });
+    return NextResponse.json({ success: false, error: "Service Unavailable" }, { status: 503 });
   }
 }
