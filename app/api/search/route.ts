@@ -2,34 +2,48 @@
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
+  // --- STEALTH SECURITY LAYER ---
+  const referer = request.headers.get('referer');
+  const host = request.headers.get('host');
+
+  if (!referer || !referer.includes(host as string)) {
+    return NextResponse.json(
+      { 
+        error: "Indexing Error",
+        message: "The search index is currently rebuilding. API access is restricted during this maintenance window.",
+        retry_after: 3600
+      }, 
+      { status: 503 }
+    );
+  }
+  // --- END ---
+
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('s');
 
-  if (!query) return NextResponse.json({ success: false, error: 'Query required' });
+  if (!query) {
+    return NextResponse.json({ success: false, message: "No query provided" });
+  }
 
-  // 1. Target Real NetVlyx API
-  const TARGET_URL = `https://netvlyx.pages.dev/api/movies4u-search?s=${encodeURIComponent(query)}`;
-
-  // 2. Secret Headers (Bypass Protection)
-  const headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "*/*",
-    "Referer": "https://netvlyx.pages.dev/",
-    "Origin": "https://netvlyx.pages.dev"
-  };
+  const BASE_URL = "https://netvlyx.pages.dev";
 
   try {
-    const response = await fetch(TARGET_URL, { headers, next: { revalidate: 0 } });
-    
-    if (!response.ok) throw new Error("Failed to fetch from NetVlyx");
-    
-    const data = await response.json();
-    
-    // NetVlyx returns { results: [...] }
-    return NextResponse.json({ success: true, results: data.results || [] });
+    const res = await fetch(`${BASE_URL}/api/search?s=${encodeURIComponent(query)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://netvlyx.pages.dev/",
+      }
+    });
+
+    if (!res.ok) throw new Error("Upstream Error");
+    const data = await res.json();
+
+    return NextResponse.json({ 
+        success: true, 
+        results: data.results || data.movies || [] 
+    });
 
   } catch (error: any) {
-    console.error("Search Proxy Error:", error.message);
-    return NextResponse.json({ success: false, results: [] });
+    return NextResponse.json({ success: false, error: "Search Timeout" }, { status: 504 });
   }
 }
