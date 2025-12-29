@@ -1,206 +1,275 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
-  Cloud, HardDrive, File, Image as ImageIcon, Music, Video, 
-  MoreVertical, Search, Plus, Folder, Clock, Trash2, 
-  Settings, ChevronRight, UploadCloud, CheckCircle
+  Cloud, Trash2, Copy, Check, FileText, Video, 
+  Image as ImageIcon, Music, Package, Search, 
+  RefreshCw, ShieldAlert, HardDrive, Filter
 } from 'lucide-react';
 
+interface FileItem {
+  name: string;
+  size: string;
+  uploadedAt: string;
+  url: string;
+}
+
 export default function NCloudPage() {
-  const [activeTab, setActiveTab] = useState('All Files');
-  const [storageUsed, setStorageUsed] = useState(65); // 65% used
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  // --- EXISTING LOGIC STATES ---
+  const [authorized, setAuthorized] = useState(false);
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [copying, setCopying] = useState<string | null>(null);
+  
+  // --- NEW UI STATES ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all'); // all, video, image, other
 
-  // Mock Data for Files
-  const files = [
-    { id: 1, name: 'Project_Netvlyx_Final.zip', type: 'zip', size: '1.2 GB', date: 'Just now', icon: <Folder className="text-yellow-500" /> },
-    { id: 2, name: 'Avengers_Endgame_4K.mkv', type: 'video', size: '4.5 GB', date: '2 mins ago', icon: <Video className="text-blue-500" /> },
-    { id: 3, name: 'Design_Mockups_v2.fig', type: 'image', size: '12 MB', date: '1 hour ago', icon: <ImageIcon className="text-purple-500" /> },
-    { id: 4, name: 'Resume_Sadab.pdf', type: 'doc', size: '2.4 MB', date: 'Yesterday', icon: <File className="text-red-500" /> },
-    { id: 5, name: 'Audio_Podcast_Ep1.mp3', type: 'audio', size: '45 MB', date: '2 days ago', icon: <Music className="text-green-500" /> },
-  ];
+  // --- EXISTING AUTH & FETCH LOGIC ---
+  useEffect(() => {
+    const key = searchParams.get('key');
+    const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY;
 
-  // Storage Categories
-  const storageStats = [
-    { label: 'Images', size: '12 GB', color: 'bg-purple-500', icon: <ImageIcon size={16}/> },
-    { label: 'Videos', size: '45 GB', color: 'bg-blue-500', icon: <Video size={16}/> },
-    { label: 'Docs', size: '5 GB', color: 'bg-red-500', icon: <File size={16}/> },
-    { label: 'Others', size: '18 GB', color: 'bg-yellow-500', icon: <Folder size={16}/> },
-  ];
+    if (key === adminKey) {
+      setAuthorized(true);
+      fetchFiles();
+    } else {
+      setLoading(false);
+    }
+  }, [searchParams]);
 
+  const fetchFiles = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/ncloud-files');
+      if (!res.ok) throw new Error('Failed to fetch files');
+      const data = await res.json();
+      setFiles(data.files || []);
+    } catch (err) {
+      setError('Could not load cloud files.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (fileName: string) => {
+    if (!confirm(`Permanently delete "${fileName}"?`)) return;
+
+    try {
+      const res = await fetch('/api/delete-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName }),
+      });
+
+      if (res.ok) {
+        setFiles((prev) => prev.filter((f) => f.name !== fileName));
+      } else {
+        alert('Failed to delete file');
+      }
+    } catch (e) {
+      alert('Error deleting file');
+    }
+  };
+
+  const handleCopy = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopying(url);
+    setTimeout(() => setCopying(null), 2000);
+  };
+
+  // --- NEW HELPER: Get Icon by Extension ---
+  const getFileIcon = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (['mp4', 'mkv', 'webm', 'mov'].includes(ext || '')) return <Video className="text-blue-500" />;
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) return <ImageIcon className="text-purple-500" />;
+    if (['mp3', 'wav', 'aac'].includes(ext || '')) return <Music className="text-green-500" />;
+    if (['zip', 'rar', '7z', 'tar'].includes(ext || '')) return <Package className="text-yellow-500" />;
+    return <FileText className="text-gray-400" />;
+  };
+
+  // --- NEW FEATURE: Filtering ---
+  const filteredFiles = files.filter(file => {
+    const matchesSearch = file.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    
+    let matchesType = true;
+    if (filterType === 'video') matchesType = ['mp4', 'mkv', 'webm'].includes(ext || '');
+    if (filterType === 'image') matchesType = ['jpg', 'png', 'webp'].includes(ext || '');
+    
+    return matchesSearch && matchesType;
+  });
+
+  // --- RENDER: Access Denied ---
+  if (!loading && !authorized) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-center p-6 space-y-4">
+        <ShieldAlert size={64} className="text-red-600 animate-pulse" />
+        <h1 className="text-3xl font-bold text-white">Access Restricted</h1>
+        <p className="text-gray-500 max-w-md">
+          This is a secure cloud storage area. You need an admin key to access these files.
+        </p>
+        <button 
+          onClick={() => router.push('/')}
+          className="mt-4 px-6 py-2 bg-white text-black rounded-full font-bold hover:bg-gray-200 transition"
+        >
+          Go Home
+        </button>
+      </div>
+    );
+  }
+
+  // --- RENDER: Dashboard ---
   return (
-    <div className="flex h-screen bg-[#050505] text-white font-sans overflow-hidden selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-blue-500/30 pb-20">
       
-      {/* --- SIDEBAR (Glassy) --- */}
-      <aside className="w-64 bg-[#0a0a0a]/50 backdrop-blur-xl border-r border-white/5 flex flex-col hidden md:flex">
-        {/* Logo */}
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Cloud className="text-white" size={20} />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight">N-Cloud</h1>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          {[
-            { name: 'My Drive', icon: HardDrive },
-            { name: 'Recent', icon: Clock },
-            { name: 'Starred', icon: Folder },
-            { name: 'Trash', icon: Trash2 },
-          ].map((item) => (
-            <button 
-              key={item.name}
-              onClick={() => setActiveTab(item.name)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === item.name ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
-            >
-              <item.icon size={18} />
-              {item.name}
-            </button>
-          ))}
-        </nav>
-
-        {/* Storage Widget */}
-        <div className="p-6 mt-auto">
-          <div className="bg-white/5 rounded-2xl p-4 border border-white/5 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="flex justify-between items-center mb-2 relative z-10">
-              <span className="text-xs font-bold text-gray-400">Storage</span>
-              <span className="text-xs font-bold text-blue-400">80 GB / 120 GB</span>
-            </div>
-            <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden relative z-10">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{ width: `${storageUsed}%` }}></div>
-            </div>
-            <button className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-bold transition-colors relative z-10">Upgrade Plan</button>
-          </div>
-        </div>
-      </aside>
-
-      {/* --- MAIN CONTENT --- */}
-      <main className="flex-1 flex flex-col relative">
-        {/* Background Gradients */}
-        <div className="absolute top-0 left-0 w-full h-96 bg-blue-900/10 blur-[100px] pointer-events-none"></div>
-
-        {/* Header */}
-        <header className="h-20 px-8 flex items-center justify-between border-b border-white/5 bg-[#050505]/80 backdrop-blur-md z-20">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            My Drive <ChevronRight size={16} className="text-gray-600" /> <span className="text-base font-normal text-gray-400">Overview</span>
-          </h2>
-
-          <div className="flex items-center gap-6">
-            <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-400 transition-colors" size={16} />
-              <input 
-                type="text" 
-                placeholder="Search files..." 
-                className="bg-white/5 border border-white/10 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-500/50 focus:bg-white/10 w-64 transition-all"
-              />
-            </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center font-bold text-black shadow-lg shadow-orange-500/20 cursor-pointer">S</div>
-          </div>
-        </header>
-
-        {/* Dashboard Content */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
+      {/* HEADER */}
+      <header className="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           
-          {/* Quick Stats Row */}
-          <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {storageStats.map((stat, idx) => (
-              <div key={idx} className="bg-white/5 border border-white/5 p-4 rounded-2xl hover:bg-white/10 transition-colors cursor-pointer group">
-                <div className={`w-10 h-10 rounded-lg ${stat.color} bg-opacity-20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-                   <div className={`${stat.color.replace('bg-', 'text-')} opacity-100`}>{stat.icon}</div>
-                </div>
-                <h4 className="text-gray-400 text-xs font-bold uppercase tracking-wider">{stat.label}</h4>
-                <p className="text-xl font-bold mt-1">{stat.size}</p>
-              </div>
-            ))}
-          </section>
-
-          {/* Upload Area & Recent */}
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Upload Zone */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="border-2 border-dashed border-white/10 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer group bg-white/[0.02]">
-                <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <UploadCloud className="text-blue-500" size={32} />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Drag & Drop files here</h3>
-                <p className="text-gray-500 text-sm mb-6">Supported formats: JPG, PNG, MP4, PDF, ZIP</p>
-                <button className="px-6 py-2.5 bg-white text-black rounded-full font-bold text-sm hover:bg-blue-500 hover:text-white transition-all shadow-lg flex items-center gap-2">
-                  <Plus size={16} /> Upload New
-                </button>
-              </div>
-
-              {/* Recent Files Table */}
-              <div>
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Clock size={18} className="text-blue-500"/> Recent Uploads</h3>
-                <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
-                        <th className="p-4 font-medium">Name</th>
-                        <th className="p-4 font-medium">Size</th>
-                        <th className="p-4 font-medium">Modified</th>
-                        <th className="p-4 font-medium text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {files.map((file) => (
-                        <tr key={file.id} className="hover:bg-white/5 transition-colors group">
-                          <td className="p-4 flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-black/50 flex items-center justify-center">{file.icon}</div>
-                            <span className="font-medium text-sm group-hover:text-blue-400 transition-colors">{file.name}</span>
-                          </td>
-                          <td className="p-4 text-sm text-gray-400">{file.size}</td>
-                          <td className="p-4 text-sm text-gray-400">{file.date}</td>
-                          <td className="p-4 text-right">
-                            <button className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
-                              <MoreVertical size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Cloud className="text-white" size={20} />
             </div>
-
-            {/* Quick Access / Details Panel */}
-            <div className="bg-gradient-to-b from-blue-900/20 to-transparent border border-white/5 rounded-3xl p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-3 opacity-10">
-                   <Cloud size={120} />
-                </div>
-                <h3 className="text-xl font-bold mb-6 relative z-10">Your Cloud</h3>
-                
-                <div className="space-y-6 relative z-10">
-                   <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/5">
-                      <div className="flex items-center gap-3 mb-2">
-                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                         <span className="text-sm font-bold text-gray-300">System Status</span>
-                      </div>
-                      <p className="text-xs text-green-400 font-medium">All Systems Operational</p>
-                   </div>
-
-                   <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/5">
-                      <h4 className="text-sm font-bold text-gray-300 mb-4">Storage Distribution</h4>
-                      <div className="flex items-end justify-between h-32 gap-2">
-                         {[40, 75, 30, 55].map((h, i) => (
-                            <div key={i} className="w-full bg-gray-800 rounded-t-lg relative group">
-                               <div className="absolute bottom-0 w-full bg-blue-600 rounded-t-lg transition-all duration-1000 group-hover:bg-blue-400" style={{ height: `${h}%` }}></div>
-                            </div>
-                         ))}
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-2">
-                         <span>img</span><span>vid</span><span>doc</span><span>oth</span>
-                      </div>
-                   </div>
-                </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">N-Cloud Storage</h1>
+              <p className="text-xs text-gray-500 flex items-center gap-2">
+                {files.length} Files <span className="w-1 h-1 bg-gray-600 rounded-full"></span> Secure Admin Mode
+              </p>
             </div>
+          </div>
 
-          </section>
+          {/* SEARCH BAR */}
+          <div className="relative w-full md:w-96 group">
+            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
+            </div>
+            <input 
+              type="text"
+              placeholder="Search files..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-full py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-white/10 transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+             <button 
+               onClick={fetchFiles} 
+               disabled={loading}
+               className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all active:scale-95 disabled:opacity-50"
+               title="Refresh Files"
+             >
+               <RefreshCw size={18} className={loading ? 'animate-spin text-blue-400' : 'text-gray-400'} />
+             </button>
+          </div>
         </div>
+      </header>
+
+      {/* MAIN CONTENT */}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        
+        {/* STATS & FILTERS */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+           <div className="bg-gradient-to-br from-blue-900/20 to-transparent border border-blue-500/20 p-5 rounded-2xl flex items-center gap-4">
+              <div className="p-3 bg-blue-500/20 rounded-lg text-blue-400"><HardDrive size={24} /></div>
+              <div>
+                 <p className="text-xs text-blue-300 font-bold uppercase">Total Files</p>
+                 <h3 className="text-2xl font-bold text-white">{files.length}</h3>
+              </div>
+           </div>
+           
+           <div className="md:col-span-3 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              {['all', 'video', 'image'].map(type => (
+                 <button 
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`px-6 py-3 rounded-xl border text-sm font-bold capitalize transition-all whitespace-nowrap ${
+                       filterType === type 
+                       ? 'bg-white text-black border-white' 
+                       : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:border-white/20'
+                    }`}
+                 >
+                    {type === 'all' ? 'All Files' : type + 's'}
+                 </button>
+              ))}
+           </div>
+        </div>
+
+        {/* LOADING STATE */}
+        {loading && (
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {[...Array(8)].map((_, i) => (
+                 <div key={i} className="h-40 bg-white/5 rounded-2xl animate-pulse border border-white/5"></div>
+              ))}
+           </div>
+        )}
+
+        {/* ERROR STATE */}
+        {error && (
+           <div className="p-8 text-center border border-red-500/20 bg-red-500/5 rounded-2xl">
+              <p className="text-red-400">{error}</p>
+              <button onClick={fetchFiles} className="mt-4 text-sm font-bold underline">Try Again</button>
+           </div>
+        )}
+
+        {/* FILE GRID */}
+        {!loading && !error && (
+           <>
+             {filteredFiles.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                   {filteredFiles.map((file, idx) => (
+                      <div key={idx} className="group relative bg-[#0f0f0f] hover:bg-[#141414] border border-white/5 hover:border-blue-500/30 rounded-2xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50">
+                         
+                         {/* Icon & Details */}
+                         <div className="flex items-start justify-between mb-4">
+                            <div className="p-3 bg-black rounded-xl border border-white/5 group-hover:border-white/10 transition-colors">
+                               {getFileIcon(file.name)}
+                            </div>
+                            <span className="text-[10px] font-mono text-gray-500 bg-white/5 px-2 py-1 rounded">
+                               {file.size || 'N/A'}
+                            </span>
+                         </div>
+                         
+                         <h3 className="font-bold text-sm text-gray-200 truncate mb-1" title={file.name}>{file.name}</h3>
+                         <p className="text-xs text-gray-500 mb-4">{new Date(file.uploadedAt).toLocaleDateString()}</p>
+                         
+                         {/* Actions */}
+                         <div className="grid grid-cols-2 gap-2 mt-auto">
+                            <button 
+                               onClick={() => handleCopy(file.url)}
+                               className="flex items-center justify-center gap-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-bold transition-colors border border-white/5"
+                            >
+                               {copying === file.url ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>}
+                               {copying === file.url ? 'Copied' : 'Copy'}
+                            </button>
+                            <button 
+                               onClick={() => handleDelete(file.name)}
+                               className="flex items-center justify-center gap-2 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-bold transition-colors border border-red-500/10"
+                            >
+                               <Trash2 size={14} /> Delete
+                            </button>
+                         </div>
+
+                      </div>
+                   ))}
+                </div>
+             ) : (
+                <div className="text-center py-20">
+                   <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Filter className="text-gray-500" />
+                   </div>
+                   <h3 className="text-lg font-bold text-gray-300">No files found</h3>
+                   <p className="text-sm text-gray-500">Try adjusting your search or filters.</p>
+                </div>
+             )}
+           </>
+        )}
       </main>
     </div>
   );
