@@ -27,32 +27,53 @@ export async function GET(request: Request) {
         throw new Error("No streams found in API response");
     }
 
-    // 2. FILTERING LOGIC (Only Best Servers)
-    const validStreams = data.streams.filter((stream: any) => {
+    // 2. CLEANING LOGIC (Sirf Kachra Hatao, Achhe Servers Nahi)
+    const cleanStreams = data.streams.filter((stream: any) => {
         const link = stream.link || "";
-        const server = stream.server || "";
-
-        // A. Reject obvious junk
-        if (link.includes("icons8.com")) return false; // Icon links
-        if (link.includes("hubcloud.foo/drive")) return false; // Recursive link
+        
+        // A. Reject obvious junk (Broken Links)
+        if (!link.startsWith("http")) return false; // Invalid URL
+        if (link.includes("hubcloud.foo/drive")) return false; // Recursive link (Loop)
         if (link.endsWith("token=")) return false; // Empty token
-        if (link.length < 50) return false; // Too short to be a real tokenized video link
-
-        // B. Accept Priority Servers (FSL, ZipDisk, etc.)
-        const isPriority = 
-            server.includes("FSL") || 
-            server.includes("ZipDisk") || 
-            server.includes("Apple") || // Kabhi kabhi Apple server bhi aata hai
-            server.includes("PixelDrain");
-
-        return isPriority;
+        if (link.includes("icons8.com")) return false; // Fake image links
+        
+        return true; // Baaki sab aane do (10Gbps, Cloud Server, etc.)
     });
 
-    // 3. Return Filtered Data
+    // 3. SORTING LOGIC (Jo Best Hai Wo Top Par)
+    // Priority: FSL > 10Gbps > Long Signed URLs > Others
+    cleanStreams.sort((a: any, b: any) => {
+        const serverA = (a.server || "").toLowerCase();
+        const serverB = (b.server || "").toLowerCase();
+        const linkA = a.link || "";
+        const linkB = b.link || "";
+
+        // Function to detect High Speed Servers
+        const isHighSpeed = (name: string, url: string) => {
+            return name.includes("fsl") || 
+                   name.includes("10gbps") || 
+                   name.includes("zipdisk") ||
+                   name.includes("apple") ||
+                   url.includes("googleusercontent"); // Google URLs are very fast
+        };
+
+        const aIsBest = isHighSpeed(serverA, linkA);
+        const bIsBest = isHighSpeed(serverB, linkB);
+
+        // Rule 1: High Speed servers pehle aayenge
+        if (aIsBest && !bIsBest) return -1; // A upar
+        if (!aIsBest && bIsBest) return 1;  // B upar
+
+        // Rule 2: Agar dono category same hain, to Lamba Link (Long URL) pehle aayega
+        // (Lamba link usually signed/tokenized hota hai jo fast chalta hai)
+        return linkB.length - linkA.length; 
+    });
+
+    // 4. Return Data
     return NextResponse.json({ 
         success: true, 
         title: data.title,
-        streams: validStreams
+        streams: cleanStreams // Ab isme saare valid servers honge, sorted order me
     });
 
   } catch (error: any) {
