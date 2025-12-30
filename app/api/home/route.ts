@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     const [
       trendingData, latestData, bollywoodData, 
       hollywoodData, southData, animeData, koreanData,
-      moviesDriveRes // <--- Naya Data Source
+      moviesDriveRes // <--- Local Scraper Data
     ] = await Promise.all([
       fetchCategory("/api/tmdb-popular-india"),
       fetchCategory("/api/category/latest"),
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
         .catch(() => ({ success: false, data: { sections: [] } }))
     ]);
 
-    // MoviesDrive ka section extract karna (Safety Check ke saath)
+    // MoviesDrive ka section extract karna
     const moviesDriveSections = (moviesDriveRes?.success && moviesDriveRes?.data?.sections) 
       ? moviesDriveRes.data.sections 
       : [];
@@ -71,16 +71,18 @@ export async function GET(request: Request) {
       })),
       
       sections: [
-        { title: "Latest Uploads", items: latestData },
+        // ✅ SLUG ADDED: 'latest'
+        { title: "Latest Uploads", items: latestData, slug: "latest" },
         
-        // Yahan MoviesDrive ka section add kar diya
-        ...moviesDriveSections, 
+        // ✅ SLUG ADDED: MoviesDrive sections ke liye 'moviesdrive' slug inject kiya
+        ...moviesDriveSections.map((sec: any) => ({ ...sec, slug: "moviesdrive" })), 
 
-        { title: "Bollywood Hits", items: bollywoodData },
-        { title: "South Indian Hindi", items: southData },
-        { title: "Hollywood Blockbusters", items: hollywoodData },
-        { title: "K-Drama World", items: koreanData },
-        { title: "Anime Series", items: animeData }
+        // ✅ SLUGS ADDED FOR ALL CATEGORIES
+        { title: "Bollywood Hits", items: bollywoodData, slug: "bollywood" },
+        { title: "South Indian Hindi", items: southData, slug: "south" },
+        { title: "Hollywood Blockbusters", items: hollywoodData, slug: "hollywood" },
+        { title: "K-Drama World", items: koreanData, slug: "korean" },
+        { title: "Anime Series", items: animeData, slug: "anime" }
       ]
     };
 
