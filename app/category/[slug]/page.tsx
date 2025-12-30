@@ -1,47 +1,58 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation'; // Correct import for App Router
+import { useRouter, useParams } from 'next/navigation'; // ✅ useParams hook import kiya
 import { Play, Star, ChevronLeft, Loader2 } from 'lucide-react';
 import TwinklingStars from '@/components/TwinklingStars';
 
-// Params ko unwrap karne ka sahi tareeka (Next.js 15+ compatible)
-export default function CategoryPage({ params }: { params: { slug: string } }) {
+export default function CategoryPage() {
   const router = useRouter();
-  const slug = params.slug; // Direct access works in most Next versions, or use React.use() in newest
+  
+  // ✅ FIX: useParams hook se slug nikalna (Next.js 15 Safe)
+  const params = useParams();
+  const slug = params?.slug as string; 
 
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  // Title formatting (e.g., 'latest' -> 'Latest Movies')
+  // Title formatting
   const categoryTitle = slug ? (slug.charAt(0).toUpperCase() + slug.slice(1).replace('-', ' ')) : "Movies";
 
   const fetchMovies = async (pageNum: number) => {
+    // Agar slug hi nahi hai to call mat karo
+    if (!slug) return;
+
     try {
+      console.log(`Fetching page ${pageNum} for ${slug}`); // Debugging ke liye log
       const res = await fetch(`/api/category-data?slug=${slug}&page=${pageNum}`);
+      
       if (!res.ok) throw new Error("API Failed");
       
       const data = await res.json();
       
       if (data.results && data.results.length > 0) {
         setItems(prev => [...prev, ...data.results]);
-        // Agar 20 se kam items aaye to samjho aage aur data nahi hai
+        // Agar kam items aayein to samjho aur nahi hain
         if (data.results.length < 10) setHasMore(false); 
       } else {
         setHasMore(false);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Fetch Error:", e);
       setHasMore(false);
     } finally {
+      // ✅ Loading band karna zaroori hai
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // Jab slug mil jaye tabhi fetch karo
     if (slug) {
+        setItems([]); // Purana data saaf karo
+        setLoading(true); // Loading shuru karo
         fetchMovies(1);
     }
   }, [slug]);
@@ -76,6 +87,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
 
         {/* Grid Content */}
         <div className="p-4 md:p-12 pb-20">
+            {/* Movies Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
                 {items.map((item, idx) => (
                     <div 
@@ -101,7 +113,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
             </div>
 
             {/* Pagination Button */}
-            {hasMore && !loading && (
+            {hasMore && !loading && items.length > 0 && (
                 <div className="mt-12 text-center">
                     <button 
                         onClick={handleLoadMore}
@@ -112,16 +124,24 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
                 </div>
             )}
 
+            {/* Loading Spinner */}
             {loading && (
-                <div className="mt-12 flex justify-center">
-                    <Loader2 className="animate-spin text-yellow-500" size={32} />
+                <div className="h-64 w-full flex items-center justify-center">
+                    <Loader2 className="animate-spin text-yellow-500" size={48} />
                 </div>
             )}
             
+            {/* No Data Found */}
             {!loading && items.length === 0 && (
                 <div className="text-center mt-20 text-gray-500 flex flex-col items-center gap-4">
                     <h2 className="text-xl font-bold">No movies found</h2>
-                    <p className="text-sm">Try checking another category.</p>
+                    <p className="text-sm">We couldn't fetch data for this category.</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-6 py-2 bg-yellow-500 text-black rounded font-bold hover:bg-yellow-400"
+                    >
+                        Try Again
+                    </button>
                 </div>
             )}
         </div>
