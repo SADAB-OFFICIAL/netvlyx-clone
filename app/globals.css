@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* globals.css ke end mein add karein */
+
+@keyframes twinkle {
+  0% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+
+.star-twinkle {
+  position: absolute;
+  background-color: white;
+  border-radius: 50%;
+  /* Tailwind ki arbitrary values use kar rahe hain taaki config na chhedna pade */
+  animation: twinkle var(--duration, 3s) infinite ease-in-out var(--delay, 0s);
+}
