@@ -346,7 +346,7 @@ function HomePageContent() {
 
       {/* ✅ Premium Soft Blur Overlay */}
       {/* 'backdrop-blur-[2px]' adds soft blur to stars behind */}
-      <div className="relative z-10 bg-gradient-to-b from-transparent via-black/50 to-[#0a0a0a] backdrop-blur-[2px]">
+      <div className="relative z-10 bg-gradient-to-b from-transparent via-black/50 to-[#0a0a0a]">
           <Navbar />
 
           <div className="pb-20">
