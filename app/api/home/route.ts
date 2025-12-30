@@ -1,13 +1,13 @@
-// app/api/home/route.ts
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  // --- STEALTH SECURITY LAYER ---
+  // --- STEALTH SECURITY LAYER (Optional Check) ---
   const referer = request.headers.get('referer');
   const host = request.headers.get('host');
 
-  // Agar direct access hai, to aysa error do jo bilkul real lage
-  
+  // Local API ko call karne ke liye Base URL nikalna zaroori hai
+  const { protocol, host: requestHost } = new URL(request.url);
+  const localBaseUrl = `${protocol}//${requestHost}`;
 
   const BASE_URL = "https://netvlyx.pages.dev";
 
@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     "Origin": "https://netvlyx.pages.dev"
   };
 
+  // Helper Function for Official Netvlyx API
   const fetchCategory = async (endpoint: string) => {
     try {
       const res = await fetch(`${BASE_URL}${endpoint}`, { 
@@ -33,9 +34,11 @@ export async function GET(request: Request) {
   };
 
   try {
+    // --- PARALLEL FETCHING (Official + MoviesDrive) ---
     const [
       trendingData, latestData, bollywoodData, 
-      hollywoodData, southData, animeData, koreanData
+      hollywoodData, southData, animeData, koreanData,
+      moviesDriveRes // <--- Naya Data Source
     ] = await Promise.all([
       fetchCategory("/api/tmdb-popular-india"),
       fetchCategory("/api/category/latest"),
@@ -43,9 +46,20 @@ export async function GET(request: Request) {
       fetchCategory("/api/category/hollywood"),
       fetchCategory("/api/category/south-hindi-movies"),
       fetchCategory("/api/category/anime"),
-      fetchCategory("/api/category/korean")
+      fetchCategory("/api/category/korean"),
+      
+      // Fetching Local MoviesDrive Scraper
+      fetch(`${localBaseUrl}/api/moviesdrive`, { cache: 'no-store' })
+        .then(res => res.json())
+        .catch(() => ({ success: false, data: { sections: [] } }))
     ]);
 
+    // MoviesDrive ka section extract karna (Safety Check ke saath)
+    const moviesDriveSections = (moviesDriveRes?.success && moviesDriveRes?.data?.sections) 
+      ? moviesDriveRes.data.sections 
+      : [];
+
+    // --- FINAL DATA MERGING ---
     const finalData = {
       hero: trendingData.map((item: any) => ({
         title: item.title || item.name,
@@ -55,8 +69,13 @@ export async function GET(request: Request) {
         link: "",
         tags: ["Trending", "Popular"]
       })),
+      
       sections: [
-        { title: "Latest Uploads", items: latestData },
+        { title: "Latest Uploads (Netvlyx)", items: latestData },
+        
+        // Yahan MoviesDrive ka section add kar diya
+        ...moviesDriveSections, 
+
         { title: "Bollywood Hits", items: bollywoodData },
         { title: "South Indian Hindi", items: southData },
         { title: "Hollywood Blockbusters", items: hollywoodData },
@@ -68,6 +87,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: finalData });
 
   } catch (error: any) {
+    console.error("Home API Error:", error);
     return NextResponse.json({ success: false, error: "Service Unavailable" }, { status: 503 });
   }
 }
