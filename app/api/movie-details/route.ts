@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 1: OFFICIAL NETVLYX API (Same as your working code)
+// 🟢 ENGINE 1: OFFICIAL NETVLYX API (No Changes Here)
 // =====================================================================
 async function fetchOfficialApiData(targetUrl: string) {
     const targetApi = `https://netvlyx.pages.dev/api/m4ulinks-scraper?url=${encodeURIComponent(targetUrl)}`;
@@ -48,7 +48,8 @@ async function fetchOfficialApiData(targetUrl: string) {
         if (!rawText) return "";
         let text = rawText.replace(/-/g, ' ');
         const splitRegex = /[\(\[\.]|Season|S\d+|Ep\d+|\b\d{4}\b/i;
-        let cleanPart = text.split(splitRegex)[0].trim();
+        let cleanPart = text.split(splitRegex)[0];
+        cleanPart = cleanPart.trim();
         return cleanPart.replace(/\b\w/g, (l) => l.toUpperCase());
     };
 
@@ -77,6 +78,8 @@ async function fetchOfficialApiData(targetUrl: string) {
         else if (quality.match(/720p/i)) quality = '720p';
         else if (quality.match(/480p/i)) quality = '480p';
 
+        const sectionIsPack = /pack|zip|batch|complete|collection|volume/i.test(item.quality || "");
+
         return {
             title: item.quality,
             quality: quality,
@@ -85,7 +88,7 @@ async function fetchOfficialApiData(targetUrl: string) {
             links: (item.links || []).map((l: any) => ({
                 label: l.name || 'Download Server',
                 url: l.url,
-                isZip: /pack|zip|batch/i.test(item.quality || "")
+                isZip: sectionIsPack || /zip|pack|batch/i.test(l.name || "")
             }))
         };
     });
@@ -93,7 +96,13 @@ async function fetchOfficialApiData(targetUrl: string) {
     const allSeasons = new Set<number>();
     downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
     
-    // Screenshot fallback
+    if (allSeasons.size === 0) {
+        const titleRange = (data.title || "").match(/(?:Season|S)\s*(\d+)\s*[-–—]\s*(\d+)/i);
+        if (titleRange) {
+            for (let i = parseInt(titleRange[1]); i <= parseInt(titleRange[2]); i++) allSeasons.add(i);
+        }
+    }
+
     let screenshots = Array.isArray(data.screenshots || data.images) ? (data.screenshots || data.images) : [];
 
     return NextResponse.json({
@@ -109,114 +118,104 @@ async function fetchOfficialApiData(targetUrl: string) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 2: MOVIESDRIVE SMART SCRAPER (Updated & Fixed)
+// 🟢 ENGINE 2: MOVIESDRIVE FIXED SCRAPER (Bug Fixed Here)
 // =====================================================================
 async function scrapeMoviesDrive(targetUrl: string) {
     const res = await fetch(targetUrl, {
-        headers: { 
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-        }
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
     });
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // 1. Selector for Main Content (Avoids sidebar/footer)
-    const content = $('.page-body, .entry-content').first();
-
-    // 2. Title & Year
-    const rawTitle = $('h1.page-title, h1.entry-title').text().trim();
+    // 1. Basic Info
+    const rawTitle = $('h1.page-title .material-text').text().trim();
     let title = rawTitle.replace(/^Download\s+/i, '').split(/[\(\[]/)[0].trim();
     
     const yearMatch = rawTitle.match(/\((\d{4})\)/);
     const year = yearMatch ? yearMatch[1] : null;
 
-    // 3. Poster
-    const poster = content.find('img').first().attr('src') || '';
+    const poster = $('.page-body img.aligncenter').attr('src') || '';
+    
+    let plot = "Overview unavailable.";
+    $('h3').each((i, el) => {
+        if ($(el).text().includes('Storyline')) {
+            const nextDiv = $(el).nextAll('div, p').first().text().trim();
+            if (nextDiv) plot = nextDiv;
+        }
+    });
 
-    // 4. Rating (Regex se dhundna)
-    let rating = "N/A";
-    const bodyText = content.text();
-    const ratingMatch = bodyText.match(/IMDb Rating:?\s*(\d+(\.\d+)?)/i) || bodyText.match(/Rating:?\s*(\d+(\.\d+)?)\/10/i);
-    if (ratingMatch) rating = ratingMatch[1];
-
-    // 5. Screenshots (Fix: Collect valid images only)
     const screenshots: string[] = [];
-    content.find('img').each((i, el) => {
+    $('center img, .page-body img').each((i, el) => {
         const src = $(el).attr('src');
-        // Filter out poster, icons, and small images
-        if (src && src !== poster && !src.includes('icon') && !src.includes('button')) {
+        if (src && !src.includes('t.jpg') && src !== poster) {
             screenshots.push(src);
         }
     });
 
-    // 6. SERIES vs MOVIE LOGIC (Strict Mode)
-    // Agar Title mein "Season" ya "Series" hai, tabhi Season detect karo.
-    const isSeriesTitle = /Season|Series|S\d+/i.test(rawTitle);
-
-    // 7. Links & Context Extraction
+    // -----------------------------------------------------------------
+    // 🛑 FIX: LINKS SELECTOR SCOPED TO '.page-body' (Sidebar Ignored)
+    // -----------------------------------------------------------------
     const downloadSections: any[] = [];
     const processedUrls = new Set();
     const allSeasons = new Set<number>();
 
-    // Headers aur Links dono ko sequence mein padho
-    let currentSeason: number | null = null;
-    let currentQuality = "HD";
+    // PEHLE: $('a').each(...) <- Ye sidebar ke links bhi utha raha tha
+    // AB: $('.page-body a').each(...) <- Ye sirf main content padhega
+    $('.page-body a').each((i, el) => {
+        const link = $(el).attr('href');
+        let text = $(el).text().trim(); 
+        
+        // Context Check: Title usually heading ya p mein hota hai link ke paas
+        // MoviesDrive structure: <h5>Title details</h5> <h5><a href>Link</a></h5>
+        let contextText = text;
+        const parentHeader = $(el).closest('h5, p, h3');
+        const prevHeader = parentHeader.prev('h5, p, h3, h4');
+        if (prevHeader.length) contextText += " " + prevHeader.text();
 
-    content.find('h3, h4, h5, p, div').each((i, el) => {
-        const text = $(el).text().trim();
-        const tag = $(el).prop('tagName').toLowerCase();
-
-        // A. Header Handling (Set Context)
-        if (['h3', 'h4', 'h5'].includes(tag)) {
-            // Quality Detection
-            if (text.includes('480p')) currentQuality = '480p';
-            else if (text.includes('720p')) currentQuality = '720p';
-            else if (text.includes('1080p')) currentQuality = '1080p';
-            else if (text.includes('4k') || text.includes('2160p')) currentQuality = '4K';
-
-            // Season Detection (Sirf tab jab Series ho)
-            if (isSeriesTitle) {
-                const sMatch = text.match(/(?:Season|S)\s*0?(\d+)/i);
-                if (sMatch) currentSeason = parseInt(sMatch[1]);
-            } else {
-                currentSeason = null; // Movie hai to season reset karo
-            }
-        }
-
-        // B. Link Handling
-        const linkEl = $(el).find('a').first();
-        const href = linkEl.attr('href');
-        const linkText = linkEl.text().trim() || text;
-
-        if (href && (href.includes('mdrive') || href.includes('drive') || href.includes('archives')) && !processedUrls.has(href)) {
+        // Safe Check: Link valid hona chahiye
+        if (link && (link.includes('mdrive') || link.includes('drive') || link.includes('archives')) && !processedUrls.has(link)) {
             
-            // Backup context check from Link Text itself
-            let finalQuality = currentQuality;
-            if (linkText.includes('480p')) finalQuality = '480p';
-            else if (linkText.includes('720p')) finalQuality = '720p';
-            else if (linkText.includes('1080p')) finalQuality = '1080p';
-            else if (linkText.includes('4k')) finalQuality = '4K';
+            // Quality Detection
+            let quality = "HD";
+            if (contextText.match(/4k|2160p/i)) quality = '4K';
+            else if (contextText.match(/1080p/i)) quality = '1080p';
+            else if (contextText.match(/720p/i)) quality = '720p';
+            else if (contextText.match(/480p/i)) quality = '480p';
 
-            let finalSeason = currentSeason;
-            if (isSeriesTitle && !finalSeason) {
-                const linkSMatch = linkText.match(/(?:Season|S)\s*0?(\d+)/i);
-                if (linkSMatch) finalSeason = parseInt(linkSMatch[1]);
+            // Size Detection
+            const sizeMatch = contextText.match(/\[(\d+(\.\d+)?\s?(MB|GB))\]/i);
+            const size = sizeMatch ? sizeMatch[1] : "";
+
+            // Season Detection
+            let season = null;
+            // 1. Pehle context check karo (Main Body wala text)
+            let sMatch = (contextText).match(/(?:Season|S)\s*0?(\d+)/i);
+            
+            // 2. Agar wahan na mile, to Main Page Title se lo (MoviesDrive aksar S5 ka page alag banata hai)
+            if (!sMatch) {
+                sMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
             }
 
-            if (finalSeason) allSeasons.add(finalSeason);
+            if (sMatch) {
+                season = parseInt(sMatch[1]);
+                allSeasons.add(season);
+            }
 
-            processedUrls.add(href);
-            downloadSections.push({
-                title: isSeriesTitle && finalSeason ? `Season ${finalSeason} - ${finalQuality}` : `Download ${finalQuality}`,
-                quality: finalQuality,
-                size: linkText.match(/\[(\d+(\.\d+)?\s?(MB|GB))\]/i)?.[1] || "N/A",
-                season: finalSeason,
-                links: [{
-                    label: "Download Link",
-                    url: href,
-                    isZip: linkText.toLowerCase().includes('zip') || linkText.toLowerCase().includes('pack')
-                }]
-            });
+            // Add to List
+            if (!processedUrls.has(link)) {
+                processedUrls.add(link);
+                downloadSections.push({
+                    title: `Download ${quality}`,
+                    quality: quality,
+                    size: size,
+                    season: season,
+                    links: [{
+                        label: text || "Download Link",
+                        url: link,
+                        isZip: contextText.toLowerCase().includes('zip') || contextText.toLowerCase().includes('pack')
+                    }]
+                });
+            }
         }
     });
 
@@ -224,8 +223,7 @@ async function scrapeMoviesDrive(targetUrl: string) {
         title: title,
         year: year,
         poster: poster,
-        plot: "Overview unavailable.", // Plot usually requires more complex scraping, title serves well for now
-        rating: rating, // Added Rating
+        plot: plot,
         imdbId: null,
         seasons: Array.from(allSeasons).sort((a, b) => a - b),
         screenshots: screenshots.slice(0, 8),
