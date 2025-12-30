@@ -149,6 +149,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
   
     return (
       <div className="relative h-[85vh] md:h-[95vh] w-full overflow-hidden group">
+         {/* BACKGROUND */}
          <div className="absolute inset-0">
             <div className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out opacity-0"
                  style={{ backgroundImage: `url(${data[(current - 1 + data.length) % data.length]?.poster})` }}>
@@ -160,6 +161,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
             <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent"></div>
          </div>
   
+         {/* CONTENT */}
          <div className="absolute bottom-0 left-0 w-full max-w-4xl flex flex-col gap-4 md:gap-6 z-10 px-6 md:px-16 pb-24 md:pb-48">
              <div className="flex items-center gap-3 animate-fade-in-up">
                  <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 md:px-3 md:py-1 text-[10px] md:text-xs font-bold rounded-md border border-yellow-500/30 flex items-center gap-1">
@@ -210,8 +212,8 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     );
 };
 
-// --- MOVIE ROW SECTION ---
-const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
+// --- MOVIE ROW SECTION (UPDATED WITH VIEW ALL) ---
+const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
   
@@ -231,14 +233,33 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
             router.push(`/search?q=${encodeURIComponent(item.title)}`);
         }
     };
+
+    const handleViewAll = () => {
+        if (slug) {
+            router.push(`/category/${slug}`);
+        }
+    };
   
     if (!items || items.length === 0) return null;
   
     return (
       <div className="mb-8 md:mb-12 relative group/section px-4 md:px-12">
-        <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4 md:mb-6 flex items-center gap-2 group-hover/section:text-yellow-400 transition-colors">
-            {title} <ChevronRight size={20} className="opacity-0 group-hover/section:opacity-100 transition-opacity -translate-x-2 group-hover/section:translate-x-0" />
-        </h2>
+        {/* Title + View All */}
+        <div className="flex justify-between items-end mb-4 md:mb-6 px-1">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-100 flex items-center gap-2 group-hover/section:text-yellow-400 transition-colors">
+                {title} 
+                <ChevronRight size={20} className="opacity-0 group-hover/section:opacity-100 transition-opacity -translate-x-2 group-hover/section:translate-x-0" />
+            </h2>
+            
+            {slug && (
+                <button 
+                    onClick={handleViewAll}
+                    className="text-xs md:text-sm font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-white/50 bg-transparent px-4 py-1 rounded-full transition-all hover:bg-white/10"
+                >
+                    View All
+                </button>
+            )}
+        </div>
   
         <div className="relative group">
             <ChevronRight 
@@ -253,9 +274,7 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
               {items.map((item, idx) => (
                 <div 
                   key={idx} 
-                  // ✅ UPDATED CARD SIZE:
-                  // Mobile: min-w-[130px] h-[200px] (Shows 2.5 cards properly)
-                  // Desktop: min-w-[180px] h-[270px] (Shows more cards)
+                  // ✅ UPDATED CARD SIZE: Mobile (2.5 cards), Desktop (More)
                   className="relative min-w-[130px] md:min-w-[180px] h-[200px] md:h-[270px] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10 group/card shadow-lg hover:shadow-yellow-500/20 bg-gray-900"
                   onClick={() => handleItemClick(item)}
                 >
@@ -339,8 +358,10 @@ function HomePageContent() {
   return (
     <div className="min-h-screen relative bg-transparent text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       
+      {/* 🌟 Twinkling Stars Background */}
       <TwinklingStars />
 
+      {/* ✅ Premium Background (Transparent Overlay) */}
       <div className="relative z-10 bg-gradient-to-b from-transparent via-black/50 to-[#0a0a0a]">
           <Navbar />
 
@@ -349,7 +370,8 @@ function HomePageContent() {
 
             <div className="-mt-16 md:-mt-24 relative z-20 space-y-6 md:space-y-8">
                 {data?.sections?.map((sec: any, idx: number) => (
-                    <MovieSection key={idx} title={sec.title} items={sec.items} />
+                    // ✅ Slug Prop Pass Kiya
+                    <MovieSection key={idx} title={sec.title} items={sec.items} slug={sec.slug} />
                 ))}
             </div>
           </div>
