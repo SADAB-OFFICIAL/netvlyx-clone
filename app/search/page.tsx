@@ -3,32 +3,30 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { 
-  Play, Info, Search, MonitorPlay, 
-  ChevronLeft, Star, Loader2, X 
+  Play, Search, MonitorPlay, ChevronLeft, Star, Loader2, X, Zap, Film 
 } from 'lucide-react';
 import TwinklingStars from '@/components/TwinklingStars';
 
 function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const query = searchParams.get('q') || ''; // URL se 'q' (e.g. Jawan) nikalo
+  const query = searchParams.get('q') || '';
 
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(query);
 
-  // --- SEARCH API CALL ---
-  // Yeh aapke banaye hue API route ko call karega
+  // --- API CALL ---
   useEffect(() => {
     const fetchResults = async () => {
       if (!query) {
           setLoading(false);
+          setResults([]);
           return;
       }
       
       setLoading(true);
       try {
-        // Aapka API Route yahan call ho raha hai 👇
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
         
@@ -63,83 +61,134 @@ function SearchPageContent() {
   };
 
   return (
-    <div className="min-h-screen relative bg-black text-white font-sans">
-      <TwinklingStars />
+    <div className="min-h-screen relative bg-[#0a0a0a] text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       
-      <div className="relative z-10 bg-gradient-to-b from-transparent via-black/50 to-[#0a0a0a]">
-        
-        {/* HEADER / NAVBAR */}
-        <div className="sticky top-0 z-50 bg-black/90 backdrop-blur-md border-b border-gray-800 px-4 md:px-12 py-4 flex items-center justify-between gap-4">
-            
-            {/* Back Button & Logo */}
-            <div className="flex items-center gap-4">
-                <button onClick={() => router.push('/')} className="p-2 bg-gray-800 rounded-full hover:bg-white hover:text-black transition-colors">
-                    <ChevronLeft size={20} />
-                </button>
-                <div className="hidden md:flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
-                    <MonitorPlay className="text-yellow-500" size={24} />
-                    <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">
-                        NETVLYX
-                    </span>
-                </div>
-            </div>
+      {/* 1. Background Effects */}
+      <TwinklingStars />
+      {/* Ambient Glows */}
+      <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-900/10 rounded-full blur-[120px]"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-yellow-900/10 rounded-full blur-[120px]"></div>
+      </div>
 
-            {/* Search Input Area */}
-            <form onSubmit={handleNewSearch} className="flex-1 max-w-xl relative">
-                <input 
-                  type="text" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search for movies..." 
-                  className="w-full bg-gray-900 border border-gray-700 text-white rounded-full px-5 py-2.5 pl-10 focus:outline-none focus:border-yellow-500 transition-all shadow-lg"
-                />
-                <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-                {searchTerm && (
-                    <X 
-                        size={16} 
-                        className="absolute right-4 top-3.5 text-gray-400 cursor-pointer hover:text-white"
-                        onClick={() => { setSearchTerm(''); router.push('/search'); }}
-                    />
-                )}
-            </form>
+      <div className="relative z-10">
+        
+        {/* --- PREMIUM HEADER --- */}
+        <div className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 shadow-2xl transition-all duration-300">
+            <div className="px-4 md:px-12 py-4 flex flex-col md:flex-row items-center justify-between gap-4 max-w-[1920px] mx-auto">
+                
+                {/* Logo & Back */}
+                <div className="flex items-center justify-between w-full md:w-auto gap-6">
+                    <button onClick={() => router.push('/')} className="group flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                        <div className="p-2 bg-white/5 rounded-full group-hover:bg-yellow-500/20 border border-transparent group-hover:border-yellow-500/30 transition-all">
+                            <ChevronLeft size={20} className="group-hover:-translate-x-0.5 transition-transform" />
+                        </div>
+                        <span className="hidden md:block font-medium text-sm tracking-wide">Back</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
+                        <MonitorPlay className="text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]" size={28} />
+                        <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-200 to-yellow-600 tracking-tight drop-shadow-sm">
+                            NETVLYX
+                        </span>
+                    </div>
+                    {/* Mobile Spacer */}
+                    <div className="w-10 md:hidden"></div>
+                </div>
+
+                {/* Liquid Glass Search Bar */}
+                <form onSubmit={handleNewSearch} className="relative w-full max-w-2xl group">
+                    {/* Glow Effect behind input */}
+                    <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-yellow-600 to-purple-600 opacity-0 group-focus-within:opacity-30 transition duration-500 blur-md"></div>
+                    
+                    <div className="relative flex items-center bg-black/50 backdrop-blur-2xl border border-white/10 rounded-full px-5 py-3 shadow-inner group-focus-within:border-yellow-500/50 group-focus-within:bg-black/80 transition-all">
+                        <Search className="text-gray-400 group-focus-within:text-yellow-500 transition-colors" size={20} />
+                        <input 
+                          type="text" 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Search movies, series, anime..." 
+                          className="w-full bg-transparent border-none outline-none text-white ml-3 placeholder-gray-500 font-medium text-sm md:text-base"
+                          autoFocus
+                        />
+                        {searchTerm && (
+                            <button type="button" onClick={() => { setSearchTerm(''); router.push('/search'); }}>
+                                <X size={18} className="text-gray-500 hover:text-white transition-colors" />
+                            </button>
+                        )}
+                    </div>
+                </form>
+            </div>
         </div>
 
-        {/* CONTENT AREA */}
-        <div className="p-4 md:p-12 pb-20 min-h-[80vh]">
+        {/* --- CONTENT AREA --- */}
+        <div className="p-4 md:p-12 min-h-[85vh] max-w-[1920px] mx-auto">
             
-            {/* Heading */}
-            <h1 className="text-2xl font-bold mb-8 flex items-center gap-2">
-                {loading ? 'Searching...' : `Results for "${query}"`}
-                {!loading && <span className="text-sm font-normal text-gray-500 bg-gray-900 px-2 py-1 rounded-md">{results.length} Found</span>}
-            </h1>
+            {/* Results Info */}
+            <div className="flex items-end gap-4 mb-8 mt-2 px-1">
+                <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center gap-3">
+                    {loading ? <span className="animate-pulse">Searching...</span> : (results.length > 0 ? 'Results' : 'Search')}
+                </h1>
+                {!loading && query && (
+                    <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full text-yellow-500 text-xs font-mono mb-1.5">
+                        <Zap size={12} fill="currentColor" />
+                        <span>{results.length} Found for &quot;{query}&quot;</span>
+                    </div>
+                )}
+            </div>
 
-            {/* Grid */}
+            {/* RESULTS GRID */}
             {!loading && results.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     {results.map((item, idx) => (
                         <div 
                             key={idx} 
-                            className="relative group aspect-[2/3] bg-gray-900 rounded-lg overflow-hidden cursor-pointer hover:scale-105 hover:shadow-yellow-500/20 hover:z-10 transition-all duration-300"
+                            className="group relative bg-[#121212] rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-yellow-500/50 transition-all duration-300 hover:shadow-[0_0_30px_-5px_rgba(234,179,8,0.15)] hover:-translate-y-2"
                             onClick={() => handleItemClick(item)}
                         >
-                            <img 
-                                src={item.image || item.poster} 
-                                alt={item.title} 
-                                className="w-full h-full object-cover opacity-90 group-hover:opacity-100"
-                                loading="lazy"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
-                                <h3 className="text-white font-bold text-xs md:text-sm leading-tight mb-1 line-clamp-2">{item.title}</h3>
-                                <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-300">
-                                    {item.quality && (
-                                        <span className="bg-gray-700 px-1.5 rounded text-white">{item.quality}</span>
+                            {/* Poster Image */}
+                            <div className="aspect-[2/3] relative overflow-hidden bg-gray-900">
+                                <img 
+                                    src={item.image || item.poster} 
+                                    alt={item.title} 
+                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:brightness-75"
+                                    loading="lazy"
+                                />
+                                
+                                {/* Badges */}
+                                <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                                    <span className="bg-black/60 backdrop-blur-md border border-white/10 px-2 py-0.5 rounded text-[10px] font-bold text-white shadow-lg uppercase tracking-wider">
+                                        {item.quality || 'HD'}
+                                    </span>
+                                    {item.type && (
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-black shadow-lg uppercase tracking-wider ${item.type === 'Series' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                                            {item.type}
+                                        </span>
                                     )}
-                                    <span className="flex items-center gap-1"><Star size={10} className="text-yellow-500" /> 8.5</span>
                                 </div>
-                                <div className="flex gap-2 mt-3">
-                                     <button className="bg-white text-black p-2 rounded-full hover:bg-yellow-400 transition-colors">
-                                        <Play size={12} fill="currentColor" />
-                                     </button>
+
+                                {/* Hover Play Button */}
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <div className="w-14 h-14 bg-yellow-500/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-2xl scale-0 group-hover:scale-100 transition-transform duration-300 delay-75">
+                                        <Play fill="black" className="text-black ml-1" size={24} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Info Area */}
+                            <div className="p-4 relative z-10 bg-[#121212]">
+                                <h3 className="text-gray-100 font-bold text-sm md:text-base leading-tight line-clamp-1 group-hover:text-yellow-400 transition-colors">
+                                    {item.title}
+                                </h3>
+                                <div className="flex items-center justify-between mt-3 text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
+                                    <span className="flex items-center gap-1.5">
+                                        <Star size={12} className="text-yellow-500 fill-yellow-500" /> 
+                                        <span className="font-semibold text-gray-200">8.5</span>
+                                    </span>
+                                    <span className="flex items-center gap-1 opacity-70">
+                                        <Film size={10} /> 
+                                        {item.year || '2024'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -147,28 +196,43 @@ function SearchPageContent() {
                 </div>
             )}
 
-            {/* Loading State */}
+            {/* LOADING STATE */}
             {loading && (
-                <div className="flex flex-col items-center justify-center h-64 text-yellow-500">
-                    <Loader2 size={48} className="animate-spin mb-4" />
-                    <p className="text-gray-400 text-sm animate-pulse">Searching Universe...</p>
+                <div className="flex flex-col items-center justify-center h-[50vh] text-yellow-500 space-y-4">
+                    <div className="relative">
+                        <div className="absolute inset-0 bg-yellow-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
+                        <Loader2 size={56} className="animate-spin relative z-10" />
+                    </div>
+                    <p className="text-gray-400 text-sm font-medium tracking-widest animate-pulse uppercase">Scanning Universe...</p>
                 </div>
             )}
 
-            {/* Empty State */}
+            {/* EMPTY STATE */}
             {!loading && results.length === 0 && query && (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-                    <Search size={64} className="mb-4 opacity-20" />
-                    <h2 className="text-xl font-bold">No results found</h2>
-                    <p className="text-sm mt-2">Try searching for a different keyword.</p>
+                <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 space-y-6">
+                    <div className="bg-white/5 p-8 rounded-full border border-white/10 shadow-2xl">
+                        <Search size={64} className="opacity-20" />
+                    </div>
+                    <div className="text-center space-y-2">
+                        <h2 className="text-2xl font-bold text-white">No results found</h2>
+                        <p className="text-gray-400 text-sm max-w-md mx-auto">
+                            We couldn't find anything matching <span className="text-yellow-500">"{query}"</span>. Try searching for a different keyword or check the spelling.
+                        </p>
+                    </div>
+                    <button 
+                        onClick={() => {setSearchTerm(''); router.push('/search');}}
+                        className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-all text-sm border border-white/10"
+                    >
+                        Clear Search
+                    </button>
                 </div>
             )}
             
-            {/* Initial State */}
+            {/* INITIAL STATE (No Query) */}
             {!loading && !query && (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-600">
-                    <Search size={64} className="mb-4 opacity-20" />
-                    <p>Type something to start searching...</p>
+                <div className="flex flex-col items-center justify-center h-[50vh] text-gray-600 space-y-4">
+                    <MonitorPlay size={80} className="opacity-10 text-white" />
+                    <p className="text-gray-500 font-medium">Type something to start your journey...</p>
                 </div>
             )}
 
