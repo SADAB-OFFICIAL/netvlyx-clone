@@ -7,19 +7,18 @@ import {
   ChevronRight, Star, X, Globe, Mail, Instagram, Menu
 } from 'lucide-react';
 
-// ✅ Import Stars Component
 import TwinklingStars from '@/components/TwinklingStars';
 
 // --- SKELETON COMPONENTS ---
 const HeroSkeleton = () => (
   <div className="w-full h-[85vh] bg-gray-900/50 animate-pulse relative">
-      <div className="absolute bottom-0 left-0 p-6 md:p-12 w-full max-w-3xl space-y-4">
+      <div className="absolute bottom-0 left-0 p-6 md:p-12 w-full max-w-3xl space-y-4 pb-24 md:pb-48">
           <div className="h-10 md:h-12 w-3/4 bg-gray-800 rounded-lg"></div>
           <div className="h-4 w-full bg-gray-800 rounded"></div>
           <div className="h-4 w-2/3 bg-gray-800 rounded"></div>
           <div className="flex gap-4 pt-4">
-              <div className="h-10 w-28 md:w-32 bg-gray-800 rounded-lg"></div>
-              <div className="h-10 w-28 md:w-32 bg-gray-800 rounded-lg"></div>
+              <div className="h-12 w-32 bg-gray-800 rounded-lg"></div>
+              <div className="h-12 w-32 bg-gray-800 rounded-lg"></div>
           </div>
       </div>
   </div>
@@ -72,7 +71,6 @@ const Navbar = () => {
     }`}>
       <div className="px-4 md:px-12 flex items-center justify-between">
         <div className="flex items-center gap-4 md:gap-12">
-           {/* LOGO: Yellow as requested */}
            <div className="flex items-center gap-2 cursor-pointer group" onClick={() => router.push('/')}>
               <MonitorPlay className="text-yellow-500 group-hover:scale-110 transition-transform" size={28} />
               <span className="text-xl md:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 drop-shadow-sm">
@@ -80,7 +78,6 @@ const Navbar = () => {
               </span>
            </div>
 
-           {/* DESKTOP LINKS */}
            <div className="hidden md:flex gap-8 text-sm font-medium text-gray-300">
               {['Home', 'Series', 'Movies', 'New & Popular', 'My List'].map((item) => (
                 <span key={item} className="hover:text-yellow-400 transition-colors cursor-pointer hover:drop-shadow-[0_0_8px_rgba(253,224,71,0.3)]">
@@ -90,7 +87,6 @@ const Navbar = () => {
            </div>
         </div>
 
-        {/* RIGHT ACTIONS */}
         <div className="flex items-center gap-4 md:gap-6">
            {searchOpen ? (
              <form onSubmit={handleSearch} className="relative flex items-center">
@@ -115,7 +111,6 @@ const Navbar = () => {
                 onClick={() => setSearchOpen(true)}
              />
            )}
-           {/* Mobile Menu Icon (Visual only for now) */}
            <Menu className="w-6 h-6 text-gray-300 md:hidden cursor-pointer" />
            <div className="hidden md:block w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-600 cursor-pointer hover:ring-2 hover:ring-white transition-all"></div>
         </div>
@@ -124,7 +119,7 @@ const Navbar = () => {
   );
 };
 
-// --- HERO SLIDER COMPONENT ---
+// --- HERO SLIDER COMPONENT (FIXED) ---
 const HeroSlider = ({ data }: { data: any[] }) => {
     const [current, setCurrent] = useState(0);
     const router = useRouter();
@@ -149,8 +144,8 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     };
   
     return (
-      <div className="relative h-[80vh] md:h-[90vh] w-full overflow-hidden group">
-         {/* BACKGROUND IMAGE */}
+      <div className="relative h-[85vh] md:h-[95vh] w-full overflow-hidden group">
+         {/* BACKGROUND */}
          <div className="absolute inset-0">
             <div className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out opacity-0"
                  style={{ backgroundImage: `url(${data[(current - 1 + data.length) % data.length]?.poster})` }}>
@@ -158,12 +153,14 @@ const HeroSlider = ({ data }: { data: any[] }) => {
             <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out scale-105 group-hover:scale-110"
                  style={{ backgroundImage: `url(${movie.poster})` }}>
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent"></div>
+            {/* Dark Gradient Overlay for Readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/40 to-transparent"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent"></div>
          </div>
   
-         {/* CONTENT */}
-         <div className="absolute bottom-0 left-0 p-6 md:p-16 w-full max-w-4xl flex flex-col gap-4 md:gap-6 z-10">
+         {/* CONTENT (FIXED: Added padding-bottom to lift content up) */}
+         <div className="absolute bottom-0 left-0 w-full max-w-4xl flex flex-col gap-4 md:gap-6 z-10 px-6 md:px-16 pb-24 md:pb-48">
+             
              {/* Tags/Rating */}
              <div className="flex items-center gap-3 animate-fade-in-up">
                  <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 md:px-3 md:py-1 text-[10px] md:text-xs font-bold rounded-md border border-yellow-500/30 flex items-center gap-1">
@@ -178,21 +175,21 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                  </div>
              </div>
   
-             {/* Title - Responsive Text Size */}
+             {/* Title */}
              <h1 className="text-4xl md:text-7xl font-black text-white leading-tight drop-shadow-2xl animate-slide-in">
                 {movie.title}
              </h1>
   
-             {/* Description - Hidden on very small screens if needed, or clamped */}
-             <p className="text-gray-300 text-sm md:text-lg line-clamp-3 md:line-clamp-3 max-w-xl drop-shadow-md animate-fade-in delay-100">
+             {/* Description (FIXED: Line clamp for clean look) */}
+             <p className="text-gray-300 text-sm md:text-lg line-clamp-2 md:line-clamp-3 max-w-xl drop-shadow-md animate-fade-in delay-100">
                 {movie.desc}
              </p>
   
-             {/* Buttons */}
-             <div className="flex gap-3 md:gap-4 pt-2 md:pt-4 animate-fade-in delay-200">
+             {/* Buttons (FIXED: Spacing and Clickability) */}
+             <div className="flex gap-3 md:gap-4 pt-2 md:pt-4 animate-fade-in delay-200 pointer-events-auto">
                 <button 
                   onClick={handlePlayClick}
-                  className="bg-white text-black px-6 md:px-8 py-3 rounded-lg font-bold flex items-center gap-2 md:gap-3 hover:bg-yellow-400 transition-all hover:scale-105 active:scale-95 text-sm md:text-base"
+                  className="bg-white text-black px-6 md:px-8 py-3 rounded-lg font-bold flex items-center gap-2 md:gap-3 hover:bg-yellow-400 transition-all hover:scale-105 active:scale-95 text-sm md:text-base shadow-lg shadow-white/10"
                 >
                     <Play fill="black" size={18} /> 
                     {movie.link ? "Play Now" : "Search Now"}
@@ -203,7 +200,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
              </div>
          </div>
   
-         {/* Carousel Indicators */}
+         {/* Indicators */}
          <div className="absolute right-4 md:right-12 bottom-1/2 translate-y-1/2 flex flex-col gap-2 md:gap-4 z-20">
             {data.map((_, idx) => (
                 <div 
@@ -249,7 +246,6 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
         </h2>
   
         <div className="relative group">
-            {/* Left Scroll Button - Hidden on Mobile */}
             <ChevronRight 
                 className="hidden md:block absolute left-0 top-0 bottom-0 z-20 m-auto h-full w-12 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-black/70 cursor-pointer transition-all rotate-180 text-white" 
                 onClick={() => scroll('left')} 
@@ -262,7 +258,6 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
               {items.map((item, idx) => (
                 <div 
                   key={idx} 
-                  // Responsive Card Sizing: min-w-[150px] for mobile, [220px] for desktop
                   className="relative min-w-[150px] md:min-w-[220px] h-[220px] md:h-[330px] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10 group/card shadow-lg hover:shadow-yellow-500/20 bg-gray-900"
                   onClick={() => handleItemClick(item)}
                 >
@@ -273,7 +268,6 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
                       loading="lazy"
                     />
                     
-                    {/* Hover Info Overlay - Simplified on Mobile */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 md:p-4">
                         <h3 className="text-white font-bold text-xs md:text-sm leading-tight mb-1 line-clamp-2">{item.title}</h3>
                         <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-300">
@@ -293,7 +287,6 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
               ))}
             </div>
   
-            {/* Right Scroll Button - Hidden on Mobile */}
             <ChevronRight 
                 className="hidden md:block absolute right-0 top-0 bottom-0 z-20 m-auto h-full w-12 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-black/70 cursor-pointer transition-all text-white" 
                 onClick={() => scroll('right')} 
@@ -347,13 +340,10 @@ function HomePageContent() {
   }
 
   return (
-    // ✅ Main Container
     <div className="min-h-screen relative bg-transparent text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       
-      {/* 🌟 Twinkling Stars Background */}
       <TwinklingStars />
 
-      {/* ✅ Content Wrapper */}
       <div className="relative z-10 bg-gradient-to-b from-transparent via-black/60 to-[#0a0a0a]">
           <Navbar />
 
@@ -361,8 +351,8 @@ function HomePageContent() {
             {/* Hero Section */}
             {data?.hero && <HeroSlider data={data.hero} />}
 
-            {/* Movie Sections */}
-            <div className="-mt-20 md:-mt-32 relative z-20 space-y-6 md:space-y-8">
+            {/* Movie Sections (Adjusted negative margin to avoid button overlap) */}
+            <div className="-mt-16 md:-mt-24 relative z-20 space-y-6 md:space-y-8">
                 {data?.sections?.map((sec: any, idx: number) => (
                     <MovieSection key={idx} title={sec.title} items={sec.items} />
                 ))}
@@ -372,22 +362,20 @@ function HomePageContent() {
           {/* Footer */}
           <footer className="bg-[#0a0a0a] border-t border-gray-900 py-10 md:py-16 px-6 md:px-20 relative z-30">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-12 max-w-7xl mx-auto">
-                  {/* Brand Column */}
                   <div className="space-y-4">
                       <div className="flex items-center gap-2">
                           <MonitorPlay className="text-yellow-500" size={28} />
                           <span className="text-xl md:text-2xl font-black text-white">NETVLYX</span>
                       </div>
                       <p className="text-gray-500 text-sm leading-relaxed">
-                          Your premium destination for unlimited entertainment. Stream the latest movies, series, and originals.
+                          Your premium destination for unlimited entertainment.
                       </p>
                   </div>
 
-                  {/* Links Columns */}
                   <div>
                       <h4 className="text-white font-bold mb-4 md:mb-6">Explore</h4>
                       <ul className="space-y-2 md:space-y-3 text-gray-400 text-sm">
-                          {['Home', 'Movies', 'TV Shows', 'Trending'].map(item => (
+                          {['Home', 'Movies', 'TV Shows'].map(item => (
                               <li key={item} className="hover:text-yellow-400 cursor-pointer transition-colors">{item}</li>
                           ))}
                       </ul>
@@ -396,15 +384,14 @@ function HomePageContent() {
                   <div>
                       <h4 className="text-white font-bold mb-4 md:mb-6">Support</h4>
                       <ul className="space-y-2 md:space-y-3 text-gray-400 text-sm">
-                          {['Help Center', 'Terms of Service', 'Privacy Policy'].map(item => (
+                          {['Terms of Service', 'Privacy Policy'].map(item => (
                               <li key={item} className="hover:text-yellow-400 cursor-pointer transition-colors">{item}</li>
                           ))}
                       </ul>
                   </div>
 
-                  {/* Contact Column */}
                   <div>
-                      <h4 className="text-white font-bold mb-4 md:mb-6">Contact Us</h4>
+                      <h4 className="text-white font-bold mb-4 md:mb-6">Contact</h4>
                       <ul className="space-y-4 text-sm">
                           <li className="flex items-center gap-3 text-gray-400">
                               <Mail size={18} className="text-yellow-500"/> 
@@ -416,12 +403,10 @@ function HomePageContent() {
 
               <div className="border-t border-gray-900 pt-8 mt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="text-gray-500 text-sm">
-                      <p className="mb-1">Developed & Managed By</p>
                       <h4 className="text-lg font-bold text-yellow-500">Sadab Codes</h4>
                   </div>
-                  
                   <div className="text-gray-600 text-xs text-center md:text-right">
-                      <p className="mb-2">© 2025 Sadabefy. All rights reserved.</p>
+                      <p>© 2025 Sadabefy.</p>
                   </div>
               </div>
           </footer>
