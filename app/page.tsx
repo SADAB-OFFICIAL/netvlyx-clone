@@ -75,7 +75,7 @@ const Navbar = () => {
            <div className="flex items-center gap-2 cursor-pointer group" onClick={() => router.push('/')}>
               <MonitorPlay className="text-yellow-500 group-hover:scale-110 transition-transform" size={28} />
               <span className="text-xl md:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 drop-shadow-sm">
-                NETVLYX
+                SADABEFY
               </span>
            </div>
 
@@ -381,7 +381,7 @@ function HomePageContent() {
                   <div className="space-y-4">
                       <div className="flex items-center gap-2">
                           <MonitorPlay className="text-yellow-500" size={28} />
-                          <span className="text-xl md:text-2xl font-black text-white">NETVLYX</span>
+                          <span className="text-xl md:text-2xl font-black text-white">SADABEFY</span>
                       </div>
                       <p className="text-gray-500 text-sm leading-relaxed">
                           Your premium destination for unlimited entertainment.
