@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       })),
       
       sections: [
-        { title: "Latest Uploads (Netvlyx)", items: latestData },
+        { title: "Latest Uploads", items: latestData },
         
         // Yahan MoviesDrive ka section add kar diya
         ...moviesDriveSections, 
