@@ -28,8 +28,8 @@ const SectionSkeleton = () => (
   <div className="px-4 md:px-12 mb-12 space-y-4">
       <div className="h-6 w-32 md:w-48 bg-gray-800 rounded animate-pulse"></div>
       <div className="flex gap-4 overflow-hidden">
-          {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="min-w-[140px] md:min-w-[200px] h-[220px] md:h-[300px] bg-gray-800 rounded-lg animate-pulse"></div>
+          {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="min-w-[130px] md:min-w-[180px] h-[200px] md:h-[270px] bg-gray-800 rounded-lg animate-pulse"></div>
           ))}
       </div>
   </div>
@@ -67,7 +67,7 @@ const Navbar = () => {
 
   return (
     <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${
-      scrolled ? 'bg-[#0a0a0a]/80 backdrop-blur-md shadow-2xl py-2' : 'bg-transparent py-4'
+      scrolled ? 'bg-[#0a0a0a]/90 shadow-2xl py-2' : 'bg-transparent py-4'
     }`}>
       <div className="px-4 md:px-12 flex items-center justify-between">
         <div className="flex items-center gap-4 md:gap-12">
@@ -91,14 +91,13 @@ const Navbar = () => {
 
         {/* RIGHT ACTIONS */}
         <div className="flex items-center gap-4 md:gap-6">
-           {/* Search Bar - Restored to Previous Design (Wide on Desktop) */}
+           {/* Search Bar */}
            {searchOpen ? (
              <form onSubmit={handleSearch} className="relative flex items-center animate-fade-in">
                 <input 
                   autoFocus
                   type="text" 
                   placeholder="Titles, people, genres" 
-                  // Previous Style: Wider (w-64) on desktop, full rounded
                   className="bg-black/80 border border-gray-600 pl-4 pr-10 py-2 rounded-full text-sm w-48 md:w-64 focus:outline-none focus:border-yellow-500 transition-all shadow-lg"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -150,7 +149,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
   
     return (
       <div className="relative h-[85vh] md:h-[95vh] w-full overflow-hidden group">
-         {/* BACKGROUND */}
          <div className="absolute inset-0">
             <div className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out opacity-0"
                  style={{ backgroundImage: `url(${data[(current - 1 + data.length) % data.length]?.poster})` }}>
@@ -162,7 +160,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
             <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent"></div>
          </div>
   
-         {/* CONTENT */}
          <div className="absolute bottom-0 left-0 w-full max-w-4xl flex flex-col gap-4 md:gap-6 z-10 px-6 md:px-16 pb-24 md:pb-48">
              <div className="flex items-center gap-3 animate-fade-in-up">
                  <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 md:px-3 md:py-1 text-[10px] md:text-xs font-bold rounded-md border border-yellow-500/30 flex items-center gap-1">
@@ -185,14 +182,12 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                 {movie.desc}
              </p>
   
-             {/* BUTTONS: Restored "Watch Now" Text & Logic */}
              <div className="flex gap-3 md:gap-4 pt-2 md:pt-4 animate-fade-in delay-200 pointer-events-auto">
                 <button 
                   onClick={handlePlayClick}
                   className="bg-white text-black px-6 md:px-8 py-3.5 rounded-lg font-bold flex items-center gap-2 md:gap-3 hover:bg-yellow-400 transition-all hover:scale-105 active:scale-95 text-sm md:text-base shadow-lg shadow-white/10"
                 >
                     <Play fill="black" size={18} /> 
-                    {/* Yahan user ki demand par "Watch Now" lagaya hai */}
                     Watch Now
                 </button>
                 <button className="bg-gray-600/40 backdrop-blur-md text-white px-6 md:px-8 py-3.5 rounded-lg font-bold flex items-center gap-2 md:gap-3 hover:bg-gray-600/60 transition-all border border-white/10 text-sm md:text-base">
@@ -258,7 +253,10 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
               {items.map((item, idx) => (
                 <div 
                   key={idx} 
-                  className="relative min-w-[150px] md:min-w-[220px] h-[220px] md:h-[330px] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10 group/card shadow-lg hover:shadow-yellow-500/20 bg-gray-900"
+                  // ✅ UPDATED CARD SIZE:
+                  // Mobile: min-w-[130px] h-[200px] (Shows 2.5 cards properly)
+                  // Desktop: min-w-[180px] h-[270px] (Shows more cards)
+                  className="relative min-w-[130px] md:min-w-[180px] h-[200px] md:h-[270px] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10 group/card shadow-lg hover:shadow-yellow-500/20 bg-gray-900"
                   onClick={() => handleItemClick(item)}
                 >
                     <img 
@@ -341,11 +339,8 @@ function HomePageContent() {
   return (
     <div className="min-h-screen relative bg-transparent text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       
-      {/* 🌟 Big Twinkling Stars */}
       <TwinklingStars />
 
-      {/* ✅ Premium Soft Blur Overlay */}
-      {/* 'backdrop-blur-[2px]' adds soft blur to stars behind */}
       <div className="relative z-10 bg-gradient-to-b from-transparent via-black/50 to-[#0a0a0a]">
           <Navbar />
 
