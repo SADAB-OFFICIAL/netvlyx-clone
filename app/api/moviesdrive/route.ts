@@ -65,7 +65,7 @@ export async function GET() {
             hero: heroData, // Slider Data
             sections: [
                 {
-                    title: "If you don't find the movie in the first row, then watch this row.",
+                    title: "Latest on Row 2.",
                     items: items // Grid Data
                 }
             ]
