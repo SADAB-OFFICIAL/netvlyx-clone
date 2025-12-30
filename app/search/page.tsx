@@ -10,49 +10,51 @@ import TwinklingStars from '@/components/TwinklingStars';
 function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const query = searchParams.get('q') || '';
+  const initialQuery = searchParams.get('q') || '';
 
+  // State Management
+  const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [results, setResults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(query);
-
-  // --- API CALL ---
+  const [loading, setLoading] = useState(false);
+  
+  // Debounce Logic (Live Search ke liye)
   useEffect(() => {
-    const fetchResults = async () => {
-      if (!query) {
-          setLoading(false);
-          setResults([]);
-          return;
-      }
-      
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-        
-        if (data.success && Array.isArray(data.results)) {
-            setResults(data.results);
-        } else {
-            setResults([]);
-        }
-      } catch (error) {
-        console.error("Search Error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Agar search empty hai to clear kar do
+    if (!searchTerm.trim()) {
+        setResults([]);
+        return;
+    }
 
-    fetchResults();
-  }, [query]);
+    // 1. Timer set karo (500ms ka delay)
+    const delayDebounceFn = setTimeout(async () => {
+        setLoading(true);
+        
+        // 2. URL update karo bina reload kiye (Silent URL update)
+        window.history.replaceState(null, '', `/search?q=${encodeURIComponent(searchTerm)}`);
+
+        try {
+            // 3. API Call
+            const res = await fetch(`/api/search?q=${encodeURIComponent(searchTerm)}`);
+            const data = await res.json();
+            
+            if (data.success && Array.isArray(data.results)) {
+                setResults(data.results);
+            } else {
+                setResults([]);
+            }
+        } catch (error) {
+            console.error("Live Search Error:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, 600); // 600ms ka wait (taaki har letter pe API call na ho)
+
+    // Cleanup (Agar user jaldi type kare to purana timer cancel karo)
+    return () => clearTimeout(delayDebounceFn);
+
+  }, [searchTerm]); // Ye effect tab chalega jab 'searchTerm' badlega
 
   // --- HANDLERS ---
-  const handleNewSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchTerm.trim()) {
-        router.push(`/search?q=${encodeURIComponent(searchTerm)}`);
-    }
-  };
-
   const handleItemClick = (item: any) => {
       if (item.link) {
           const encodedLink = btoa(item.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -60,22 +62,16 @@ function SearchPageContent() {
       }
   };
 
-  // --- HELPER: Random Rating Generator based on Title ---
-  // (Taaki har movie ki rating alag dikhe aur refresh karne par same rahe)
+  // Helper Functions
   const getDynamicRating = (title: string) => {
       let hash = 0;
-      for (let i = 0; i < title.length; i++) {
-          hash = title.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      // Generate number between 6.5 and 9.5
-      const rating = (Math.abs(hash % 30) / 10 + 6.5).toFixed(1);
-      return rating;
+      for (let i = 0; i < title.length; i++) hash = title.charCodeAt(i) + ((hash << 5) - hash);
+      return (Math.abs(hash % 30) / 10 + 6.5).toFixed(1);
   };
 
-  // --- HELPER: Extract Year from Title ---
   const getYearFromTitle = (title: string) => {
-      const match = title.match(/\((\d{4})\)/); // Title mein (2024) dhoondo
-      return match ? match[1] : '2024'; // Agar na mile to default 2024
+      const match = title.match(/\((\d{4})\)/);
+      return match ? match[1] : '2024';
   };
 
   return (
@@ -103,45 +99,57 @@ function SearchPageContent() {
 
                     <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
                         <MonitorPlay className="text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]" size={28} />
-                        {/* ✅ LOGO CHANGED TO SADABEFY */}
                         <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-200 to-yellow-600 tracking-tight drop-shadow-sm">
                             SADABEFY
                         </span>
                     </div>
-                    <div className="w-10 md:hidden"></div>
                 </div>
 
-                <form onSubmit={handleNewSearch} className="relative w-full max-w-2xl group">
+                {/* --- LIVE SEARCH INPUT --- */}
+                <div className="relative w-full max-w-2xl group">
                     <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-yellow-600 to-purple-600 opacity-0 group-focus-within:opacity-30 transition duration-500 blur-md"></div>
                     <div className="relative flex items-center bg-black/50 backdrop-blur-2xl border border-white/10 rounded-full px-5 py-3 shadow-inner group-focus-within:border-yellow-500/50 group-focus-within:bg-black/80 transition-all">
-                        <Search className="text-gray-400 group-focus-within:text-yellow-500 transition-colors" size={20} />
+                        {loading ? (
+                            <Loader2 className="text-yellow-500 animate-spin" size={20} />
+                        ) : (
+                            <Search className="text-gray-400 group-focus-within:text-yellow-500 transition-colors" size={20} />
+                        )}
+                        
                         <input 
                           type="text" 
                           value={searchTerm}
+                          // ✅ LIVE TYPING HANDLER
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          placeholder="Search movies, series, anime..." 
+                          placeholder="Type to search (e.g. Jawan, Salaar)..." 
                           className="w-full bg-transparent border-none outline-none text-white ml-3 placeholder-gray-500 font-medium text-sm md:text-base"
                           autoFocus
                         />
+                        
                         {searchTerm && (
-                            <button type="button" onClick={() => { setSearchTerm(''); router.push('/search'); }}>
+                            <button type="button" onClick={() => setSearchTerm('')}>
                                 <X size={18} className="text-gray-500 hover:text-white transition-colors" />
                             </button>
                         )}
                     </div>
-                </form>
+                </div>
             </div>
         </div>
 
         {/* --- CONTENT AREA --- */}
         <div className="p-4 md:p-12 min-h-[85vh] max-w-[1920px] mx-auto">
             
-            {/* ✅ HEADING SMALLER (text-3xl -> text-xl/2xl) */}
+            {/* Status Heading */}
             <div className="flex items-end gap-4 mb-8 mt-2 px-1">
                 <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
-                    {loading ? <span className="animate-pulse">Searching...</span> : (results.length > 0 ? 'Results' : 'Search')}
+                    {loading ? (
+                        <span className="flex items-center gap-2 animate-pulse text-yellow-500">
+                           Searching Live...
+                        </span>
+                    ) : (
+                        results.length > 0 ? 'Results' : 'Search'
+                    )}
                 </h1>
-                {!loading && query && (
+                {!loading && searchTerm && results.length > 0 && (
                     <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full text-yellow-500 text-xs font-mono mb-1">
                         <Zap size={12} fill="currentColor" />
                         <span>{results.length} Found</span>
@@ -150,17 +158,16 @@ function SearchPageContent() {
             </div>
 
             {/* RESULTS GRID */}
-            {!loading && results.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {results.length > 0 && (
+                <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 ${loading ? 'opacity-50 grayscale' : 'opacity-100'} transition-all duration-300`}>
                     {results.map((item, idx) => {
-                        // ✅ DYNAMIC DATA LOGIC
                         const dynamicRating = item.rating && item.rating !== "N/A" ? item.rating : getDynamicRating(item.title);
                         const dynamicYear = getYearFromTitle(item.title);
 
                         return (
                             <div 
                                 key={idx} 
-                                className="group relative bg-[#121212] rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-yellow-500/50 transition-all duration-300 hover:shadow-[0_0_30px_-5px_rgba(234,179,8,0.15)] hover:-translate-y-2"
+                                className="group relative bg-[#121212] rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-yellow-500/50 transition-all duration-300 hover:shadow-[0_0_30px_-5px_rgba(234,179,8,0.15)] hover:-translate-y-2 animate-fade-in-up"
                                 onClick={() => handleItemClick(item)}
                             >
                                 <div className="aspect-[2/3] relative overflow-hidden bg-gray-900">
@@ -194,12 +201,10 @@ function SearchPageContent() {
                                         {item.title}
                                     </h3>
                                     <div className="flex items-center justify-between mt-3 text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
-                                        {/* ✅ DYNAMIC RATING */}
                                         <span className="flex items-center gap-1.5">
                                             <Star size={12} className="text-yellow-500 fill-yellow-500" /> 
                                             <span className="font-semibold text-gray-200">{dynamicRating}</span>
                                         </span>
-                                        {/* ✅ DYNAMIC YEAR */}
                                         <span className="flex items-center gap-1 opacity-70">
                                             <Film size={10} /> 
                                             {dynamicYear}
@@ -212,40 +217,26 @@ function SearchPageContent() {
                 </div>
             )}
 
-            {loading && (
-                <div className="flex flex-col items-center justify-center h-[50vh] text-yellow-500 space-y-4">
-                    <div className="relative">
-                        <div className="absolute inset-0 bg-yellow-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                        <Loader2 size={56} className="animate-spin relative z-10" />
-                    </div>
-                    <p className="text-gray-400 text-sm font-medium tracking-widest animate-pulse uppercase">Scanning Universe...</p>
+            {/* INITIAL EMPTY STATE */}
+            {!loading && !searchTerm && (
+                <div className="flex flex-col items-center justify-center h-[50vh] text-gray-600 space-y-4">
+                    <MonitorPlay size={80} className="opacity-10 text-white" />
+                    <p className="text-gray-500 font-medium">Type to start searching...</p>
                 </div>
             )}
 
-            {!loading && results.length === 0 && query && (
-                <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 space-y-6">
+            {/* NO RESULTS STATE */}
+            {!loading && searchTerm && results.length === 0 && (
+                 <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 space-y-6">
                     <div className="bg-white/5 p-8 rounded-full border border-white/10 shadow-2xl">
                         <Search size={64} className="opacity-20" />
                     </div>
                     <div className="text-center space-y-2">
                         <h2 className="text-2xl font-bold text-white">No results found</h2>
                         <p className="text-gray-400 text-sm max-w-md mx-auto">
-                            We couldn't find anything matching <span className="text-yellow-500">"{query}"</span>.
+                            No match for <span className="text-yellow-500">"{searchTerm}"</span>.
                         </p>
                     </div>
-                    <button 
-                        onClick={() => {setSearchTerm(''); router.push('/search');}}
-                        className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-all text-sm border border-white/10"
-                    >
-                        Clear Search
-                    </button>
-                </div>
-            )}
-            
-            {!loading && !query && (
-                <div className="flex flex-col items-center justify-center h-[50vh] text-gray-600 space-y-4">
-                    <MonitorPlay size={80} className="opacity-10 text-white" />
-                    <p className="text-gray-500 font-medium">Type something to start your journey...</p>
                 </div>
             )}
 
