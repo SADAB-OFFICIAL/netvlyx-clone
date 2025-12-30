@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState, useRef, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { 
   Play, Info, Search, Bell, MonitorPlay, 
-  ChevronRight, Star, Loader2, X, 
-  Globe, Mail, Instagram 
+  ChevronRight, Star, X, Globe, Mail, Instagram, Menu
 } from 'lucide-react';
 
 // ✅ Import Stars Component
@@ -14,39 +13,33 @@ import TwinklingStars from '@/components/TwinklingStars';
 // --- SKELETON COMPONENTS ---
 const HeroSkeleton = () => (
   <div className="w-full h-[85vh] bg-gray-900/50 animate-pulse relative">
-      <div className="absolute bottom-0 left-0 p-12 w-full max-w-3xl space-y-4">
-          <div className="h-12 w-3/4 bg-gray-800 rounded-lg"></div>
+      <div className="absolute bottom-0 left-0 p-6 md:p-12 w-full max-w-3xl space-y-4">
+          <div className="h-10 md:h-12 w-3/4 bg-gray-800 rounded-lg"></div>
           <div className="h-4 w-full bg-gray-800 rounded"></div>
           <div className="h-4 w-2/3 bg-gray-800 rounded"></div>
           <div className="flex gap-4 pt-4">
-              <div className="h-12 w-32 bg-gray-800 rounded-lg"></div>
-              <div className="h-12 w-32 bg-gray-800 rounded-lg"></div>
+              <div className="h-10 w-28 md:w-32 bg-gray-800 rounded-lg"></div>
+              <div className="h-10 w-28 md:w-32 bg-gray-800 rounded-lg"></div>
           </div>
       </div>
   </div>
 );
 
 const SectionSkeleton = () => (
-  <div className="px-12 mb-12 space-y-4">
-      <div className="h-6 w-48 bg-gray-800 rounded animate-pulse"></div>
+  <div className="px-4 md:px-12 mb-12 space-y-4">
+      <div className="h-6 w-32 md:w-48 bg-gray-800 rounded animate-pulse"></div>
       <div className="flex gap-4 overflow-hidden">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="min-w-[200px] h-[300px] bg-gray-800 rounded-lg animate-pulse"></div>
+          {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="min-w-[140px] md:min-w-[200px] h-[220px] md:h-[300px] bg-gray-800 rounded-lg animate-pulse"></div>
           ))}
       </div>
   </div>
 );
 
 const NavbarSkeleton = () => (
-  <div className="h-20 w-full bg-gray-900/80 border-b border-gray-800 flex items-center justify-between px-12 animate-pulse">
-      <div className="h-8 w-24 bg-gray-800 rounded"></div>
-      <div className="flex gap-6">
-          <div className="h-6 w-16 bg-gray-800 rounded"></div>
-          <div className="h-6 w-16 bg-gray-800 rounded"></div>
-          <div className="h-6 w-16 bg-gray-800 rounded"></div>
-      </div>
+  <div className="h-16 md:h-20 w-full bg-gray-900/80 border-b border-gray-800 flex items-center justify-between px-4 md:px-12 animate-pulse">
+      <div className="h-6 md:h-8 w-20 md:w-24 bg-gray-800 rounded"></div>
       <div className="flex gap-4">
-          <div className="h-8 w-8 bg-gray-800 rounded-full"></div>
           <div className="h-8 w-8 bg-gray-800 rounded-full"></div>
       </div>
   </div>
@@ -75,14 +68,14 @@ const Navbar = () => {
 
   return (
     <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${
-      scrolled ? 'bg-[#0a0a0a]/90 backdrop-blur-md shadow-2xl' : 'bg-transparent'
+      scrolled ? 'bg-[#0a0a0a]/90 backdrop-blur-md shadow-2xl py-2' : 'bg-transparent py-4'
     }`}>
-      <div className="px-6 md:px-12 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-12">
-           {/* LOGO */}
+      <div className="px-4 md:px-12 flex items-center justify-between">
+        <div className="flex items-center gap-4 md:gap-12">
+           {/* LOGO: Yellow as requested */}
            <div className="flex items-center gap-2 cursor-pointer group" onClick={() => router.push('/')}>
-              <MonitorPlay className="text-purple-500 group-hover:scale-110 transition-transform" size={32} />
-              <span className="text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+              <MonitorPlay className="text-yellow-500 group-hover:scale-110 transition-transform" size={28} />
+              <span className="text-xl md:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 drop-shadow-sm">
                 NETVLYX
               </span>
            </div>
@@ -90,7 +83,7 @@ const Navbar = () => {
            {/* DESKTOP LINKS */}
            <div className="hidden md:flex gap-8 text-sm font-medium text-gray-300">
               {['Home', 'Series', 'Movies', 'New & Popular', 'My List'].map((item) => (
-                <span key={item} className="hover:text-white transition-colors cursor-pointer hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+                <span key={item} className="hover:text-yellow-400 transition-colors cursor-pointer hover:drop-shadow-[0_0_8px_rgba(253,224,71,0.3)]">
                   {item}
                 </span>
               ))}
@@ -98,32 +91,33 @@ const Navbar = () => {
         </div>
 
         {/* RIGHT ACTIONS */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 md:gap-6">
            {searchOpen ? (
-             <form onSubmit={handleSearch} className="relative">
+             <form onSubmit={handleSearch} className="relative flex items-center">
                 <input 
                   autoFocus
                   type="text" 
-                  placeholder="Titles, people, genres" 
-                  className="bg-black/80 border border-gray-600 pl-4 pr-10 py-2 rounded-full text-sm w-64 focus:outline-none focus:border-purple-500 transition-all"
+                  placeholder="Search..." 
+                  className="bg-black/80 border border-gray-600 pl-3 pr-8 py-1.5 rounded-full text-sm w-40 md:w-64 focus:outline-none focus:border-yellow-500 transition-all"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onBlur={() => !query && setSearchOpen(false)}
                 />
                 <X 
-                  size={16} 
-                  className="absolute right-3 top-2.5 text-gray-400 cursor-pointer hover:text-white"
+                  size={14} 
+                  className="absolute right-3 text-gray-400 cursor-pointer hover:text-white"
                   onClick={() => setSearchOpen(false)} 
                 />
              </form>
            ) : (
              <Search 
-                className="w-6 h-6 text-gray-300 hover:text-white cursor-pointer transition-transform hover:scale-110" 
+                className="w-5 h-5 md:w-6 md:h-6 text-gray-300 hover:text-yellow-400 cursor-pointer transition-transform hover:scale-110" 
                 onClick={() => setSearchOpen(true)}
              />
            )}
-           <Bell className="w-6 h-6 text-gray-300 hover:text-white cursor-pointer hover:animate-pulse" />
-           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 cursor-pointer hover:ring-2 hover:ring-white transition-all"></div>
+           {/* Mobile Menu Icon (Visual only for now) */}
+           <Menu className="w-6 h-6 text-gray-300 md:hidden cursor-pointer" />
+           <div className="hidden md:block w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-600 cursor-pointer hover:ring-2 hover:ring-white transition-all"></div>
         </div>
       </div>
     </nav>
@@ -147,7 +141,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
   
     const handlePlayClick = () => {
         if (movie.link) {
-            // Encode link for security like /v/[slug]
             const encodedLink = btoa(movie.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
             router.push(`/v/${encodedLink}`);
         } else {
@@ -156,68 +149,67 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     };
   
     return (
-      <div className="relative h-[90vh] w-full overflow-hidden group">
+      <div className="relative h-[80vh] md:h-[90vh] w-full overflow-hidden group">
          {/* BACKGROUND IMAGE */}
          <div className="absolute inset-0">
-            {/* Old Image Fade Out */}
             <div className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out opacity-0"
                  style={{ backgroundImage: `url(${data[(current - 1 + data.length) % data.length]?.poster})` }}>
             </div>
-            {/* New Image Fade In */}
             <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out scale-105 group-hover:scale-110"
                  style={{ backgroundImage: `url(${movie.poster})` }}>
             </div>
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/40 to-transparent"></div>
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/40 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent"></div>
          </div>
   
          {/* CONTENT */}
-         <div className="absolute bottom-0 left-0 p-6 md:p-16 w-full max-w-4xl flex flex-col gap-6 z-10">
+         <div className="absolute bottom-0 left-0 p-6 md:p-16 w-full max-w-4xl flex flex-col gap-4 md:gap-6 z-10">
              {/* Tags/Rating */}
-             <div className="flex items-center gap-4 animate-fade-in-up">
-                 <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 text-xs font-bold rounded-md border border-yellow-500/30 flex items-center gap-1">
-                    <Star size={12} fill="currentColor" /> {movie.rating}
+             <div className="flex items-center gap-3 animate-fade-in-up">
+                 <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 md:px-3 md:py-1 text-[10px] md:text-xs font-bold rounded-md border border-yellow-500/30 flex items-center gap-1">
+                    <Star size={10} fill="currentColor" /> {movie.rating}
                  </span>
-                 {movie.tags?.map((tag: string, i: number) => (
-                    <span key={i} className="text-gray-300 text-xs font-medium uppercase tracking-wider border-l border-gray-600 pl-4">
-                        {tag}
-                    </span>
-                 ))}
+                 <div className="flex gap-2 overflow-hidden">
+                    {movie.tags?.slice(0, 3).map((tag: string, i: number) => (
+                        <span key={i} className="text-gray-300 text-[10px] md:text-xs font-medium uppercase tracking-wider border-l border-gray-600 pl-3">
+                            {tag}
+                        </span>
+                    ))}
+                 </div>
              </div>
   
-             {/* Title */}
-             <h1 className="text-5xl md:text-7xl font-black text-white leading-tight drop-shadow-2xl animate-slide-in">
+             {/* Title - Responsive Text Size */}
+             <h1 className="text-4xl md:text-7xl font-black text-white leading-tight drop-shadow-2xl animate-slide-in">
                 {movie.title}
              </h1>
   
-             {/* Description */}
-             <p className="text-gray-300 text-lg line-clamp-3 max-w-2xl drop-shadow-md animate-fade-in delay-100">
+             {/* Description - Hidden on very small screens if needed, or clamped */}
+             <p className="text-gray-300 text-sm md:text-lg line-clamp-3 md:line-clamp-3 max-w-xl drop-shadow-md animate-fade-in delay-100">
                 {movie.desc}
              </p>
   
              {/* Buttons */}
-             <div className="flex gap-4 pt-4 animate-fade-in delay-200">
+             <div className="flex gap-3 md:gap-4 pt-2 md:pt-4 animate-fade-in delay-200">
                 <button 
                   onClick={handlePlayClick}
-                  className="bg-white text-black px-8 py-3.5 rounded-lg font-bold flex items-center gap-3 hover:bg-gray-200 transition-all hover:scale-105 active:scale-95"
+                  className="bg-white text-black px-6 md:px-8 py-3 rounded-lg font-bold flex items-center gap-2 md:gap-3 hover:bg-yellow-400 transition-all hover:scale-105 active:scale-95 text-sm md:text-base"
                 >
-                    <Play fill="black" size={20} /> 
+                    <Play fill="black" size={18} /> 
                     {movie.link ? "Play Now" : "Search Now"}
                 </button>
-                <button className="bg-gray-600/40 backdrop-blur-md text-white px-8 py-3.5 rounded-lg font-bold flex items-center gap-3 hover:bg-gray-600/60 transition-all border border-white/10">
-                    <Info size={20} /> More Info
+                <button className="bg-gray-600/40 backdrop-blur-md text-white px-6 md:px-8 py-3 rounded-lg font-bold flex items-center gap-2 md:gap-3 hover:bg-gray-600/60 transition-all border border-white/10 text-sm md:text-base">
+                    <Info size={18} /> More Info
                 </button>
              </div>
          </div>
   
-         {/* Right Side Carousel Indicators (Optional) */}
-         <div className="absolute right-12 bottom-1/2 translate-y-1/2 flex flex-col gap-4 z-20">
+         {/* Carousel Indicators */}
+         <div className="absolute right-4 md:right-12 bottom-1/2 translate-y-1/2 flex flex-col gap-2 md:gap-4 z-20">
             {data.map((_, idx) => (
                 <div 
                   key={idx} 
-                  className={`w-1.5 h-12 rounded-full transition-all duration-300 ${
-                    idx === current ? 'bg-purple-500 scale-y-125' : 'bg-gray-700/50'
+                  className={`w-1 md:w-1.5 h-8 md:h-12 rounded-full transition-all duration-300 ${
+                    idx === current ? 'bg-yellow-500 scale-y-125' : 'bg-gray-700/50'
                   }`}
                 />
             ))}
@@ -234,7 +226,7 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
     const scroll = (direction: 'left' | 'right') => {
       if (rowRef.current) {
         const { scrollLeft, clientWidth } = rowRef.current;
-        const scrollTo = direction === 'left' ? scrollLeft - clientWidth : scrollLeft + clientWidth;
+        const scrollTo = direction === 'left' ? scrollLeft - clientWidth * 0.8 : scrollLeft + clientWidth * 0.8;
         rowRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
       }
     };
@@ -251,25 +243,27 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
     if (!items || items.length === 0) return null;
   
     return (
-      <div className="mb-12 relative group/section px-4 md:px-12">
-        <h2 className="text-2xl font-bold text-gray-100 mb-6 flex items-center gap-2 group-hover/section:text-purple-400 transition-colors">
+      <div className="mb-8 md:mb-12 relative group/section px-4 md:px-12">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4 md:mb-6 flex items-center gap-2 group-hover/section:text-yellow-400 transition-colors">
             {title} <ChevronRight size={20} className="opacity-0 group-hover/section:opacity-100 transition-opacity -translate-x-2 group-hover/section:translate-x-0" />
         </h2>
   
         <div className="relative group">
+            {/* Left Scroll Button - Hidden on Mobile */}
             <ChevronRight 
-                className="absolute left-0 top-0 bottom-0 z-20 m-auto h-full w-12 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-black/70 cursor-pointer transition-all rotate-180 text-white" 
+                className="hidden md:block absolute left-0 top-0 bottom-0 z-20 m-auto h-full w-12 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-black/70 cursor-pointer transition-all rotate-180 text-white" 
                 onClick={() => scroll('left')} 
             />
             
             <div 
               ref={rowRef}
-              className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 px-1"
+              className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 px-1"
             >
               {items.map((item, idx) => (
                 <div 
                   key={idx} 
-                  className="relative min-w-[180px] md:min-w-[220px] h-[280px] md:h-[330px] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10 group/card shadow-lg hover:shadow-purple-500/20 bg-gray-900"
+                  // Responsive Card Sizing: min-w-[150px] for mobile, [220px] for desktop
+                  className="relative min-w-[150px] md:min-w-[220px] h-[220px] md:h-[330px] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10 group/card shadow-lg hover:shadow-yellow-500/20 bg-gray-900"
                   onClick={() => handleItemClick(item)}
                 >
                     <img 
@@ -279,22 +273,19 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
                       loading="lazy"
                     />
                     
-                    {/* Hover Info Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                        <h3 className="text-white font-bold text-sm leading-tight mb-1 line-clamp-2">{item.title}</h3>
-                        <div className="flex items-center gap-2 text-xs text-gray-300">
+                    {/* Hover Info Overlay - Simplified on Mobile */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 md:p-4">
+                        <h3 className="text-white font-bold text-xs md:text-sm leading-tight mb-1 line-clamp-2">{item.title}</h3>
+                        <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-300">
                             {item.quality && (
-                                <span className="bg-gray-700 px-1.5 rounded text-[10px]">{item.quality}</span>
+                                <span className="bg-gray-700 px-1.5 rounded">{item.quality}</span>
                             )}
                             <span className="flex items-center gap-1"><Star size={10} className="text-yellow-500" /> 8.5</span>
                         </div>
                         
-                        <div className="flex gap-2 mt-3">
-                             <button className="bg-white text-black p-2 rounded-full hover:bg-purple-500 hover:text-white transition-colors">
-                                <Play size={12} fill="currentColor" />
-                             </button>
-                             <button className="border border-gray-400 text-white p-2 rounded-full hover:border-white hover:bg-white/10">
-                                <Info size={12} />
+                        <div className="flex gap-2 mt-2 md:mt-3">
+                             <button className="bg-white text-black p-1.5 md:p-2 rounded-full hover:bg-yellow-400 transition-colors">
+                                <Play size={10} className="md:w-3 md:h-3" fill="currentColor" />
                              </button>
                         </div>
                     </div>
@@ -302,8 +293,9 @@ const MovieSection = ({ title, items }: { title: string, items: any[] }) => {
               ))}
             </div>
   
+            {/* Right Scroll Button - Hidden on Mobile */}
             <ChevronRight 
-                className="absolute right-0 top-0 bottom-0 z-20 m-auto h-full w-12 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-black/70 cursor-pointer transition-all text-white" 
+                className="hidden md:block absolute right-0 top-0 bottom-0 z-20 m-auto h-full w-12 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-black/70 cursor-pointer transition-all text-white" 
                 onClick={() => scroll('right')} 
             />
         </div>
@@ -355,13 +347,13 @@ function HomePageContent() {
   }
 
   return (
-    // ✅ 1. Main Container: Transparent Background + Stars
-    <div className="min-h-screen relative bg-transparent text-white font-sans selection:bg-purple-500/30 overflow-x-hidden">
+    // ✅ Main Container
+    <div className="min-h-screen relative bg-transparent text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       
-      {/* 🌟 Twinkling Stars Background (Fixed) */}
+      {/* 🌟 Twinkling Stars Background */}
       <TwinklingStars />
 
-      {/* ✅ 2. Content Wrapper: Transparent Overlay to allow stars visibility */}
+      {/* ✅ Content Wrapper */}
       <div className="relative z-10 bg-gradient-to-b from-transparent via-black/60 to-[#0a0a0a]">
           <Navbar />
 
@@ -370,7 +362,7 @@ function HomePageContent() {
             {data?.hero && <HeroSlider data={data.hero} />}
 
             {/* Movie Sections */}
-            <div className="-mt-32 relative z-20 space-y-8">
+            <div className="-mt-20 md:-mt-32 relative z-20 space-y-6 md:space-y-8">
                 {data?.sections?.map((sec: any, idx: number) => (
                     <MovieSection key={idx} title={sec.title} items={sec.items} />
                 ))}
@@ -378,56 +370,45 @@ function HomePageContent() {
           </div>
 
           {/* Footer */}
-          <footer className="bg-[#0a0a0a] border-t border-gray-900 py-16 px-6 md:px-20 relative z-30">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-12 max-w-7xl mx-auto">
+          <footer className="bg-[#0a0a0a] border-t border-gray-900 py-10 md:py-16 px-6 md:px-20 relative z-30">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-12 max-w-7xl mx-auto">
                   {/* Brand Column */}
                   <div className="space-y-4">
                       <div className="flex items-center gap-2">
-                          <MonitorPlay className="text-purple-600" size={32} />
-                          <span className="text-2xl font-black text-white">NETVLYX</span>
+                          <MonitorPlay className="text-yellow-500" size={28} />
+                          <span className="text-xl md:text-2xl font-black text-white">NETVLYX</span>
                       </div>
                       <p className="text-gray-500 text-sm leading-relaxed">
-                          Your premium destination for unlimited entertainment. Stream the latest movies, series, and originals in high quality.
+                          Your premium destination for unlimited entertainment. Stream the latest movies, series, and originals.
                       </p>
-                      <div className="flex gap-4 pt-2">
-                          {[1, 2, 3].map((i) => (
-                              <div key={i} className="w-8 h-8 rounded-full bg-gray-800 hover:bg-purple-600 cursor-pointer transition-colors flex items-center justify-center text-white">
-                                  <Globe size={14} />
-                              </div>
-                          ))}
-                      </div>
                   </div>
 
                   {/* Links Columns */}
                   <div>
-                      <h4 className="text-white font-bold mb-6">Explore</h4>
-                      <ul className="space-y-3 text-gray-400 text-sm">
-                          {['Home', 'Movies', 'TV Shows', 'New Arrivals', 'Trending'].map(item => (
-                              <li key={item} className="hover:text-purple-400 cursor-pointer transition-colors">{item}</li>
+                      <h4 className="text-white font-bold mb-4 md:mb-6">Explore</h4>
+                      <ul className="space-y-2 md:space-y-3 text-gray-400 text-sm">
+                          {['Home', 'Movies', 'TV Shows', 'Trending'].map(item => (
+                              <li key={item} className="hover:text-yellow-400 cursor-pointer transition-colors">{item}</li>
                           ))}
                       </ul>
                   </div>
 
                   <div>
-                      <h4 className="text-white font-bold mb-6">Support</h4>
-                      <ul className="space-y-3 text-gray-400 text-sm">
-                          {['Help Center', 'Terms of Service', 'Privacy Policy', 'Cookie Preferences', 'Corporate Info'].map(item => (
-                              <li key={item} className="hover:text-purple-400 cursor-pointer transition-colors">{item}</li>
+                      <h4 className="text-white font-bold mb-4 md:mb-6">Support</h4>
+                      <ul className="space-y-2 md:space-y-3 text-gray-400 text-sm">
+                          {['Help Center', 'Terms of Service', 'Privacy Policy'].map(item => (
+                              <li key={item} className="hover:text-yellow-400 cursor-pointer transition-colors">{item}</li>
                           ))}
                       </ul>
                   </div>
 
                   {/* Contact Column */}
                   <div>
-                      <h4 className="text-white font-bold mb-6">Contact Us</h4>
+                      <h4 className="text-white font-bold mb-4 md:mb-6">Contact Us</h4>
                       <ul className="space-y-4 text-sm">
                           <li className="flex items-center gap-3 text-gray-400">
-                              <Mail size={18} className="text-purple-500"/> 
-                              <span className="hover:text-white cursor-pointer">contact@sadabefy.com</span>
-                          </li>
-                          <li className="flex items-center gap-3 text-gray-400">
-                              <Instagram size={18} className="text-purple-500"/> 
-                              <span className="hover:text-white cursor-pointer">@sadab_official</span>
+                              <Mail size={18} className="text-yellow-500"/> 
+                              <span className="hover:text-white cursor-pointer break-all">contact@sadabefy.com</span>
                           </li>
                       </ul>
                   </div>
@@ -437,12 +418,10 @@ function HomePageContent() {
                   <div className="text-gray-500 text-sm">
                       <p className="mb-1">Developed & Managed By</p>
                       <h4 className="text-lg font-bold text-yellow-500">Sadab Codes</h4>
-                      <p className="text-xs">Professional Web Development</p>
                   </div>
                   
-                  <div className="text-gray-600 text-xs text-center md:text-right max-w-md">
+                  <div className="text-gray-600 text-xs text-center md:text-right">
                       <p className="mb-2">© 2025 Sadabefy. All rights reserved.</p>
-                      <p>Disclaimer: Sadabefy does not host any content. We only index and provide links to content that is publicly available on the internet.</p>
                   </div>
               </div>
           </footer>
