@@ -66,33 +66,41 @@ function SearchPageContent() {
       return match ? match[1] : '2024';
   };
 
-  // --- HELPER 3: SEASON BADGE LOGIC (New) ---
+  // --- HELPER 3: ADVANCED SEASON BADGE LOGIC 🧠 ---
   const getSeasonBadge = (title: string, type: string) => {
-      // Sirf agar Series hai tabhi check karo
       if (!type || type !== 'Series') return null;
 
-      const lowerTitle = title.toLowerCase();
+      const t = title.toLowerCase();
 
-      // Multi Season Keywords (Range like 1-4, Seasons plural, Complete)
-      // Regex checks for "Season X-Y" or "S01-S05"
-      const isMulti = 
-          lowerTitle.includes('season 1-') ||
-          lowerTitle.includes('seasons') ||
-          lowerTitle.includes('complete') ||
-          lowerTitle.match(/season \d+\s?-\s?\d+/) || 
-          lowerTitle.match(/s\d+\s?-\s?s\d+/);
+      // 1. MULTI SEASON PATTERNS (Strongest Check)
+      // Examples: "Season 1-5", "S01-S03", "Season 1, 2", "Complete Series", "All Seasons"
+      const multiPatterns = [
+        /season\s*\d+\s*[-–to&]\s*\d+/i,    // Range: Season 1-5, Season 1 to 5
+        /s\d+\s*[-–to&]\s*s\d+/i,           // Range: S01-S05
+        /seasons\s+\d+/i,                   // Plural: Seasons 1...
+        /complete\s+series/i,               // Complete Series
+        /all\s+seasons/i,                   // All Seasons
+        /season\s*\d+(?:\s*,\s*\d+)+/i,     // Comma List: Season 1, 2
+        /series\s+pack/i                    // Series Pack
+      ];
 
-      if (isMulti) return 'Multi (s)';
+      if (multiPatterns.some(p => p.test(t))) return 'Multi (s)';
 
-      // Single Season Keywords (Season 5, S01, etc.)
-      const isSingle = 
-          lowerTitle.includes('season') || 
-          lowerTitle.match(/s\d+e\d+/) || // S01E01 pattern
-          lowerTitle.match(/s\d+/);      // S01 pattern
+      // 2. SINGLE SEASON PATTERNS (Specific Check)
+      // Examples: "Season 5", "S05", "3rd Season"
+      // Note: Hum check karte hain ki iske aage dash (-) na ho taaki "Season 1-5" galti se catch na ho
+      const singlePatterns = [
+        /season\s*\d+(?!\s*[-–])/i,         // Season 4 (Not followed by -)
+        /s\d+(?!\s*[-–])/i,                 // S04 (Not followed by -)
+        /series\s*\d+/i,                    // Series 4
+        /\d+(?:st|nd|rd|th)\s*season/i      // 1st Season
+      ];
 
-      if (isSingle) return 'Single (s)';
+      if (singlePatterns.some(p => p.test(t))) return 'Single (s)';
 
-      return null; // Agar clear nahi hai
+      // 3. FALLBACK: Agar Title me season number nahi hai par wo Series hai
+      // Example: "Stranger Things" (Implies Main Series Page -> Multi)
+      return 'Multi (s)';
   };
 
   return (
@@ -109,7 +117,6 @@ function SearchPageContent() {
         {/* --- HEADER --- */}
         <div className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 shadow-2xl transition-all duration-300">
             <div className="px-4 md:px-12 py-4 flex flex-col md:flex-row items-center justify-between gap-4 max-w-[1920px] mx-auto">
-                
                 <div className="flex items-center justify-between w-full md:w-auto gap-6">
                     <button onClick={() => router.push('/')} className="group flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
                         <div className="p-2 bg-white/5 rounded-full group-hover:bg-yellow-500/20 border border-transparent group-hover:border-yellow-500/30 transition-all">
@@ -117,7 +124,6 @@ function SearchPageContent() {
                         </div>
                         <span className="hidden md:block font-medium text-sm tracking-wide">Back</span>
                     </button>
-
                     <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
                         <MonitorPlay className="text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]" size={28} />
                         <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-200 to-yellow-600 tracking-tight drop-shadow-sm">
@@ -126,7 +132,6 @@ function SearchPageContent() {
                     </div>
                 </div>
 
-                {/* SEARCH INPUT */}
                 <div className="relative w-full max-w-2xl group">
                     <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-yellow-600 to-purple-600 opacity-0 group-focus-within:opacity-30 transition duration-500 blur-md"></div>
                     <div className="relative flex items-center bg-black/50 backdrop-blur-2xl border border-white/10 rounded-full px-5 py-3 shadow-inner group-focus-within:border-yellow-500/50 group-focus-within:bg-black/80 transition-all">
@@ -177,8 +182,6 @@ function SearchPageContent() {
                     {results.map((item, idx) => {
                         const dynamicRating = item.rating && item.rating !== "N/A" ? item.rating : getDynamicRating(item.title);
                         const dynamicYear = getYearFromTitle(item.title);
-                        
-                        // ✅ GET SEASON BADGE
                         const seasonBadge = getSeasonBadge(item.title, item.type);
 
                         return (
@@ -195,33 +198,29 @@ function SearchPageContent() {
                                         loading="lazy"
                                     />
                                     
-                                    {/* --- BADGES CONTAINER --- */}
                                     <div className="absolute top-2 right-2 flex flex-col gap-1.5 items-end">
-                                        {/* Quality Badge */}
                                         <span className="bg-black/60 backdrop-blur-md border border-white/10 px-2 py-0.5 rounded text-[10px] font-bold text-white shadow-lg uppercase tracking-wider">
                                             {item.quality || 'HD'}
                                         </span>
                                         
-                                        {/* Series/Movie Badge */}
                                         {item.type && (
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-black shadow-lg uppercase tracking-wider ${item.type === 'Series' ? 'bg-purple-500' : 'bg-blue-500'}`}>
                                                 {item.type}
                                             </span>
                                         )}
 
-                                        {/* ✅ NEW SEASON BADGE (Only shows if Series) */}
+                                        {/* ✅ SMART BADGE UI */}
                                         {seasonBadge && (
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold shadow-lg uppercase tracking-wider flex items-center gap-1 ${
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold shadow-lg uppercase tracking-wider flex items-center gap-1 border border-white/10 ${
                                                 seasonBadge === 'Multi (s)' 
-                                                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' // Multi color
-                                                : 'bg-emerald-500 text-black' // Single color
+                                                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white' 
+                                                : 'bg-emerald-600 text-white' 
                                             }`}>
-                                                <Layers size={8} /> {seasonBadge}
+                                                <Layers size={9} /> {seasonBadge}
                                             </span>
                                         )}
                                     </div>
 
-                                    {/* Play Button Overlay */}
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                         <div className="w-14 h-14 bg-yellow-500/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-2xl scale-0 group-hover:scale-100 transition-transform duration-300 delay-75">
                                             <Play fill="black" className="text-black ml-1" size={24} />
@@ -250,7 +249,6 @@ function SearchPageContent() {
                 </div>
             )}
 
-            {/* Empty States */}
             {!loading && !searchTerm && (
                 <div className="flex flex-col items-center justify-center h-[50vh] text-gray-600 space-y-4">
                     <MonitorPlay size={80} className="opacity-10 text-white" />
