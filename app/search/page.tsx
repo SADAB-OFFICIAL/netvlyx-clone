@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { 
-  Play, Search, MonitorPlay, ChevronLeft, Star, Loader2, X, Zap, Film 
+  Play, Search, MonitorPlay, ChevronLeft, Star, Loader2, X, Zap, Film, Layers 
 } from 'lucide-react';
 import TwinklingStars from '@/components/TwinklingStars';
 
@@ -12,28 +12,22 @@ function SearchPageContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
 
-  // State Management
   const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // Debounce Logic (Live Search ke liye)
+  // --- LIVE SEARCH LOGIC ---
   useEffect(() => {
-    // Agar search empty hai to clear kar do
     if (!searchTerm.trim()) {
         setResults([]);
         return;
     }
 
-    // 1. Timer set karo (500ms ka delay)
     const delayDebounceFn = setTimeout(async () => {
         setLoading(true);
-        
-        // 2. URL update karo bina reload kiye (Silent URL update)
         window.history.replaceState(null, '', `/search?q=${encodeURIComponent(searchTerm)}`);
 
         try {
-            // 3. API Call
             const res = await fetch(`/api/search?q=${encodeURIComponent(searchTerm)}`);
             const data = await res.json();
             
@@ -47,14 +41,11 @@ function SearchPageContent() {
         } finally {
             setLoading(false);
         }
-    }, 600); // 600ms ka wait (taaki har letter pe API call na ho)
+    }, 600); 
 
-    // Cleanup (Agar user jaldi type kare to purana timer cancel karo)
     return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
 
-  }, [searchTerm]); // Ye effect tab chalega jab 'searchTerm' badlega
-
-  // --- HANDLERS ---
   const handleItemClick = (item: any) => {
       if (item.link) {
           const encodedLink = btoa(item.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -62,16 +53,46 @@ function SearchPageContent() {
       }
   };
 
-  // Helper Functions
+  // --- HELPER 1: Dynamic Rating ---
   const getDynamicRating = (title: string) => {
       let hash = 0;
       for (let i = 0; i < title.length; i++) hash = title.charCodeAt(i) + ((hash << 5) - hash);
       return (Math.abs(hash % 30) / 10 + 6.5).toFixed(1);
   };
 
+  // --- HELPER 2: Year Extraction ---
   const getYearFromTitle = (title: string) => {
       const match = title.match(/\((\d{4})\)/);
       return match ? match[1] : '2024';
+  };
+
+  // --- HELPER 3: SEASON BADGE LOGIC (New) ---
+  const getSeasonBadge = (title: string, type: string) => {
+      // Sirf agar Series hai tabhi check karo
+      if (!type || type !== 'Series') return null;
+
+      const lowerTitle = title.toLowerCase();
+
+      // Multi Season Keywords (Range like 1-4, Seasons plural, Complete)
+      // Regex checks for "Season X-Y" or "S01-S05"
+      const isMulti = 
+          lowerTitle.includes('season 1-') ||
+          lowerTitle.includes('seasons') ||
+          lowerTitle.includes('complete') ||
+          lowerTitle.match(/season \d+\s?-\s?\d+/) || 
+          lowerTitle.match(/s\d+\s?-\s?s\d+/);
+
+      if (isMulti) return 'Multi (s)';
+
+      // Single Season Keywords (Season 5, S01, etc.)
+      const isSingle = 
+          lowerTitle.includes('season') || 
+          lowerTitle.match(/s\d+e\d+/) || // S01E01 pattern
+          lowerTitle.match(/s\d+/);      // S01 pattern
+
+      if (isSingle) return 'Single (s)';
+
+      return null; // Agar clear nahi hai
   };
 
   return (
@@ -105,7 +126,7 @@ function SearchPageContent() {
                     </div>
                 </div>
 
-                {/* --- LIVE SEARCH INPUT --- */}
+                {/* SEARCH INPUT */}
                 <div className="relative w-full max-w-2xl group">
                     <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-yellow-600 to-purple-600 opacity-0 group-focus-within:opacity-30 transition duration-500 blur-md"></div>
                     <div className="relative flex items-center bg-black/50 backdrop-blur-2xl border border-white/10 rounded-full px-5 py-3 shadow-inner group-focus-within:border-yellow-500/50 group-focus-within:bg-black/80 transition-all">
@@ -114,17 +135,14 @@ function SearchPageContent() {
                         ) : (
                             <Search className="text-gray-400 group-focus-within:text-yellow-500 transition-colors" size={20} />
                         )}
-                        
                         <input 
                           type="text" 
                           value={searchTerm}
-                          // ✅ LIVE TYPING HANDLER
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          placeholder="Type to search (e.g. Jawan, Salaar)..." 
+                          placeholder="Type to search (e.g. Stranger Things)..." 
                           className="w-full bg-transparent border-none outline-none text-white ml-3 placeholder-gray-500 font-medium text-sm md:text-base"
                           autoFocus
                         />
-                        
                         {searchTerm && (
                             <button type="button" onClick={() => setSearchTerm('')}>
                                 <X size={18} className="text-gray-500 hover:text-white transition-colors" />
@@ -135,16 +153,13 @@ function SearchPageContent() {
             </div>
         </div>
 
-        {/* --- CONTENT AREA --- */}
+        {/* --- RESULTS AREA --- */}
         <div className="p-4 md:p-12 min-h-[85vh] max-w-[1920px] mx-auto">
             
-            {/* Status Heading */}
             <div className="flex items-end gap-4 mb-8 mt-2 px-1">
                 <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
                     {loading ? (
-                        <span className="flex items-center gap-2 animate-pulse text-yellow-500">
-                           Searching Live...
-                        </span>
+                        <span className="flex items-center gap-2 animate-pulse text-yellow-500">Searching Live...</span>
                     ) : (
                         results.length > 0 ? 'Results' : 'Search'
                     )}
@@ -157,12 +172,14 @@ function SearchPageContent() {
                 )}
             </div>
 
-            {/* RESULTS GRID */}
             {results.length > 0 && (
                 <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 ${loading ? 'opacity-50 grayscale' : 'opacity-100'} transition-all duration-300`}>
                     {results.map((item, idx) => {
                         const dynamicRating = item.rating && item.rating !== "N/A" ? item.rating : getDynamicRating(item.title);
                         const dynamicYear = getYearFromTitle(item.title);
+                        
+                        // ✅ GET SEASON BADGE
+                        const seasonBadge = getSeasonBadge(item.title, item.type);
 
                         return (
                             <div 
@@ -178,17 +195,33 @@ function SearchPageContent() {
                                         loading="lazy"
                                     />
                                     
-                                    <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                                    {/* --- BADGES CONTAINER --- */}
+                                    <div className="absolute top-2 right-2 flex flex-col gap-1.5 items-end">
+                                        {/* Quality Badge */}
                                         <span className="bg-black/60 backdrop-blur-md border border-white/10 px-2 py-0.5 rounded text-[10px] font-bold text-white shadow-lg uppercase tracking-wider">
                                             {item.quality || 'HD'}
                                         </span>
+                                        
+                                        {/* Series/Movie Badge */}
                                         {item.type && (
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-black shadow-lg uppercase tracking-wider ${item.type === 'Series' ? 'bg-purple-500' : 'bg-blue-500'}`}>
                                                 {item.type}
                                             </span>
                                         )}
+
+                                        {/* ✅ NEW SEASON BADGE (Only shows if Series) */}
+                                        {seasonBadge && (
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold shadow-lg uppercase tracking-wider flex items-center gap-1 ${
+                                                seasonBadge === 'Multi (s)' 
+                                                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' // Multi color
+                                                : 'bg-emerald-500 text-black' // Single color
+                                            }`}>
+                                                <Layers size={8} /> {seasonBadge}
+                                            </span>
+                                        )}
                                     </div>
 
+                                    {/* Play Button Overlay */}
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                         <div className="w-14 h-14 bg-yellow-500/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-2xl scale-0 group-hover:scale-100 transition-transform duration-300 delay-75">
                                             <Play fill="black" className="text-black ml-1" size={24} />
@@ -217,7 +250,7 @@ function SearchPageContent() {
                 </div>
             )}
 
-            {/* INITIAL EMPTY STATE */}
+            {/* Empty States */}
             {!loading && !searchTerm && (
                 <div className="flex flex-col items-center justify-center h-[50vh] text-gray-600 space-y-4">
                     <MonitorPlay size={80} className="opacity-10 text-white" />
@@ -225,7 +258,6 @@ function SearchPageContent() {
                 </div>
             )}
 
-            {/* NO RESULTS STATE */}
             {!loading && searchTerm && results.length === 0 && (
                  <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 space-y-6">
                     <div className="bg-white/5 p-8 rounded-full border border-white/10 shadow-2xl">
@@ -239,7 +271,6 @@ function SearchPageContent() {
                     </div>
                 </div>
             )}
-
         </div>
       </div>
     </div>
