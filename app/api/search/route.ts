@@ -3,34 +3,41 @@ import * as cheerio from 'cheerio';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  
-  // FIX: 's' (jo aap use karte ho) aur 'q' (standard) dono check karo
   const query = searchParams.get('s') || searchParams.get('q');
 
   if (!query) return NextResponse.json({ success: false, results: [] });
 
   try {
-    // --- PARALLEL SEARCHING (Dono sources se data lao) ---
     const [officialRes, mdriveResults] = await Promise.all([
-      // 1. Official Movies4u API (Aapka purana working logic)
+      // 1. Movies4u API
       fetch(`https://netvlyx.pages.dev/api/movies4u-search?s=${encodeURIComponent(query)}`, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
             "Referer": "https://netvlyx.pages.dev/"
           },
-          next: { revalidate: 0 } // No cache for search
+          next: { revalidate: 0 }
       }).then(res => res.json()).catch(() => ({ results: [] })),
 
-      // 2. MoviesDrive Scraper (Local)
+      // 2. MoviesDrive Scraper
       searchMoviesDrive(query)
     ]);
 
-    // --- DATA MERGING ---
-    // Movies4u ka data 'results' key mein hota hai
-    const officialResults = officialRes.results || [];
+    // --- DATA TAGGING (Source Add Kar Rahe Hain) ---
     
-    // Dono ko mix kar do (MoviesDrive + Movies4u)
-    const finalResults = [...mdriveResults, ...officialResults];
+    // Movies4u Data -> Tag as 'server_2'
+    const officialResults = (officialRes.results || []).map((item: any) => ({
+        ...item,
+        source: 'server_2' 
+    }));
+    
+    // MoviesDrive Data -> Tag as 'server_1'
+    const mdriveTagged = mdriveResults.map((item: any) => ({
+        ...item,
+        source: 'server_1'
+    }));
+
+    // Dono ko ek list mein bhej do, Frontend alag kar lega
+    const finalResults = [...mdriveTagged, ...officialResults];
 
     return NextResponse.json({ 
         success: true, 
@@ -43,41 +50,29 @@ export async function GET(request: Request) {
   }
 }
 
-// =========================================================
-// 🕵️‍♂️ HELPER: MOVIESDRIVE SCRAPER (Based on your HTML)
-// =========================================================
+// ... (Baaki Scraper Code same rahega, usme change ki zaroorat nahi)
+// Helper Function: MoviesDrive Scraper
 async function searchMoviesDrive(query: string) {
     try {
-        // MoviesDrive search URL pattern
         const targetUrl = `https://moviesdrive.forum/?s=${encodeURIComponent(query)}`;
-        
         const res = await fetch(targetUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            },
+            headers: { 'User-Agent': 'Mozilla/5.0' },
             cache: 'no-store'
         });
-
-        // Agar response nahi mila, toh empty bhej do (Crash mat karo)
         if (!res.ok) return [];
-
         const html = await res.text();
         const $ = cheerio.load(html);
         const results: any[] = [];
 
-        // Selectors jo aapke 'search.html' mein confirm hue hain
         $('ul.recent-movies li.thumb').each((i, el) => {
             const titleEl = $(el).find('figcaption p');
             const imgEl = $(el).find('figure img');
             const linkEl = $(el).find('figure a');
-
             const title = titleEl.text().trim(); 
             const image = imgEl.attr('src');     
             const link = linkEl.attr('href');    
 
-            // Data Validate karo
             if (title && link) {
-                // Quality Tags detect karo title se
                 const qualityTags = [];
                 if (title.includes('4k') || title.includes('2160p')) qualityTags.push('4K');
                 if (title.includes('1080p')) qualityTags.push('1080p');
@@ -92,11 +87,8 @@ async function searchMoviesDrive(query: string) {
                 });
             }
         });
-
         return results;
-
     } catch (e) {
-        console.error("MDrive Scraper Error:", e);
         return [];
     }
 }
