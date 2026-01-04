@@ -118,8 +118,128 @@ async function fetchOfficialApiData(targetUrl: string) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 2: MOVIESDRIVE FIXED SCRAPER (Bug Fixed Here)
+// 🟢 ENGINE 2: MOVIESDRIVE UPGRADED SCRAPER (Virtual Merger Added 🚀)
 // =====================================================================
+
+// --- Helper: Extract Links from ANY Page (Current or Other Seasons) ---
+async function scrapePageForLinks(url: string, forceSeason: number | null = null) {
+    try {
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const html = await res.text();
+        const $ = cheerio.load(html);
+
+        const sections: any[] = [];
+        const processedUrls = new Set();
+        
+        // Page Title se Season nikalne ki koshish (Fallback)
+        const rawTitle = $('h1.page-title').text().trim();
+        let pageLevelSeason = null;
+        const sMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
+        if (sMatch) pageLevelSeason = parseInt(sMatch[1]);
+
+        // Links Extraction (Your Fixed Sidebar Logic)
+        $('.page-body a').each((i, el) => {
+            const link = $(el).attr('href');
+            let text = $(el).text().trim();
+            
+            let contextText = text;
+            const parentHeader = $(el).closest('h5, p, h3');
+            const prevHeader = parentHeader.prev('h5, p, h3, h4');
+            if (prevHeader.length) contextText += " " + prevHeader.text();
+
+            if (link && (link.includes('mdrive') || link.includes('drive') || link.includes('archives')) && !processedUrls.has(link)) {
+                
+                let quality = "HD";
+                if (contextText.match(/4k|2160p/i)) quality = '4K';
+                else if (contextText.match(/1080p/i)) quality = '1080p';
+                else if (contextText.match(/720p/i)) quality = '720p';
+                else if (contextText.match(/480p/i)) quality = '480p';
+
+                const sizeMatch = contextText.match(/\[(\d+(\.\d+)?\s?(MB|GB))\]/i);
+                const size = sizeMatch ? sizeMatch[1] : "";
+
+                // Season Detection Logic
+                // 1. ForceSeason (agar humne bahar se bataya hai)
+                // 2. Link Context (agar link ke paas likha hai S1, S2)
+                // 3. Page Title (agar page title hi Season 2 hai)
+                let season = forceSeason; 
+                if (season === null) {
+                    let localMatch = contextText.match(/(?:Season|S)\s*0?(\d+)/i);
+                    if (localMatch) season = parseInt(localMatch[1]);
+                    else season = pageLevelSeason;
+                }
+
+                if (!processedUrls.has(link)) {
+                    processedUrls.add(link);
+                    sections.push({
+                        title: `Download ${quality}`,
+                        quality: quality,
+                        size: size,
+                        season: season,
+                        links: [{
+                            label: text || "Download Link",
+                            url: link,
+                            isZip: contextText.toLowerCase().includes('zip') || contextText.toLowerCase().includes('pack')
+                        }]
+                    });
+                }
+            }
+        });
+        return sections;
+    } catch (e) {
+        console.error(`Error scraping ${url}:`, e);
+        return [];
+    }
+}
+
+// --- Helper: Find Other Seasons ---
+async function findOtherSeasons(seriesTitle: string, currentUrl: string) {
+    try {
+        // Series naam se search karo
+        const searchUrl = `https://moviesdrive.forum/?s=${encodeURIComponent(seriesTitle)}`;
+        const res = await fetch(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const html = await res.text();
+        const $ = cheerio.load(html);
+
+        const seasonPages: { season: number, url: string }[] = [];
+
+        $('ul.recent-movies li.thumb').each((i, el) => {
+            const title = $(el).find('figcaption p').text().trim();
+            const link = $(el).find('figure a').attr('href');
+
+            // Agar title match kare aur ye current page na ho
+            if (title.toLowerCase().includes(seriesTitle.toLowerCase()) && link && link !== currentUrl) {
+                const match = title.match(/(?:Season|S)\s*0?(\d+)/i);
+                if (match) {
+                    seasonPages.push({ season: parseInt(match[1]), url: link });
+                }
+            }
+        });
+
+        return seasonPages;
+    } catch (e) {
+        return [];
+    }
+}
+
+// --- Helper: Extract IMDb ID ---
+const extractImdbId = (html: string): string | null => {
+    const $ = cheerio.load(html);
+    let imdbId = null;
+    $('strong').each((i, el) => {
+        const text = $(el).text();
+        if (text.includes('iMDB Rating')) {
+            const link = $(el).next('a').attr('href');
+            if (link) {
+                const match = link.match(/(tt\d+)/);
+                if (match) imdbId = match[1];
+            }
+        }
+    });
+    return imdbId;
+};
+
+// --- MAIN SCRAPER FUNCTION ---
 async function scrapeMoviesDrive(targetUrl: string) {
     const res = await fetch(targetUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
@@ -135,6 +255,7 @@ async function scrapeMoviesDrive(targetUrl: string) {
     const year = yearMatch ? yearMatch[1] : null;
 
     const poster = $('.page-body img.aligncenter').attr('src') || '';
+    const imdbId = extractImdbId(html);
     
     let plot = "Overview unavailable.";
     $('h3').each((i, el) => {
@@ -152,79 +273,42 @@ async function scrapeMoviesDrive(targetUrl: string) {
         }
     });
 
-    // -----------------------------------------------------------------
-    // 🛑 FIX: LINKS SELECTOR SCOPED TO '.page-body' (Sidebar Ignored)
-    // -----------------------------------------------------------------
-    const downloadSections: any[] = [];
-    const processedUrls = new Set();
-    const allSeasons = new Set<number>();
+    // 2. Links Extraction (Current Page)
+    // Hum naya helper use kar rahe hain taaki logic consistent rahe
+    let downloadSections = await scrapePageForLinks(targetUrl);
 
-    // PEHLE: $('a').each(...) <- Ye sidebar ke links bhi utha raha tha
-    // AB: $('.page-body a').each(...) <- Ye sirf main content padhega
-    $('.page-body a').each((i, el) => {
-        const link = $(el).attr('href');
-        let text = $(el).text().trim(); 
+    // 3. SERIES DETECTION & MERGER LOGIC 🌟
+    const isSeries = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
+    
+    if (isSeries) {
+        // Clean Series Name (e.g. "Mirzapur Season 2" -> "Mirzapur")
+        const seriesName = rawTitle.replace(/\s*(?:Season|S)\s*0?\d+.*/i, "").replace(/^Download\s+/i, "").trim();
         
-        // Context Check: Title usually heading ya p mein hota hai link ke paas
-        // MoviesDrive structure: <h5>Title details</h5> <h5><a href>Link</a></h5>
-        let contextText = text;
-        const parentHeader = $(el).closest('h5, p, h3');
-        const prevHeader = parentHeader.prev('h5, p, h3, h4');
-        if (prevHeader.length) contextText += " " + prevHeader.text();
+        // Find other seasons
+        const otherSeasons = await findOtherSeasons(seriesName, targetUrl);
 
-        // Safe Check: Link valid hona chahiye
-        if (link && (link.includes('mdrive') || link.includes('drive') || link.includes('archives')) && !processedUrls.has(link)) {
-            
-            // Quality Detection
-            let quality = "HD";
-            if (contextText.match(/4k|2160p/i)) quality = '4K';
-            else if (contextText.match(/1080p/i)) quality = '1080p';
-            else if (contextText.match(/720p/i)) quality = '720p';
-            else if (contextText.match(/480p/i)) quality = '480p';
+        if (otherSeasons.length > 0) {
+            // Fetch all other season pages in parallel (Fast!)
+            const promises = otherSeasons.map(os => scrapePageForLinks(os.url, os.season));
+            const results = await Promise.all(promises);
 
-            // Size Detection
-            const sizeMatch = contextText.match(/\[(\d+(\.\d+)?\s?(MB|GB))\]/i);
-            const size = sizeMatch ? sizeMatch[1] : "";
-
-            // Season Detection
-            let season = null;
-            // 1. Pehle context check karo (Main Body wala text)
-            let sMatch = (contextText).match(/(?:Season|S)\s*0?(\d+)/i);
-            
-            // 2. Agar wahan na mile, to Main Page Title se lo (MoviesDrive aksar S5 ka page alag banata hai)
-            if (!sMatch) {
-                sMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
-            }
-
-            if (sMatch) {
-                season = parseInt(sMatch[1]);
-                allSeasons.add(season);
-            }
-
-            // Add to List
-            if (!processedUrls.has(link)) {
-                processedUrls.add(link);
-                downloadSections.push({
-                    title: `Download ${quality}`,
-                    quality: quality,
-                    size: size,
-                    season: season,
-                    links: [{
-                        label: text || "Download Link",
-                        url: link,
-                        isZip: contextText.toLowerCase().includes('zip') || contextText.toLowerCase().includes('pack')
-                    }]
-                });
-            }
+            // Merge results
+            results.forEach(sections => {
+                downloadSections = [...downloadSections, ...sections];
+            });
         }
-    });
+    }
+
+    // 4. Collect All Unique Seasons for Metadata
+    const allSeasons = new Set<number>();
+    downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
 
     return NextResponse.json({
         title: title,
         year: year,
         poster: poster,
         plot: plot,
-        imdbId: null,
+        imdbId: imdbId,
         seasons: Array.from(allSeasons).sort((a, b) => a - b),
         screenshots: screenshots.slice(0, 8),
         downloadSections: downloadSections
