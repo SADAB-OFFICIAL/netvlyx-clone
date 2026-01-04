@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 1: OFFICIAL NETVLYX API (No Changes)
+// 🟢 ENGINE 1: OFFICIAL NETVLYX API (No Changes Here)
 // =====================================================================
 async function fetchOfficialApiData(targetUrl: string) {
     const targetApi = `https://netvlyx.pages.dev/api/m4ulinks-scraper?url=${encodeURIComponent(targetUrl)}`;
@@ -118,10 +118,10 @@ async function fetchOfficialApiData(targetUrl: string) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 2: MOVIESDRIVE UPGRADED SCRAPER (Fixed Series Matching 🛠️)
+// 🟢 ENGINE 2: MOVIESDRIVE UPGRADED SCRAPER (Virtual Merger Added 🚀)
 // =====================================================================
 
-// --- Helper: Extract Links ---
+// --- Helper: Extract Links from ANY Page (Current or Other Seasons) ---
 async function scrapePageForLinks(url: string, forceSeason: number | null = null) {
     try {
         const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -131,11 +131,13 @@ async function scrapePageForLinks(url: string, forceSeason: number | null = null
         const sections: any[] = [];
         const processedUrls = new Set();
         
+        // Page Title se Season nikalne ki koshish (Fallback)
         const rawTitle = $('h1.page-title').text().trim();
         let pageLevelSeason = null;
         const sMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
         if (sMatch) pageLevelSeason = parseInt(sMatch[1]);
 
+        // Links Extraction (Your Fixed Sidebar Logic)
         $('.page-body a').each((i, el) => {
             const link = $(el).attr('href');
             let text = $(el).text().trim();
@@ -156,6 +158,10 @@ async function scrapePageForLinks(url: string, forceSeason: number | null = null
                 const sizeMatch = contextText.match(/\[(\d+(\.\d+)?\s?(MB|GB))\]/i);
                 const size = sizeMatch ? sizeMatch[1] : "";
 
+                // Season Detection Logic
+                // 1. ForceSeason (agar humne bahar se bataya hai)
+                // 2. Link Context (agar link ke paas likha hai S1, S2)
+                // 3. Page Title (agar page title hi Season 2 hai)
                 let season = forceSeason; 
                 if (season === null) {
                     let localMatch = contextText.match(/(?:Season|S)\s*0?(\d+)/i);
@@ -186,14 +192,11 @@ async function scrapePageForLinks(url: string, forceSeason: number | null = null
     }
 }
 
-// --- Helper: Find Other Seasons (Improved Matching) 🧠 ---
-async function findOtherSeasons(seriesName: string, currentUrl: string) {
+// --- Helper: Find Other Seasons ---
+async function findOtherSeasons(seriesTitle: string, currentUrl: string) {
     try {
-        // Clean Title for Search (Remove Year, Special Chars)
-        // Ex: "Squid Game (2021)" -> "Squid Game"
-        const cleanSearchTerm = seriesName.replace(/\(\d{4}\)/g, '').trim();
-
-        const searchUrl = `https://moviesdrive.forum/?s=${encodeURIComponent(cleanSearchTerm)}`;
+        // Series naam se search karo
+        const searchUrl = `https://moviesdrive.forum/?s=${encodeURIComponent(seriesTitle)}`;
         const res = await fetch(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const html = await res.text();
         const $ = cheerio.load(html);
@@ -204,14 +207,11 @@ async function findOtherSeasons(seriesName: string, currentUrl: string) {
             const title = $(el).find('figcaption p').text().trim();
             const link = $(el).find('figure a').attr('href');
 
-            if (title && link && link !== currentUrl) {
-                // Check if title contains our series name (Case Insensitive)
-                // Using 'cleanSearchTerm' ensures "Squid Game" matches "Squid Game (2021)"
-                if (title.toLowerCase().includes(cleanSearchTerm.toLowerCase())) {
-                    const match = title.match(/(?:Season|S)\s*0?(\d+)/i);
-                    if (match) {
-                        seasonPages.push({ season: parseInt(match[1]), url: link });
-                    }
+            // Agar title match kare aur ye current page na ho
+            if (title.toLowerCase().includes(seriesTitle.toLowerCase()) && link && link !== currentUrl) {
+                const match = title.match(/(?:Season|S)\s*0?(\d+)/i);
+                if (match) {
+                    seasonPages.push({ season: parseInt(match[1]), url: link });
                 }
             }
         });
@@ -248,7 +248,7 @@ async function scrapeMoviesDrive(targetUrl: string) {
     const $ = cheerio.load(html);
 
     // 1. Basic Info
-    const rawTitle = $('h1.page-title').text().trim(); // Use broad selector
+    const rawTitle = $('h1.page-title .material-text').text().trim();
     let title = rawTitle.replace(/^Download\s+/i, '').split(/[\(\[]/)[0].trim();
     
     const yearMatch = rawTitle.match(/\((\d{4})\)/);
@@ -273,42 +273,33 @@ async function scrapeMoviesDrive(targetUrl: string) {
         }
     });
 
-    // 2. Links (Current Page)
+    // 2. Links Extraction (Current Page)
+    // Hum naya helper use kar rahe hain taaki logic consistent rahe
     let downloadSections = await scrapePageForLinks(targetUrl);
 
-    // 3. SERIES DETECTION & MERGER LOGIC (Aggressive Cleaning 🧹)
+    // 3. SERIES DETECTION & MERGER LOGIC 🌟
     const isSeries = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
     
     if (isSeries) {
-        // "Download Squid Game (2021) Season 1..."
-        // Step 1: Remove "Download" prefix
-        let seriesName = rawTitle.replace(/^Download\s+/i, "");
+        // Clean Series Name (e.g. "Mirzapur Season 2" -> "Mirzapur")
+        const seriesName = rawTitle.replace(/\s*(?:Season|S)\s*0?\d+.*/i, "").replace(/^Download\s+/i, "").trim();
         
-        // Step 2: Remove Year (e.g. (2021) or [2021]) -> Important for Matching!
-        seriesName = seriesName.replace(/\s*[\(\[]\d{4}[\)\]].*/, "");
-        seriesName = seriesName.replace(/\s*\(\d{4}\)/, "");
-        
-        // Step 3: Remove Season Info
-        seriesName = seriesName.replace(/\s*(?:Season|S)\s*0?\d+.*/i, "");
-        
-        // Final Trim
-        seriesName = seriesName.trim(); 
-        // Result: "Squid Game"
-
-        // Search for other seasons using this clean name
+        // Find other seasons
         const otherSeasons = await findOtherSeasons(seriesName, targetUrl);
 
         if (otherSeasons.length > 0) {
+            // Fetch all other season pages in parallel (Fast!)
             const promises = otherSeasons.map(os => scrapePageForLinks(os.url, os.season));
             const results = await Promise.all(promises);
 
+            // Merge results
             results.forEach(sections => {
                 downloadSections = [...downloadSections, ...sections];
             });
         }
     }
 
-    // 4. Metadata
+    // 4. Collect All Unique Seasons for Metadata
     const allSeasons = new Set<number>();
     downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
 
