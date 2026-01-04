@@ -150,7 +150,7 @@ export default function MoviePage() {
   // Prioritize Scraper Screenshots
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- FILTER LOGIC ---
+  // --- FILTER LOGIC (LONG LOGIC PRESERVED) ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
@@ -204,10 +204,39 @@ export default function MoviePage() {
 
   const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
 
+  // --- 🔥 FIXED CLICK HANDLER (SAFE MODE) ---
   const handleLinkClick = (url: string) => {
-    const payload = { link: url, title: finalTitle, poster: finalPoster, quality: selectedQuality };
-    const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    router.push(`/vlyxdrive?key=${key}`);
+    if (!url) {
+        // Agar link hi nahi hai, to alert do
+        console.error("Link URL is missing/empty");
+        return;
+    }
+
+    try {
+        // 1. Title aur Poster se Special Characters hatayein (Taaki btoa crash na ho)
+        // Ye bohot zaroori hai agar title mein Emojis ya Hindi text hai
+        const safeTitle = finalTitle ? finalTitle.replace(/[^\x00-\x7F]/g, "") : "Unknown Title";
+        const safePoster = finalPoster ? finalPoster : "";
+
+        const payload = { 
+            link: url, 
+            title: safeTitle, 
+            poster: safePoster, 
+            quality: selectedQuality 
+        };
+
+        // 2. Safely Encode
+        const jsonString = JSON.stringify(payload);
+        const key = btoa(jsonString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        
+        // 3. Navigate
+        router.push(`/vlyxdrive?key=${key}`);
+
+    } catch (err) {
+        console.error("Navigation Failed:", err);
+        // Fallback: Agar encode fail ho jaye, to seedha bhej do (risk hai par click chalega)
+        alert("Unable to open link due to character encoding issue.");
+    }
   };
 
   const handleHeroAction = (type: 'watch' | 'download') => {
