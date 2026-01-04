@@ -9,7 +9,7 @@ export async function GET(request: Request) {
 
   try {
     const [officialRes, mdriveResults] = await Promise.all([
-      // 1. Movies4u API
+      // 1. Movies4u API (Official) - NO CHANGE
       fetch(`https://netvlyx.pages.dev/api/movies4u-search?s=${encodeURIComponent(query)}`, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -18,11 +18,11 @@ export async function GET(request: Request) {
           next: { revalidate: 0 }
       }).then(res => res.json()).catch(() => ({ results: [] })),
 
-      // 2. MoviesDrive Scraper
+      // 2. MoviesDrive Scraper (With Deduplication Logic)
       searchMoviesDrive(query)
     ]);
 
-    // --- DATA TAGGING (Source Add Kar Rahe Hain) ---
+    // --- DATA TAGGING ---
     
     // Movies4u Data -> Tag as 'server_2'
     const officialResults = (officialRes.results || []).map((item: any) => ({
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
         source: 'server_1'
     }));
 
-    // Dono ko ek list mein bhej do, Frontend alag kar lega
+    // Combine Both
     const finalResults = [...mdriveTagged, ...officialResults];
 
     return NextResponse.json({ 
@@ -50,8 +50,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ... (Baaki Scraper Code same rahega, usme change ki zaroorat nahi)
-// Helper Function: MoviesDrive Scraper
+// --- HELPER: MoviesDrive Search + Deduplication Logic 🧠 ---
 async function searchMoviesDrive(query: string) {
     try {
         const targetUrl = `https://moviesdrive.forum/?s=${encodeURIComponent(query)}`;
@@ -62,8 +61,10 @@ async function searchMoviesDrive(query: string) {
         if (!res.ok) return [];
         const html = await res.text();
         const $ = cheerio.load(html);
-        const results: any[] = [];
+        
+        const rawResults: any[] = [];
 
+        // 1. Scrape All Items (Raw)
         $('ul.recent-movies li.thumb').each((i, el) => {
             const titleEl = $(el).find('figcaption p');
             const imgEl = $(el).find('figure img');
@@ -78,7 +79,7 @@ async function searchMoviesDrive(query: string) {
                 if (title.includes('1080p')) qualityTags.push('1080p');
                 if (title.includes('Hindi')) qualityTags.push('Hindi');
 
-                results.push({
+                rawResults.push({
                     title: title,
                     image: image,
                     link: link,
@@ -87,7 +88,33 @@ async function searchMoviesDrive(query: string) {
                 });
             }
         });
-        return results;
+
+        // 2. SMART DEDUPLICATION LOGIC 🌟
+        // Maqsad: Series ke multiple seasons ko remove karke ek dikhana
+        
+        const seenTitles = new Set();
+        const uniqueResults = [];
+
+        for (const item of rawResults) {
+            // Clean Title banao (Season info hata kar)
+            // Ex: "Game of Thrones Season 5" -> "game of thrones"
+            const cleanBaseTitle = item.title
+                .replace(/\s*(?:Season|S|Series)\s*0?\d+.*/i, "") // Remove 'Season 1' etc
+                .replace(/\s*[\(\[]?Complete[\)\]]?/i, "") // Remove 'Complete'
+                .replace(/\s*[\(\[]?Vol\s*\.?\s*\d+[\)\]]?/i, "") // Remove 'Vol 1'
+                .trim()
+                .toLowerCase();
+
+            // Agar ye Series pehli baar dikhi hai -> Add karo
+            // Agar ye Movie hai -> Hamesha Add karo (Movies duplicate nahi hoti usually)
+            if (item.type === 'Movie' || !seenTitles.has(cleanBaseTitle)) {
+                if(item.type === 'Series') seenTitles.add(cleanBaseTitle);
+                uniqueResults.push(item);
+            }
+        }
+
+        return uniqueResults;
+
     } catch (e) {
         return [];
     }
