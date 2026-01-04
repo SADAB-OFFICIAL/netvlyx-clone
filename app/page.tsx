@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Play, Info, Search, Bell, MonitorPlay, 
-  ChevronRight, Star, X, Mail, Menu
+  ChevronRight, Star, X, Mail
 } from 'lucide-react';
 
 import TwinklingStars from '@/components/TwinklingStars';
@@ -212,7 +212,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     );
 };
 
-// --- MOVIE ROW SECTION (UPDATED WITH VIEW ALL) ---
+// --- MOVIE ROW SECTION (UPDATED: FRESH NAME BELOW CARD 🌟) ---
 const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
@@ -238,6 +238,19 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
         if (slug) {
             router.push(`/category/${slug}`);
         }
+    };
+
+    // 🌟 HELPER: Clean Title Function
+    const getCleanTitle = (text: string) => {
+        if (!text) return "Unknown";
+        return text
+            .replace(/^Download\s+/i, "")
+            .replace(/\s*\(\d{4}\).*/, "")  // Remove (2024)...
+            .replace(/\s*\[\d{4}\].*/, "")  // Remove [2024]...
+            .replace(/\s*(?:4k|1080p|720p|480p|hd|cam|rip).*/i, "") // Remove Quality tags
+            .replace(/\s*(?:Season|S)\s*0?\d+.*/i, "") // Remove Season if you want base title
+            .replace(/[\[\]\(\)]/g, "") // Remove left over brackets
+            .trim();
     };
   
     if (!items || items.length === 0) return null;
@@ -272,33 +285,35 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
               className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 px-1"
             >
               {items.map((item, idx) => (
+                // WRAPPER DIV: Holds Image + Title
                 <div 
                   key={idx} 
-                  // ✅ UPDATED CARD SIZE: Mobile (2.5 cards), Desktop (More)
-                  className="relative min-w-[130px] md:min-w-[180px] h-[200px] md:h-[270px] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:z-10 group/card shadow-lg hover:shadow-yellow-500/20 bg-gray-900"
+                  className="flex flex-col gap-2 min-w-[130px] md:min-w-[180px] group/item cursor-pointer"
                   onClick={() => handleItemClick(item)}
                 >
-                    <img 
-                      src={item.image || item.poster} 
-                      alt={item.title} 
-                      className="w-full h-full object-cover opacity-90 group-hover/card:opacity-100" 
-                      loading="lazy"
-                    />
-                    
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 md:p-4">
-                        <h3 className="text-white font-bold text-xs md:text-sm leading-tight mb-1 line-clamp-2">{item.title}</h3>
-                        <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-300">
-                            {item.quality && (
-                                <span className="bg-gray-700 px-1.5 rounded">{item.quality}</span>
-                            )}
-                            <span className="flex items-center gap-1"><Star size={10} className="text-yellow-500" /> 8.5</span>
-                        </div>
-                        <div className="flex gap-2 mt-2 md:mt-3">
-                             <button className="bg-white text-black p-1.5 md:p-2 rounded-full hover:bg-yellow-400 transition-colors">
-                                <Play size={10} className="md:w-3 md:h-3" fill="currentColor" />
-                             </button>
+                    {/* POSTER IMAGE CONTAINER */}
+                    <div className="relative w-full h-[200px] md:h-[270px] rounded-lg overflow-hidden transition-all duration-300 group-hover/item:scale-105 group-hover/item:shadow-lg group-hover/item:shadow-yellow-500/20 bg-gray-900 z-10">
+                        <img 
+                          src={item.image || item.poster} 
+                          alt={item.title} 
+                          className="w-full h-full object-cover opacity-90 group-hover/item:opacity-100 transition-opacity" 
+                          loading="lazy"
+                        />
+                        
+                        {/* Hover Overlay (Optional: keep for quick info) */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
+                            <div className="flex gap-2 justify-center">
+                                 <div className="bg-white text-black p-2 rounded-full hover:bg-yellow-400 transition-colors scale-0 group-hover/item:scale-100 duration-300">
+                                    <Play size={12} fill="currentColor" />
+                                 </div>
+                            </div>
                         </div>
                     </div>
+
+                    {/* ✅ FRESH NAME BELOW CARD */}
+                    <h3 className="text-gray-300 font-medium text-xs md:text-sm truncate pl-1 group-hover/item:text-yellow-400 transition-colors">
+                        {getCleanTitle(item.title)}
+                    </h3>
                 </div>
               ))}
             </div>
