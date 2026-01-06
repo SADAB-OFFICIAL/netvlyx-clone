@@ -4,7 +4,8 @@ export const runtime = 'edge';
 
 const TOKEN_SOURCE = "https://vcloud.zip/hr17ehaeym7rza9";
 const PROXY = "https://proxy.vlyx.workers.dev";
-const BASE_HOST = "https://gamerxyt.com/hubcloud.php";
+const BASE_HOST = "https://gamerxyt.com";
+const BASE_SCRIPT = "hubcloud.php";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -13,41 +14,38 @@ export async function GET(req: NextRequest) {
   if (!key) return NextResponse.json({ error: "No key provided" }, { status: 400 });
 
   try {
-    // 🛠️ FIX: URL-Safe Base64 ko Standard Base64 mein badlo
+    // 🛠️ 1. Secure Key Decoding
     let cleanKey = key.replace(/-/g, '+').replace(/_/g, '/');
-    
-    // Padding wapas lagao agar missing hai (atob ko padding chahiye hoti hai)
-    while (cleanKey.length % 4) {
-        cleanKey += '=';
-    }
+    while (cleanKey.length % 4) cleanKey += '='; // Padding fix
 
-    // Ab Decode karo
     const decoded = atob(cleanKey);
     const json = JSON.parse(decoded);
-    const inputUrl = json.url || json.link; // Kabhi 'url' hota hai, kabhi 'link'
+    const inputUrl = json.url || json.link;
 
     if (!inputUrl) throw new Error("URL missing in key data");
 
-    // 2. ID Extraction Logic
+    // 🛠️ 2. ID Extraction
     const urlObj = new URL(inputUrl.startsWith('http') ? inputUrl : `https://${inputUrl}`);
-    // ID nikalne ka robust tareeka (Last path segment)
     const pathParts = urlObj.pathname.replace(/\/$/, '').split('/');
     const id = pathParts.pop(); 
 
     if (!id) throw new Error("Invalid HubCloud ID");
 
-    console.log(`[Generate API] Processing ID: ${id}`);
-
     // --- 🕵️‍♂️ STEP 1: Get Initial Token ---
     const token = await getVcloudToken();
     if (!token) throw new Error("Failed to get vCloud token");
 
-    // Construct First URL
-    const step1Url = `${BASE_HOST}?host=hubcloud&id=${id}&token=${token}`;
+    // Construct URL 1
+    const step1Url = `${BASE_HOST}/${BASE_SCRIPT}?host=hubcloud&id=${id}&token=${token}`;
     
-    // --- 🕵️‍♂️ STEP 2: Fetch Tokenized URL ---
+    // --- 🕵️‍♂️ STEP 2: Fetch & Find Tokenized URL (The Error Fix) ---
+    // Yahan hum relative aur absolute dono URLs check karenge
     const step2Url = await fetchAndFindTokenizedUrl(step1Url);
-    if (!step2Url) throw new Error("Failed to verify token (Step 2)");
+    
+    if (!step2Url) {
+        // Debugging ke liye step 1 ka URL return kar rahe hain taaki pata chale kahan atka
+        throw new Error(`Failed to verify token (Step 2). Source: ${step1Url}`);
+    }
 
     // --- 🕵️‍♂️ STEP 3: Fetch Final Stream Link ---
     const finalData = await extractFinalLink(step2Url);
@@ -71,7 +69,12 @@ export async function GET(req: NextRequest) {
 
 async function getVcloudToken() {
     try {
-        const res = await fetch(`${PROXY}/?url=${encodeURIComponent(TOKEN_SOURCE)}`, { cache: 'no-store' });
+        const res = await fetch(`${PROXY}/?url=${encodeURIComponent(TOKEN_SOURCE)}`, { 
+            cache: 'no-store',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
         const text = await res.text();
         const match = text.match(/token=([^&']+)/);
         return match ? match[1] : null;
@@ -79,26 +82,47 @@ async function getVcloudToken() {
 }
 
 async function fetchAndFindTokenizedUrl(url: string) {
-    const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-    });
-    const html = await res.text();
+    try {
+        const res = await fetch(url, {
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://vcloud.zip/' // Adding Referer helps bypass checks
+            }
+        });
+        const html = await res.text();
 
-    // Debugging ke liye: GamerXYT ke redirect pattern ko pakadna
-    // Pattern: meta refresh ya window.location ya anchor tag
-    const regex = /https:\/\/gamerxyt\.com\/hubcloud\.php\?[^"']+/g;
-    const matches = html.match(regex);
+        // Regex Strategies to find the next link:
+        // 1. Absolute: https://gamerxyt.com/hubcloud.php?host=...
+        // 2. Relative: hubcloud.php?host=...
+        
+        // Search for 'hubcloud.php' followed by query params
+        const regex = /(?:https:\/\/gamerxyt\.com\/)?hubcloud\.php\?[^"']+/g;
+        const matches = html.match(regex);
 
-    if (matches) {
-        // Sabse lamba link usually sahi hota hai (usme naya token hota hai)
-        return matches.reduce((a, b) => a.length > b.length ? a : b);
+        if (matches) {
+            // Find the longest match (it usually contains the extra token/page params)
+            let bestMatch = matches.reduce((a, b) => a.length > b.length ? a : b);
+            
+            // Agar relative hai, to domain add kar do
+            if (!bestMatch.startsWith('http')) {
+                bestMatch = `${BASE_HOST}/${bestMatch}`;
+            }
+            return bestMatch;
+        }
+        
+        return null;
+    } catch (e) {
+        console.error("Step 2 Error:", e);
+        return null;
     }
-    return null;
 }
 
 async function extractFinalLink(url: string) {
     const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
+        headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://gamerxyt.com/'
+        }
     });
     const html = await res.text();
 
@@ -108,14 +132,14 @@ async function extractFinalLink(url: string) {
 
     let streamLink = null;
     
-    // 1. Try finding 'btn-success' / 'btn-danger' (GamerXYT Style)
+    // 1. Try finding 'btn-success' / 'btn-danger' (Direct Link Button)
     const linkMatch = html.match(/href=["'](https?:\/\/[^"']+)["'][^>]*class=["'][^"']*btn-(?:success|danger|primary)[^"']*["']/);
     
     if (linkMatch) {
         streamLink = linkMatch[1];
     } else {
-        // 2. Fallback: Search for drive/hubcloud links directly
-        const rawMatch = html.match(/href=["'](https?:\/\/(?:drive\.google\.com|hubcloud\.run|workers\.dev)[^"']+)["']/);
+        // 2. Fallback: Search for known drive domains
+        const rawMatch = html.match(/href=["'](https?:\/\/(?:drive\.google\.com|hubcloud\.run|workers\.dev|cf-worker)[^"']+)["']/);
         if (rawMatch) streamLink = rawMatch[1];
     }
 
