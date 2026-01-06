@@ -1,93 +1,128 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// ⚡ Edge Runtime (Fast Execution ke liye)
 export const runtime = 'edge';
 
-// 🔒 Constants (Wahi same trick)
 const TOKEN_SOURCE = "https://vcloud.zip/hr17ehaeym7rza9";
 const PROXY = "https://proxy.vlyx.workers.dev";
-const BASE_URL = "https://gamerxyt.com/hubcloud.php";
+const BASE_HOST = "https://gamerxyt.com/hubcloud.php";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const key = searchParams.get('key');
-  const action = searchParams.get('action') || 'download';
 
-  // 1. Check Key
-  if (!key) {
-    return NextResponse.json({ error: "Missing 'key' parameter" }, { status: 400 });
-  }
+  if (!key) return NextResponse.json({ error: "No key provided" }, { status: 400 });
 
   try {
-    // 2. Decode Key (Base64 -> JSON)
-    // NCloud/Netvlyx se jo key aati hai wo encoded hoti hai
-    const decodedString = atob(key);
-    const data = JSON.parse(decodedString);
+    // 1. Decode Key
+    const decoded = atob(key);
+    const json = JSON.parse(decoded);
+    const inputUrl = json.url; 
 
-    if (!data.url) throw new Error('Invalid data structure: URL missing');
+    if (!inputUrl) throw new Error("URL missing in key");
 
-    // 3. Generate New Link (Magic Trick)
-    const generatedLink = await generateHubCloudLink(data.url);
+    // 2. ID Extraction
+    const urlObj = new URL(inputUrl.startsWith('http') ? inputUrl : `https://${inputUrl}`);
+    const pathParts = urlObj.pathname.replace(/\/$/, '').split('/');
+    const id = pathParts.pop(); 
+
+    if (!id) throw new Error("Invalid ID");
+
+    // --- 🕵️‍♂️ STEP 1: Get Initial Token ---
+    const token = await getVcloudToken();
+    if (!token) throw new Error("Failed to get vCloud token");
+
+    // Construct First URL (Log Step 1)
+    const step1Url = `${BASE_HOST}?host=hubcloud&id=${id}&token=${token}`;
+    console.log("[N-Cloud] Step 1 URL:", step1Url);
+
+    // --- 🕵️‍♂️ STEP 2: Fetch Tokenized URL (Log Step 2) ---
+    const step2Url = await fetchAndFindTokenizedUrl(step1Url);
+    if (!step2Url) throw new Error("Failed to find Tokenized URL (Step 2)");
+    console.log("[N-Cloud] Step 2 URL:", step2Url);
+
+    // --- 🕵️‍♂️ STEP 3: Fetch Final Stream Link (Log Step 3) ---
+    const finalData = await extractFinalLink(step2Url);
     
-    // 4. Update Data
-    data.url = generatedLink;
-    
-    // 5. Re-Encode for Response
-    const newKey = btoa(JSON.stringify(data));
-
-    // 6. Return JSON (Frontend isse handle karega)
+    // Return Final Direct Link (Streamable)
     return NextResponse.json({
         success: true,
-        originalUrl: data.url,
-        generatedLink: generatedLink,
-        newKey: newKey,
-        nextUrl: `/gen?key=${newKey}&action=${action}`
+        streamUrl: finalData.streamLink,
+        filename: finalData.filename,
+        originalUrl: inputUrl
     });
 
-  } catch (err: any) {
-    console.error("Generator Error:", err);
-    return NextResponse.json({ error: err.message || 'Processing failed' }, { status: 500 });
+  } catch (e: any) {
+    console.error("[N-Cloud Error]:", e.message);
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
-// --- HELPER FUNCTIONS ---
+// ==========================================
+// 🛠️ HELPER FUNCTIONS (The Magic Logic)
+// ==========================================
 
-// 🕵️‍♂️ Step 1: Token Chori Karna (Scraping)
-async function getToken() {
-  try {
-    const res = await fetch(`${PROXY}/?url=${encodeURIComponent(TOKEN_SOURCE)}`, {
-      cache: 'no-store'
+// 1. Token Scraper (Wahi Friend wala trick)
+async function getVcloudToken() {
+    try {
+        const res = await fetch(`${PROXY}/?url=${encodeURIComponent(TOKEN_SOURCE)}`, { cache: 'no-store' });
+        const text = await res.text();
+        const match = text.match(/token=([^&']+)/);
+        return match ? match[1] : null;
+    } catch (e) { return null; }
+}
+
+// 2. Step 2 Handler: Finds "Tokenized URL" inside HTML/JS
+async function fetchAndFindTokenizedUrl(url: string) {
+    const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
-
-    if (!res.ok) return null;
-
     const html = await res.text();
-    // Regex se token nikalna: token='XYZ'
-    const match = html.match(/token=([^&']+)/);
+
+    // Debug logs ke hisaab se URL pattern dhoondna hai
+    // Pattern: https://gamerxyt.com/hubcloud.php?host=hubcloud&id=...&token=...
+    // Aksar ye window.location.replace("...") ya <a href="..."> mein hota hai
     
-    return match ? match[1] : null;
-  } catch (e) {
-    console.error("Token Fetch Error:", e);
+    const regex = /https:\/\/gamerxyt\.com\/hubcloud\.php\?[^"']+/g;
+    const matches = html.match(regex);
+
+    // Filter logic: Hame wo link chahiye jo input URL se thoda alag ho (redirect wala)
+    if (matches) {
+        // Find the longest match (usually contains extra params like &page= or &token=new)
+        return matches.reduce((a, b) => a.length > b.length ? a : b);
+    }
     return null;
-  }
 }
 
-// 🔗 Step 2: Link Banana
-async function generateHubCloudLink(inputUrl: string) {
-  // HubCloud Link se ID nikalna (e.g. https://hubcloud.run/drive/xyz123)
-  // Logic: Last part of URL is ID
-  const urlObj = new URL(inputUrl.startsWith('http') ? inputUrl : `https://${inputUrl}`);
-  
-  // ID Extraction fix: kabhi kabhi last mein slash hota hai
-  const pathParts = urlObj.pathname.replace(/\/$/, '').split('/');
-  const id = pathParts.pop(); // Last hissa ID hai
+// 3. Step 3 Handler: Extracts Final Direct Link (Google Drive / Worker)
+async function extractFinalLink(url: string) {
+    const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const html = await res.text();
 
-  if (!id || id.length <= 3) throw new Error("Invalid HubCloud ID");
+    // 1. Filename Extraction
+    let filename = "Unknown Movie";
+    const titleMatch = html.match(/<title>(.*?)<\/title>/);
+    if (titleMatch) filename = titleMatch[1].replace("(Movies4u.Foo)", "").trim();
 
-  // Token lao
-  const token = await getToken();
-  if (!token) throw new Error("Failed to fetch bypass token");
+    // 2. Direct Link Extraction
+    // GamerXYT usually returns a button with class 'btn-success' or 'btn-danger' containing the link
+    // Pattern: <a href="https://hubcloud.run/..." class="btn">
+    
+    let streamLink = null;
+    
+    // Pattern A: Direct HubCloud/Drive link in anchor tag
+    const linkMatch = html.match(/href=["'](https?:\/\/[^"']+)["'][^>]*class=["'][^"']*btn-(?:success|danger|primary)[^"']*["']/);
+    
+    if (linkMatch) {
+        streamLink = linkMatch[1];
+    } else {
+        // Pattern B: Raw Search (Fallback) -> Finds Google Drive or HubCloud links
+        const rawMatch = html.match(/href=["'](https?:\/\/(?:drive\.google\.com|hubcloud\.run|workers\.dev)[^"']+)["']/);
+        if (rawMatch) streamLink = rawMatch[1];
+    }
 
-  // Final API Call URL banao
-  return `${BASE_URL}?host=hubcloud&id=${id}&token=${token}`;
+    if (!streamLink) throw new Error("Stream Link Extraction Failed");
+
+    return { streamLink, filename };
 }
