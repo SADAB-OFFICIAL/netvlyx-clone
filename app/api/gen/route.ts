@@ -1,54 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// ⚡ Edge Runtime (Fastest Response)
 export const runtime = 'edge';
 
 const BASE_HOST = "https://gamerxyt.com";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  // Input: Wo URL jo NCloud API ne banaya tha
-  // Ex: https://gamerxyt.com/hubcloud.php?host=hubcloud&id=...&token=...
   const targetUrl = searchParams.get('url');
 
-  if (!targetUrl) {
-    return NextResponse.json({ error: "No target URL provided" }, { status: 400 });
-  }
+  if (!targetUrl) return NextResponse.json({ error: "No target URL provided" }, { status: 400 });
 
   try {
-    console.log("[GEN API] Step 2 Scraping Started for:", targetUrl);
-
-    // -----------------------------------------------------------
-    // 🕵️‍♂️ PHASE 1: Verify & Get "Tokenized" URL (Redirect Check)
-    // -----------------------------------------------------------
-    // GamerXYT ka pehla link aksar ek intermediate page hota hai.
-    // Humein HTML ke andar se 'verified' link dhoondna hai.
-    
+    // 1. Verify & Get Tokenized URL
     const step2Url = await fetchAndFindTokenizedUrl(targetUrl);
     
     if (!step2Url) {
-        // Agar link nahi mila, matlab token expire ho gaya ya page change ho gaya
-        throw new Error("Failed to find verified redirection URL (Step 2 Failed)");
+        throw new Error("Failed to find verified redirection URL");
     }
 
-    console.log("[GEN API] Found Verified URL:", step2Url);
+    // 2. Scrape ALL Final Links (Multi-Server)
+    const finalData = await extractAllLinks(step2Url);
 
-    // -----------------------------------------------------------
-    // 🕵️‍♂️ PHASE 2: Scrape Final Direct Link
-    // -----------------------------------------------------------
-    // Ab us verified URL ko visit karke final 'Download/Play' button dhundenge.
-    
-    const finalData = await extractFinalLink(step2Url);
+    // 3. Smart Filtering (Junk Hatao)
+    const cleanStreams = finalData.streams.filter(s => {
+        const link = s.link.toLowerCase();
+        const server = s.server.toLowerCase();
+        
+        // 🚫 Block Junk
+        if (link.includes('dgdrive') || server.includes('dgdrive')) return false;
+        if (link.includes('plough') || link.includes('terra')) return false;
+        if (link.includes('login') || link.includes('signup')) return false;
 
-    // -----------------------------------------------------------
-    // ✅ SUCCESS
-    // -----------------------------------------------------------
+        return true;
+    });
+
+    // 4. Return List
     return NextResponse.json({
         success: true,
-        step: 'gen_complete',
-        streamLink: finalData.streamLink, // Ye raha asli maal (Direct Link)
+        streamLink: cleanStreams[0]?.link, // Compatibility ke liye pehla link
+        streams: cleanStreams,             // Ye hai naya maal (All Servers)
         filename: finalData.filename,
-        serverName: "G-Direct Fast",
         originalUrl: targetUrl
     });
 
@@ -59,89 +50,104 @@ export async function GET(req: NextRequest) {
 }
 
 // ==========================================
-// 🛠️ HELPER FUNCTIONS (The Core Logic)
+// 🛠️ HELPER FUNCTIONS
 // ==========================================
 
-// Helper 1: HTML ke andar se Next Step ka URL dhoondna
 async function fetchAndFindTokenizedUrl(url: string) {
     try {
         const res = await fetch(url, {
             headers: { 
-                // Browser Headers bohot zaroori hain taaki GamerXYT block na kare
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://vcloud.zip/', // Referer Trick
+                'Referer': 'https://vcloud.zip/',
             }
         });
         const html = await res.text();
-
-        // 🔍 Regex Strategy:
-        // Hum "hubcloud.php?" wala pattern dhundenge jo page mein kahin bhi ho.
-        // Ye Relative (hubcloud.php?...) ya Absolute (https://gamerxyt...) dono pakad lega.
-        
         const regex = /(?:https:\/\/gamerxyt\.com\/)?hubcloud\.php\?[^"']+/g;
         const matches = html.match(regex);
 
         if (matches) {
-            // Logic: Sabse lamba URL usually sahi hota hai (usme extra tokens hote hain)
             let bestMatch = matches.reduce((a, b) => a.length > b.length ? a : b);
-            
-            // Fix Relative URLs (Agar http se shuru nahi ho raha)
             if (!bestMatch.startsWith('http')) {
                 const separator = bestMatch.startsWith('/') ? '' : '/';
                 bestMatch = `${BASE_HOST}${separator}${bestMatch}`;
             }
             return bestMatch;
         }
-        
         return null;
-
-    } catch (e) {
-        console.error("Step 1 Fetch Error:", e);
-        return null;
-    }
+    } catch (e) { return null; }
 }
 
-// Helper 2: Final Page se Button Extract karna
-async function extractFinalLink(url: string) {
+async function extractAllLinks(url: string) {
     const res = await fetch(url, {
         headers: { 
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://gamerxyt.com/' // Internal Referer
+            'Referer': 'https://gamerxyt.com/'
         }
     });
     const html = await res.text();
 
-    // 1. Filename Extraction (Title tag se)
     let filename = "Unknown File";
     const titleMatch = html.match(/<title>(.*?)<\/title>/);
     if (titleMatch) {
-        // Cleaning title (removing site branding)
         filename = titleMatch[1]
             .replace("(Movies4u.Foo)", "")
             .replace("- GamerXYT", "")
             .trim();
     }
 
-    let streamLink = null;
+    const streams: { server: string, link: string, type: string }[] = [];
     
-    // 2. Button Link Extraction 🎯
-    // GamerXYT links usually 'btn-success', 'btn-danger' class wale buttons mein hote hain.
+    // 🎯 STRATEGY: Find all buttons with links
+    // Regex matches: <a href="..." class="... btn-success ...">Download Text</a>
     
-    // Strategy A: Class based search (Most Reliable)
-    const linkMatch = html.match(/href=["'](https?:\/\/[^"']+)["'][^>]*class=["'][^"']*btn-(?:success|danger|primary|warning)[^"']*["']/);
-    
-    if (linkMatch) {
-        streamLink = linkMatch[1];
-    } else {
-        // Strategy B: Raw URL search (Fallback)
-        // Dhoondo: google drive, hubcloud.run, ya workers.dev links seedhe HTML mein
-        const rawMatch = html.match(/href=["'](https?:\/\/(?:drive\.google\.com|hubcloud\.run|workers\.dev|cf-worker)[^"']+)["']/);
-        if (rawMatch) streamLink = rawMatch[1];
+    // 1. Success Buttons (Usually FSL / Fast)
+    const successRegex = /<a[^>]+href=["']([^"']+)["'][^>]*class=["'][^"']*btn-success[^"']*["'][^>]*>(.*?)<\/a>/g;
+    let match;
+    while ((match = successRegex.exec(html)) !== null) {
+        streams.push({
+            server: "⚡ Fast Cloud (VIP)",
+            link: match[1],
+            type: "DIRECT"
+        });
     }
 
-    if (!streamLink) {
-        throw new Error("Final Stream Link not found in the page source.");
+    // 2. Danger Buttons (Usually G-Direct / Drive)
+    const dangerRegex = /<a[^>]+href=["']([^"']+)["'][^>]*class=["'][^"']*btn-danger[^"']*["'][^>]*>(.*?)<\/a>/g;
+    while ((match = dangerRegex.exec(html)) !== null) {
+        streams.push({
+            server: "🚀 G-Direct (10Gbps)",
+            link: match[1],
+            type: "DRIVE"
+        });
     }
 
-    return { streamLink, filename };
+    // 3. Warning/Primary Buttons (Other Mirrors)
+    const otherRegex = /<a[^>]+href=["']([^"']+)["'][^>]*class=["'][^"']*btn-(?:primary|warning|info)[^"']*["'][^>]*>(.*?)<\/a>/g;
+    while ((match = otherRegex.exec(html)) !== null) {
+        // Clean Link Name
+        let name = match[2].replace(/<[^>]*>/g, '').trim(); // Remove inner HTML tags
+        if (name.toLowerCase().includes('download')) name = "Cloud Mirror";
+        
+        streams.push({
+            server: name || "Backup Server",
+            link: match[1],
+            type: "MIRROR"
+        });
+    }
+
+    // 4. Fallback: If no buttons found, find raw links
+    if (streams.length === 0) {
+        const rawMatch = html.match(/href=["'](https?:\/\/(?:drive\.google\.com|hubcloud\.run|workers\.dev|cf-worker|cdn\.fsl)[^"']+)["']/);
+        if (rawMatch) {
+            streams.push({
+                server: "⚡ Fast Cloud (Fallback)",
+                link: rawMatch[1],
+                type: "DIRECT"
+            });
+        }
+    }
+
+    if (streams.length === 0) throw new Error("No stream links found on page");
+
+    return { streams, filename };
 }
