@@ -18,7 +18,7 @@ function NCloudPlayer() {
   const params = useSearchParams();
   const key = params.get('key');
   
-  // --- STATE & LOGIC ---
+  // --- STATE ---
   const [loading, setLoading] = useState(true);
   const [statusMsg, setStatusMsg] = useState('Initializing Secure Handshake...');
   
@@ -34,37 +34,37 @@ function NCloudPlayer() {
     if (key) {
       const init = async () => {
         try {
-          // 1. Decoding Metadata
+          // 1. Decode Key
           const cleanKey = key.replace(/-/g, '+').replace(/_/g, '/');
           const json = atob(cleanKey);
           const payload = JSON.parse(json);
           setMetaData(payload);
 
-          const targetUrl = payload.url || payload.link;
-          if (!targetUrl) throw new Error("No URL found in data");
+          // 2. Call Smart Backend (NCloud API)
+          setStatusMsg('Analyzing Link Type...');
+          const ncloudRes = await fetch(`/api/ncloud?key=${key}`);
+          const ncloudData = await ncloudRes.json();
 
-          // -----------------------------------------------------------
-          // 🧠 SMART SWITCH: Check if HUBCLOUD or V-CLOUD
-          // -----------------------------------------------------------
-          
-          const isHubCloud = targetUrl.includes('hubcloud') || targetUrl.includes('hubdrive');
+          if (!ncloudData.success) {
+             throw new Error(ncloudData.error || "Processing failed");
+          }
 
-          if (isHubCloud) {
-              // ==========================================
-              // 🔴 OPTION A: HUBCLOUD (New Token Logic)
-              // ==========================================
-              setStatusMsg('Detected HubCloud. Authenticating Tokens...');
-              
-              // Step 1: Get Tokenized URL
-              const ncloudRes = await fetch(`/api/ncloud?key=${key}`);
-              const ncloudData = await ncloudRes.json();
-
-              if (!ncloudData.success || !ncloudData.finalUrl) {
-                throw new Error(ncloudData.error || "Token generation failed");
+          // 3. Handle Based on Mode
+          if (ncloudData.mode === 'direct') {
+              // ✅ CASE A: V-CLOUD (Direct Streams)
+              // Backend ne old API se streams laa diye hain
+              if (!ncloudData.streams || ncloudData.streams.length === 0) {
+                  throw new Error("No streams found from V-Cloud source");
               }
+              
+              setStreams(ncloudData.streams);
+              setCurrentStream(ncloudData.streams[0]);
+              setApiTitle(ncloudData.title || payload.title);
 
-              // Step 2: Gen Scraper
+          } else if (ncloudData.mode === 'handshake') {
+              // ✅ CASE B: HUBCLOUD (Step 2 Required)
               setStatusMsg('Bypassing Cloudflare & Generating Link...');
+              
               const genRes = await fetch(`/api/gen?url=${encodeURIComponent(ncloudData.finalUrl)}`);
               const genData = await genRes.json();
 
@@ -72,42 +72,16 @@ function NCloudPlayer() {
                  throw new Error(genData.error || "Final link generation failed");
               }
 
-              // Set Streams
+              // Create Single Stream Object
               const newStreams: Stream[] = [{
                   server: "⚡ Fast Cloud (VIP)",
                   link: genData.streamLink,
                   type: "DIRECT"
               }];
+              
               setStreams(newStreams);
               setCurrentStream(newStreams[0]);
               setApiTitle(genData.filename || payload.title);
-
-          } else {
-              // ==========================================
-              // 🔵 OPTION B: V-CLOUD (Old API Logic)
-              // ==========================================
-              setStatusMsg('Detected V-Cloud. Fetching Standard API...');
-
-              // Direct call to old API (No Token System needed)
-              const oldApiUrl = `https://nothing-to-see-nine.vercel.app/hubcloud?url=${targetUrl}&key=sadabefy`;
-              
-              const res = await fetch(oldApiUrl);
-              const data = await res.json();
-
-              // API se link nikalna (Adjust based on old API response)
-              const finalLink = data.link || data.url || data.stream_link;
-              
-              if (!finalLink) throw new Error("V-Cloud API failed to return link");
-
-              // Set Streams
-              const newStreams: Stream[] = [{
-                  server: "☁️ V-Cloud Server",
-                  link: finalLink,
-                  type: "STANDARD"
-              }];
-              setStreams(newStreams);
-              setCurrentStream(newStreams[0]);
-              setApiTitle(data.title || payload.title);
           }
 
           setLoading(false);
@@ -122,7 +96,7 @@ function NCloudPlayer() {
     }
   }, [key]);
 
-  // --- HANDLERS ---
+  // --- HANDLERS (Same as before) ---
   const handleServerClick = (stream: Stream) => {
       setCurrentStream(stream);
       if (tab === 'download') window.open(stream.link, '_blank');
@@ -142,9 +116,8 @@ function NCloudPlayer() {
     window.location.href = intent;
   };
 
-  // --- UI RENDERING ---
+  // --- UI RENDER (Loading / Error / Main) ---
   
-  // 1. LOADING SCREEN
   if (loading) return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden px-4">
       <div className="relative z-10 flex flex-col items-center text-center">
@@ -161,7 +134,6 @@ function NCloudPlayer() {
     </div>
   );
 
-  // 2. ERROR SCREEN
   if (!currentStream || streams.length === 0) return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-sm text-center p-6 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-xl">
@@ -224,7 +196,6 @@ function NCloudPlayer() {
            {/* PLAYER SECTION */}
            <div className="lg:col-span-8 space-y-4">
               
-              {/* Video Container */}
               <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                  {tab === 'stream' ? (
                      <video 
@@ -248,7 +219,6 @@ function NCloudPlayer() {
                  )}
               </div>
 
-              {/* Title Info */}
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 md:p-6 backdrop-blur-sm">
                   <h2 className="text-lg md:text-2xl font-bold text-white leading-tight mb-2 line-clamp-2">
                       {metaData?.title || apiTitle || 'Unknown Title'}
@@ -264,7 +234,6 @@ function NCloudPlayer() {
            {/* CONTROLS SECTION */}
            <div className="lg:col-span-4 space-y-4 md:space-y-6">
               
-              {/* Server List */}
               <div className="bg-black/40 border border-white/10 rounded-2xl p-4 md:p-6 backdrop-blur-xl flex flex-col h-[300px] md:h-[400px]">
                  <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                      <Wifi size={12} /> {tab === 'download' ? 'Download Servers' : 'Stream Servers'}
@@ -287,7 +256,7 @@ function NCloudPlayer() {
                                     <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-600'}`}></div>
                                     <div className="text-left">
                                         <p className="font-bold text-xs md:text-sm">{stream.server}</p>
-                                        <p className="text-[9px] opacity-60 font-mono uppercase">{stream.type}</p>
+                                        <p className="text-[9px] opacity-60 font-mono uppercase">{stream.type || 'FAST'}</p>
                                     </div>
                                 </div>
                                 {isActive && <MonitorPlay size={14} />}
@@ -297,7 +266,6 @@ function NCloudPlayer() {
                  </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="space-y-3">
                  {tab === 'stream' ? (
                     <>
