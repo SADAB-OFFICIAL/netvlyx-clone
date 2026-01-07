@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   if (!key) return NextResponse.json({ error: "No key provided" }, { status: 400 });
 
   try {
-    // 1. Decode Key safely
+    // 1. Decode Key
     let cleanKey = key.replace(/-/g, '+').replace(/_/g, '/');
     while (cleanKey.length % 4) cleanKey += '=';
     
@@ -25,31 +25,57 @@ export async function GET(req: NextRequest) {
     if (!targetUrl) throw new Error("URL missing in key");
 
     // -----------------------------------------------------------
-    // 🧠 SMART SWITCH: Check if HubCloud or V-Cloud
+    // 🧠 SMART SWITCH & FILTER SYSTEM
     // -----------------------------------------------------------
     const isHubCloud = targetUrl.includes('hubcloud') || targetUrl.includes('hubdrive');
 
     if (!isHubCloud) {
         // ==========================================
-        // 🔵 CASE A: V-CLOUD (Use Old API Proxy)
+        // 🔵 CASE A: V-CLOUD (Old API Proxy + Filter)
         // ==========================================
-        // Kyunki V-Cloud links token system se nahi chalte
         
         const apiUrl = `${OLD_API}?url=${encodeURIComponent(targetUrl)}&key=sadabefy`;
         const res = await fetch(apiUrl);
         const data = await res.json();
         
-        // Agar Old API ne streams de diye, to seedha return karo
+        let rawStreams = data.streams || [];
+        
+        // 🧹 JUNK CLEANER LOGIC
+        const cleanStreams = rawStreams.filter((s: any) => {
+            const link = (s.link || '').toLowerCase();
+            const server = (s.server || '').toLowerCase();
+            
+            // 🚫 Block List (Junk Links)
+            if (link.includes('dgdrive') || server.includes('dgdrive')) return false;
+            if (link.includes('plough') || link.includes('terra')) return false;
+            if (link.includes('login') || link.includes('signup')) return false; // Login pages hatao
+            
+            // ✅ Allow List (Sirf confirm karne ke liye ki ye pass ho rahe hain)
+            // (Code logic: Jo block nahi hua, wo pass hoga. 10gbs, fsl sab pass honge)
+            
+            return true; 
+        });
+
+        // (Optional) Sort: 10Gbps aur FSL ko upar rakho
+        cleanStreams.sort((a: any, b: any) => {
+            const priority = ['10gbps', 'fsl', 'google', 'cloud'];
+            const getPriority = (str: string) => {
+                const index = priority.findIndex(p => str.toLowerCase().includes(p));
+                return index === -1 ? 99 : index;
+            };
+            return getPriority(a.server) - getPriority(b.server);
+        });
+        
         return NextResponse.json({
             success: true,
-            mode: 'direct', // Frontend ko batao: "Kaam ho gaya, ye lo streams"
-            streams: data.streams || [],
+            mode: 'direct',
+            streams: cleanStreams,
             title: data.title
         });
     }
 
     // ==========================================
-    // 🔴 CASE B: HUBCLOUD (Use Token Logic)
+    // 🔴 CASE B: HUBCLOUD (Token Logic)
     // ==========================================
     
     // 1. ID Extraction
@@ -68,7 +94,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
         success: true,
-        mode: 'handshake', // Frontend ko batao: "Abhi Step 2 (Gen Scraper) baaki hai"
+        mode: 'handshake',
         finalUrl: finalUrl
     });
 
