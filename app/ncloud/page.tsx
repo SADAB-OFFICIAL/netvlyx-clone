@@ -5,7 +5,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { 
   Play, Download, CloudLightning, AlertTriangle, 
   Copy, CheckCircle, Wifi, HardDrive, ExternalLink, 
-  Cast, MonitorPlay
+  Cast, MonitorPlay, Lock, ShieldCheck
 } from 'lucide-react';
 
 interface Stream {
@@ -20,6 +20,8 @@ function NCloudPlayer() {
   
   // --- STATE & LOGIC ---
   const [loading, setLoading] = useState(true);
+  const [statusMsg, setStatusMsg] = useState('Initializing Secure Handshake...');
+  
   const [streams, setStreams] = useState<Stream[]>([]); 
   const [currentStream, setCurrentStream] = useState<Stream | null>(null);
   const [metaData, setMetaData] = useState<any>(null);
@@ -32,26 +34,69 @@ function NCloudPlayer() {
     if (key) {
       const init = async () => {
         try {
-          // Decoding Logic
-          const json = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
+          // 1. Decoding Metadata
+          const cleanKey = key.replace(/-/g, '+').replace(/_/g, '/');
+          const json = atob(cleanKey);
           const payload = JSON.parse(json);
           setMetaData(payload);
 
-          // API Call
-          const res = await fetch(`/api/ncloud?url=${payload.url}`);
-          const result = await res.json();
+          // ----------------------------------------------------
+          // 🚀 STEP 1: N-CLOUD (Token Extraction)
+          // ----------------------------------------------------
+          setStatusMsg('Authenticating & Extracting Tokens...');
           
-          if (result.success && result.streams.length > 0) {
-             setStreams(result.streams);
-             setCurrentStream(result.streams[0]);
-             setApiTitle(result.title);
-             setLoading(false);
-          } else {
-             throw new Error("No streams found");
+          // Hum seedha 'key' bhej rahe hain kyunki API use decode karegi
+          const ncloudRes = await fetch(`/api/ncloud?key=${key}`);
+          const ncloudData = await ncloudRes.json();
+
+          if (!ncloudData.success || !ncloudData.finalUrl) {
+            throw new Error(ncloudData.error || "Token generation failed");
           }
-        } catch (e) {
-          console.error("Fetch Error", e);
+
+          // ----------------------------------------------------
+          // 🚀 STEP 2: GEN SCRAPER (Final Link)
+          // ----------------------------------------------------
+          setStatusMsg('Bypassing Cloudflare & Generating Link...');
+          
+          const genRes = await fetch(`/api/gen?url=${encodeURIComponent(ncloudData.finalUrl)}`);
+          const genData = await genRes.json();
+
+          if (!genData.success || !genData.streamLink) {
+             throw new Error(genData.error || "Final link generation failed");
+          }
+
+          // ----------------------------------------------------
+          // ✅ SUCCESS: Build Stream List
+          // ----------------------------------------------------
+          const newStreams: Stream[] = [
+              {
+                  server: "⚡ Fast Cloud (VIP)",
+                  link: genData.streamLink,
+                  type: "DIRECT"
+              }
+          ];
+
+          // Add Backup Link if available
+          if (payload.link || payload.url) {
+              newStreams.push({
+                  server: "☁️ HubCloud (Backup)",
+                  link: payload.link || payload.url,
+                  type: "BACKUP"
+              });
+          }
+
+          setStreams(newStreams);
+          setCurrentStream(newStreams[0]);
+          setApiTitle(genData.filename || payload.title);
           setLoading(false);
+
+        } catch (e: any) {
+          console.error("NCloud Error:", e);
+          setStatusMsg(e.message || "Connection Failed");
+          // Thoda delay karke error dikhayenge taaki user message padh sake
+          // Lekin yahan hum seedha error state dikha sakte hain agar chahiye
+          // For now, let's keep loading state false to show Error UI
+          setLoading(false); 
         }
       };
       init();
@@ -78,29 +123,33 @@ function NCloudPlayer() {
     window.location.href = intent;
   };
 
-  // --- 1. LOADING UI ---
+  // --- 1. LOADING UI (With Steps) ---
   if (loading) return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden px-4">
       <div className="relative z-10 flex flex-col items-center text-center">
          <div className="w-16 h-16 md:w-20 md:h-20 relative mb-6">
             <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
             <div className="absolute inset-2 border-b-4 border-purple-500 rounded-full animate-spin-reverse"></div>
-            <CloudLightning className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white" />
+            <Lock className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/50" size={24} />
          </div>
-         <h2 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 animate-pulse">
-            Connecting Securely...
+         <h2 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 animate-pulse mb-2">
+            Secure Connection...
          </h2>
+         <p className="text-gray-500 text-xs md:text-sm font-mono tracking-wider">{statusMsg}</p>
       </div>
     </div>
   );
 
   // --- 2. ERROR UI ---
-  if (!currentStream) return (
+  if (!currentStream || streams.length === 0) return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-sm text-center p-6 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-xl">
         <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-500" />
         <h3 className="text-lg font-bold text-white mb-2">Stream Unavailable</h3>
-        <button onClick={() => window.location.reload()} className="mt-4 w-full py-3 bg-red-600 rounded-xl font-bold text-white">Retry</button>
+        <p className="text-gray-400 text-sm mb-4">{statusMsg !== 'Initializing Secure Handshake...' ? statusMsg : 'Could not resolve stream links.'}</p>
+        <button onClick={() => window.location.reload()} className="w-full py-3 bg-red-600 rounded-xl font-bold text-white hover:bg-red-700 transition-colors">
+            Retry Connection
+        </button>
       </div>
     </div>
   );
@@ -116,7 +165,7 @@ function NCloudPlayer() {
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10">
         
-        {/* HEADER: Stacked on Mobile, Row on Desktop */}
+        {/* HEADER */}
         <header className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
             <div className="flex items-center gap-3 w-full md:w-auto">
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center backdrop-blur-md shadow-lg">
@@ -131,7 +180,7 @@ function NCloudPlayer() {
                 </div>
             </div>
             
-            {/* Tab Switcher: Full width on mobile */}
+            {/* Tab Switcher */}
             <div className="w-full md:w-auto bg-white/5 border border-white/10 p-1 rounded-xl flex">
                 <button 
                     onClick={() => setTab('stream')} 
@@ -148,13 +197,13 @@ function NCloudPlayer() {
             </div>
         </header>
 
-        {/* MAIN GRID: 1 Col Mobile, 12 Cols Desktop */}
+        {/* MAIN GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
            
-           {/* PLAYER SECTION (Top on Mobile) */}
+           {/* PLAYER SECTION */}
            <div className="lg:col-span-8 space-y-4">
               
-              {/* Aspect Ratio Container */}
+              {/* Video Container */}
               <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                  {tab === 'stream' ? (
                      <video 
@@ -194,10 +243,10 @@ function NCloudPlayer() {
               </div>
            </div>
 
-           {/* CONTROLS SECTION (Bottom on Mobile) */}
+           {/* CONTROLS SECTION */}
            <div className="lg:col-span-4 space-y-4 md:space-y-6">
               
-              {/* Server List: Fixed Height with Scroll */}
+              {/* Server List */}
               <div className="bg-black/40 border border-white/10 rounded-2xl p-4 md:p-6 backdrop-blur-xl flex flex-col h-[300px] md:h-[400px]">
                  <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                      <Wifi size={12} /> {tab === 'download' ? 'Download Servers' : 'Stream Servers'}
@@ -230,11 +279,10 @@ function NCloudPlayer() {
                  </div>
               </div>
 
-              {/* Action Buttons: Big Touch Targets */}
+              {/* Action Buttons */}
               <div className="space-y-3">
                  {tab === 'stream' ? (
                     <>
-                       {/* Mobile First: Stacked Buttons */}
                        <button onClick={() => playInApp('org.videolan.vlc')} className="w-full py-3.5 bg-[#ff6b00]/10 border border-[#ff6b00]/20 active:bg-[#ff6b00]/30 rounded-xl flex items-center justify-center gap-2 text-[#ff6b00] font-bold text-sm md:text-base transition-all">
                           Play in VLC
                        </button>
@@ -259,7 +307,7 @@ function NCloudPlayer() {
 
 export default function NCloud() {
   return (
-    <Suspense fallback={<div className="h-screen bg-black flex items-center justify-center text-white text-sm">Loading App...</div>}>
+    <Suspense fallback={<div className="h-screen bg-black flex items-center justify-center text-white text-sm">Loading N-Cloud...</div>}>
       <NCloudPlayer />
     </Suspense>
   );
