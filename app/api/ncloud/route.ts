@@ -1,83 +1,91 @@
-// app/api/ncloud/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
+// ⚡ Edge Runtime for Speed
+export const runtime = 'edge';
 
-  if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
+// 🔒 Constants (Tumhare diye huye)
+const TOKEN_SOURCE = "https://vcloud.zip/hr17ehaeym7rza9";
+const PROXY = "https://proxy.vlyx.workers.dev";
+const BASE_URL = "https://gamerxyt.com/hubcloud.php";
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const key = searchParams.get('key'); // Encoded HubCloud URL
+
+  if (!key) return NextResponse.json({ error: "No key provided" }, { status: 400 });
 
   try {
-    // 1. Call the External API
-    // Hum encodeURIComponent use nahi kar rahe kyunki API shayad raw url maangta ho, 
-    // par safety ke liye check kar lein. Usually query params encode hone chahiye.
-    const apiUrl = `https://nothing-to-see-nine.vercel.app/hubcloud?url=${url}&key=sadabefy`;
+    // 1. Decode Key safely
+    let cleanKey = key.replace(/-/g, '+').replace(/_/g, '/');
+    while (cleanKey.length % 4) cleanKey += '=';
     
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
-      }
+    const decoded = atob(cleanKey);
+    const json = JSON.parse(decoded);
+    const hubCloudUrl = json.url || json.link;
+
+    if (!hubCloudUrl) throw new Error("URL missing in key");
+
+    // 2. Extract HubCloud ID
+    // Logic: URL ke last part ko ID maante hain
+    const urlObj = new URL(hubCloudUrl.startsWith('http') ? hubCloudUrl : `https://${hubCloudUrl}`);
+    const pathParts = urlObj.pathname.replace(/\/$/, '').split('/');
+    const id = pathParts.pop(); 
+
+    if (!id) throw new Error("Invalid HubCloud ID");
+
+    // 3. Extract Token from V-Cloud (Using Proxy)
+    const token = await getVCloudToken();
+    
+    if (!token) throw new Error("Failed to extract V-Cloud Token");
+
+    // 4. Construct the Final GamerXYT URL 🛠️
+    // Format: host=hubcloud & id={HUB_ID} & token={V_TOKEN}
+    const finalUrl = `${BASE_URL}?host=hubcloud&id=${id}&token=${token}`;
+
+    console.log("Generated Magic URL:", finalUrl);
+
+    // 5. Success Response
+    // Frontend is URL ko lekar 'gen' API ko call karega
+    return NextResponse.json({
+        success: true,
+        step: 'ncloud_complete',
+        hubId: id,
+        vToken: token,
+        finalUrl: finalUrl // <-- Ye wo URL hai jo humein chahiye
     });
 
-    if (!response.ok) throw new Error("External API Failed");
-
-    const data = await response.json();
-
-    if (!data.streams || !Array.isArray(data.streams)) {
-        throw new Error("No streams found in API response");
-    }
-
-    // 2. CLEANING LOGIC (Sirf Kachra Hatao, Achhe Servers Nahi)
-    const cleanStreams = data.streams.filter((stream: any) => {
-        const link = stream.link || "";
-        
-        // A. Reject obvious junk (Broken Links)
-        if (!link.startsWith("http")) return false; // Invalid URL
-        if (link.includes("hubcloud.foo/drive")) return false; // Recursive link (Loop)
-        if (link.endsWith("token=")) return false; // Empty token
-        if (link.includes("icons8.com")) return false; // Fake image links
-        
-        return true; // Baaki sab aane do (10Gbps, Cloud Server, etc.)
-    });
-
-    // 3. SORTING LOGIC (Jo Best Hai Wo Top Par)
-    // Priority: FSL > 10Gbps > Long Signed URLs > Others
-    cleanStreams.sort((a: any, b: any) => {
-        const serverA = (a.server || "").toLowerCase();
-        const serverB = (b.server || "").toLowerCase();
-        const linkA = a.link || "";
-        const linkB = b.link || "";
-
-        // Function to detect High Speed Servers
-        const isHighSpeed = (name: string, url: string) => {
-            return name.includes("fsl") || 
-                   name.includes("10gbps") || 
-                   name.includes("zipdisk") ||
-                   name.includes("apple") ||
-                   url.includes("googleusercontent"); // Google URLs are very fast
-        };
-
-        const aIsBest = isHighSpeed(serverA, linkA);
-        const bIsBest = isHighSpeed(serverB, linkB);
-
-        // Rule 1: High Speed servers pehle aayenge
-        if (aIsBest && !bIsBest) return -1; // A upar
-        if (!aIsBest && bIsBest) return 1;  // B upar
-
-        // Rule 2: Agar dono category same hain, to Lamba Link (Long URL) pehle aayega
-        // (Lamba link usually signed/tokenized hota hai jo fast chalta hai)
-        return linkB.length - linkA.length; 
-    });
-
-    // 4. Return Data
-    return NextResponse.json({ 
-        success: true, 
-        title: data.title,
-        streams: cleanStreams // Ab isme saare valid servers honge, sorted order me
-    });
-
-  } catch (error: any) {
-    console.error("N-Cloud API Error:", error.message);
-    return NextResponse.json({ success: false, error: 'Failed to fetch streams' });
+  } catch (e: any) {
+    console.error("[N-Cloud API Error]:", e.message);
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
+}
+
+// ==========================================
+// 🛠️ HELPER: Token Scraper
+// ==========================================
+async function getVCloudToken() {
+    try {
+        // Proxy use karke V-Cloud ka source code uthao
+        const res = await fetch(`${PROXY}/?url=${encodeURIComponent(TOKEN_SOURCE)}`, {
+            cache: 'no-store',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
+        
+        if (!res.ok) return null;
+
+        const html = await res.text();
+
+        // Regex to find token
+        // Pattern: token=OW1RR3dleTJzdDds... (until next & or end)
+        // Hum simple approach use karenge jo tumhare snippet se match kare
+        const match = html.match(/token=([^&"'\s]+)/);
+        
+        return match ? match[1] : null;
+
+    } catch (e) {
+        console.error("Token Fetch Error:", e);
+        return null;
+    }
 }
