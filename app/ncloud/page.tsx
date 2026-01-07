@@ -4,8 +4,8 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { 
   Play, Download, CloudLightning, AlertTriangle, 
-  Copy, CheckCircle, Wifi, HardDrive, ExternalLink, 
-  Cast, MonitorPlay, Lock, ShieldCheck
+  Copy, CheckCircle, Wifi, HardDrive, 
+  MonitorPlay, Lock
 } from 'lucide-react';
 
 interface Stream {
@@ -40,62 +40,81 @@ function NCloudPlayer() {
           const payload = JSON.parse(json);
           setMetaData(payload);
 
-          // ----------------------------------------------------
-          // 🚀 STEP 1: N-CLOUD (Token Extraction)
-          // ----------------------------------------------------
-          setStatusMsg('Authenticating & Extracting Tokens...');
+          const targetUrl = payload.url || payload.link;
+          if (!targetUrl) throw new Error("No URL found in data");
+
+          // -----------------------------------------------------------
+          // 🧠 SMART SWITCH: Check if HUBCLOUD or V-CLOUD
+          // -----------------------------------------------------------
           
-          // Hum seedha 'key' bhej rahe hain kyunki API use decode karegi
-          const ncloudRes = await fetch(`/api/ncloud?key=${key}`);
-          const ncloudData = await ncloudRes.json();
+          const isHubCloud = targetUrl.includes('hubcloud') || targetUrl.includes('hubdrive');
 
-          if (!ncloudData.success || !ncloudData.finalUrl) {
-            throw new Error(ncloudData.error || "Token generation failed");
-          }
+          if (isHubCloud) {
+              // ==========================================
+              // 🔴 OPTION A: HUBCLOUD (New Token Logic)
+              // ==========================================
+              setStatusMsg('Detected HubCloud. Authenticating Tokens...');
+              
+              // Step 1: Get Tokenized URL
+              const ncloudRes = await fetch(`/api/ncloud?key=${key}`);
+              const ncloudData = await ncloudRes.json();
 
-          // ----------------------------------------------------
-          // 🚀 STEP 2: GEN SCRAPER (Final Link)
-          // ----------------------------------------------------
-          setStatusMsg('Bypassing Cloudflare & Generating Link...');
-          
-          const genRes = await fetch(`/api/gen?url=${encodeURIComponent(ncloudData.finalUrl)}`);
-          const genData = await genRes.json();
+              if (!ncloudData.success || !ncloudData.finalUrl) {
+                throw new Error(ncloudData.error || "Token generation failed");
+              }
 
-          if (!genData.success || !genData.streamLink) {
-             throw new Error(genData.error || "Final link generation failed");
-          }
+              // Step 2: Gen Scraper
+              setStatusMsg('Bypassing Cloudflare & Generating Link...');
+              const genRes = await fetch(`/api/gen?url=${encodeURIComponent(ncloudData.finalUrl)}`);
+              const genData = await genRes.json();
 
-          // ----------------------------------------------------
-          // ✅ SUCCESS: Build Stream List
-          // ----------------------------------------------------
-          const newStreams: Stream[] = [
-              {
+              if (!genData.success || !genData.streamLink) {
+                 throw new Error(genData.error || "Final link generation failed");
+              }
+
+              // Set Streams
+              const newStreams: Stream[] = [{
                   server: "⚡ Fast Cloud (VIP)",
                   link: genData.streamLink,
                   type: "DIRECT"
-              }
-          ];
+              }];
+              setStreams(newStreams);
+              setCurrentStream(newStreams[0]);
+              setApiTitle(genData.filename || payload.title);
 
-          // Add Backup Link if available
-          if (payload.link || payload.url) {
-              newStreams.push({
-                  server: "☁️ HubCloud (Backup)",
-                  link: payload.link || payload.url,
-                  type: "BACKUP"
-              });
+          } else {
+              // ==========================================
+              // 🔵 OPTION B: V-CLOUD (Old API Logic)
+              // ==========================================
+              setStatusMsg('Detected V-Cloud. Fetching Standard API...');
+
+              // Direct call to old API (No Token System needed)
+              const oldApiUrl = `https://nothing-to-see-nine.vercel.app/hubcloud?url=${targetUrl}&key=sadabefy`;
+              
+              const res = await fetch(oldApiUrl);
+              const data = await res.json();
+
+              // API se link nikalna (Adjust based on old API response)
+              const finalLink = data.link || data.url || data.stream_link;
+              
+              if (!finalLink) throw new Error("V-Cloud API failed to return link");
+
+              // Set Streams
+              const newStreams: Stream[] = [{
+                  server: "☁️ V-Cloud Server",
+                  link: finalLink,
+                  type: "STANDARD"
+              }];
+              setStreams(newStreams);
+              setCurrentStream(newStreams[0]);
+              setApiTitle(data.title || payload.title);
           }
 
-          setStreams(newStreams);
-          setCurrentStream(newStreams[0]);
-          setApiTitle(genData.filename || payload.title);
           setLoading(false);
 
         } catch (e: any) {
           console.error("NCloud Error:", e);
           setStatusMsg(e.message || "Connection Failed");
-          // Thoda delay karke error dikhayenge taaki user message padh sake
-          // Lekin yahan hum seedha error state dikha sakte hain agar chahiye
-          // For now, let's keep loading state false to show Error UI
           setLoading(false); 
         }
       };
@@ -123,7 +142,9 @@ function NCloudPlayer() {
     window.location.href = intent;
   };
 
-  // --- 1. LOADING UI (With Steps) ---
+  // --- UI RENDERING ---
+  
+  // 1. LOADING SCREEN
   if (loading) return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden px-4">
       <div className="relative z-10 flex flex-col items-center text-center">
@@ -140,13 +161,13 @@ function NCloudPlayer() {
     </div>
   );
 
-  // --- 2. ERROR UI ---
+  // 2. ERROR SCREEN
   if (!currentStream || streams.length === 0) return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-sm text-center p-6 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-xl">
         <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-500" />
         <h3 className="text-lg font-bold text-white mb-2">Stream Unavailable</h3>
-        <p className="text-gray-400 text-sm mb-4">{statusMsg !== 'Initializing Secure Handshake...' ? statusMsg : 'Could not resolve stream links.'}</p>
+        <p className="text-gray-400 text-sm mb-4">{statusMsg}</p>
         <button onClick={() => window.location.reload()} className="w-full py-3 bg-red-600 rounded-xl font-bold text-white hover:bg-red-700 transition-colors">
             Retry Connection
         </button>
@@ -236,9 +257,6 @@ function NCloudPlayer() {
                       <span className="px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] md:text-xs font-bold flex items-center gap-1">
                           <HardDrive size={10}/> HD Source
                       </span>
-                      <span className="px-2 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] md:text-xs font-bold flex items-center gap-1">
-                          <Cast size={10}/> Cloud
-                      </span>
                   </div>
               </div>
            </div>
@@ -269,7 +287,7 @@ function NCloudPlayer() {
                                     <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-600'}`}></div>
                                     <div className="text-left">
                                         <p className="font-bold text-xs md:text-sm">{stream.server}</p>
-                                        <p className="text-[9px] opacity-60 font-mono uppercase">{stream.type || 'FAST'}</p>
+                                        <p className="text-[9px] opacity-60 font-mono uppercase">{stream.type}</p>
                                     </div>
                                 </div>
                                 {isActive && <MonitorPlay size={14} />}
