@@ -1,53 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// ⚡ Edge Runtime (Fast Execution)
 export const runtime = 'edge';
 
-// 🔒 Constants
 const TOKEN_SOURCE = "https://vcloud.zip/hr17ehaeym7rza9";
 const PROXY = "https://proxy.vlyx.workers.dev";
 const BASE_URL = "https://gamerxyt.com/hubcloud.php";
+const OLD_API = "https://nothing-to-see-nine.vercel.app/hubcloud"; // V-Cloud ke liye
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const key = searchParams.get('key'); // Encoded HubCloud URL
+  const key = searchParams.get('key');
 
   if (!key) return NextResponse.json({ error: "No key provided" }, { status: 400 });
 
   try {
-    // 1. Decode Key (Safe Replace)
+    // 1. Decode Key safely
     let cleanKey = key.replace(/-/g, '+').replace(/_/g, '/');
     while (cleanKey.length % 4) cleanKey += '=';
     
     const decoded = atob(cleanKey);
     const json = JSON.parse(decoded);
-    // URL kahi 'url' key mein hota hai kahi 'link' mein
-    const hubCloudUrl = json.url || json.link;
+    const targetUrl = json.url || json.link;
 
-    if (!hubCloudUrl) throw new Error("URL missing in key");
+    if (!targetUrl) throw new Error("URL missing in key");
 
-    // 2. Extract HubCloud ID
-    // Ex: https://hubcloud.foo/drive/azipjklbznz1ijp -> ID: azipjklbznz1ijp
-    const urlObj = new URL(hubCloudUrl.startsWith('http') ? hubCloudUrl : `https://${hubCloudUrl}`);
+    // -----------------------------------------------------------
+    // 🧠 SMART SWITCH: Check if HubCloud or V-Cloud
+    // -----------------------------------------------------------
+    const isHubCloud = targetUrl.includes('hubcloud') || targetUrl.includes('hubdrive');
+
+    if (!isHubCloud) {
+        // ==========================================
+        // 🔵 CASE A: V-CLOUD (Use Old API Proxy)
+        // ==========================================
+        // Kyunki V-Cloud links token system se nahi chalte
+        
+        const apiUrl = `${OLD_API}?url=${encodeURIComponent(targetUrl)}&key=sadabefy`;
+        const res = await fetch(apiUrl);
+        const data = await res.json();
+        
+        // Agar Old API ne streams de diye, to seedha return karo
+        return NextResponse.json({
+            success: true,
+            mode: 'direct', // Frontend ko batao: "Kaam ho gaya, ye lo streams"
+            streams: data.streams || [],
+            title: data.title
+        });
+    }
+
+    // ==========================================
+    // 🔴 CASE B: HUBCLOUD (Use Token Logic)
+    // ==========================================
+    
+    // 1. ID Extraction
+    const urlObj = new URL(targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`);
     const pathParts = urlObj.pathname.replace(/\/$/, '').split('/');
     const id = pathParts.pop(); 
 
     if (!id) throw new Error("Invalid HubCloud ID");
 
-    // 3. Extract Token from V-Cloud (Using Proxy)
+    // 2. Token Extraction
     const token = await getVCloudToken();
-    
     if (!token) throw new Error("Failed to extract V-Cloud Token");
 
-    // 4. Construct the Final GamerXYT URL 🛠️
-    // Format: host=hubcloud & id={HUB_ID} & token={V_TOKEN}
+    // 3. Construct Final GamerXYT URL
     const finalUrl = `${BASE_URL}?host=hubcloud&id=${id}&token=${token}`;
 
-    console.log("Generated Magic URL:", finalUrl);
-
-    // 5. Return JSON (Taaki VlyxDrive isse leke Gen ke paas jaye)
     return NextResponse.json({
         success: true,
+        mode: 'handshake', // Frontend ko batao: "Abhi Step 2 (Gen Scraper) baaki hai"
         finalUrl: finalUrl
     });
 
@@ -57,30 +78,16 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ==========================================
-// 🛠️ HELPER: Token Scraper
-// ==========================================
+// Helper: Token Scraper
 async function getVCloudToken() {
     try {
         const res = await fetch(`${PROXY}/?url=${encodeURIComponent(TOKEN_SOURCE)}`, {
             cache: 'no-store',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
         });
-        
         if (!res.ok) return null;
-
         const html = await res.text();
-
-        // Regex to find token (Correct Pattern)
-        // Token '=' se start nahi hota, 'token=' ke baad aata hai
         const match = html.match(/token=([^&"'\s]+)/);
-        
         return match ? match[1] : null;
-
-    } catch (e) {
-        console.error("Token Fetch Error:", e);
-        return null;
-    }
+    } catch (e) { return null; }
 }
