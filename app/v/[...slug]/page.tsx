@@ -4,10 +4,10 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  Archive, Tv, Loader2, Star 
+  Archive, Tv, Star 
 } from 'lucide-react';
-// Animation ke liye library add ki hai (sirf download section ke liye)
-import { motion, AnimatePresence } from 'framer-motion';
+// FIX: 'Variants' type import kiya hai error hatane ke liye
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 
 // --- SKELETON COMPONENT ---
 const MovieSkeleton = () => (
@@ -194,7 +194,8 @@ export default function MoviePage() {
   };
 
   // --- Animation Variants (Fast & Snappy) ---
-  const sectionVariant = {
+  // FIX: Added ': Variants' type annotation to prevent TypeScript error
+  const sectionVariant: Variants = {
     hidden: { opacity: 0, y: 10 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
     exit: { opacity: 0, y: -10, transition: { duration: 0.15 } }
