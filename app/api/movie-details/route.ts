@@ -18,7 +18,7 @@ export async function GET(request: Request) {
         if (url.includes('moviesdrive') || url.includes('mdrive')) {
             return await scrapeMoviesDrive(url);
         }
-        // 2. Movies4u (New Robust Scraper with Long Logic)
+        // 2. Movies4u (Robust Scraper)
         else if (url.includes('movies4u') || url.includes('movie4u') || url.includes('m4u') || url.includes('fans') || url.includes('forex')) {
             try {
                 return await scrapeMovies4u(url);
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 1: MOVIES4U SCRAPER (New Long Logic)
+// 🟢 ENGINE 1: MOVIES4U SCRAPER (Fixed Link Logic)
 // =====================================================================
 async function scrapeMovies4u(targetUrl: string) {
     const res = await fetch(targetUrl, { headers: HEADERS });
@@ -49,7 +49,6 @@ async function scrapeMovies4u(targetUrl: string) {
 
     // 1. Metadata Parsing
     let rawTitle = $('meta[property="og:title"]').attr('content') || $('title').text();
-    // Clean Title: Remove "Download", Quality info, [Hindi] etc.
     let title = rawTitle
         .replace(/^Download\s+/i, '')
         .replace(/\s*\[.*?\]/g, '') // Remove [Hindi (CLEAN)]
@@ -59,13 +58,11 @@ async function scrapeMovies4u(targetUrl: string) {
 
     const poster = $('meta[property="og:image"]').attr('content') || $('.entry-content img').first().attr('src');
     
-    // Plot Logic: Meta Desc or Entry Content
     let plot = $('meta[property="og:description"]').attr('content');
     if (!plot || plot.length < 50) {
         plot = $('.entry-content p').not(':has(a)').first().text().trim();
     }
 
-    // IMDb ID
     let imdbId = null;
     const imdbLink = $('a[href*="imdb.com/title/tt"]').attr('href');
     if (imdbLink) {
@@ -73,7 +70,6 @@ async function scrapeMovies4u(targetUrl: string) {
         if (match) imdbId = match[0];
     }
 
-    // Year
     let year = null;
     const yearMatch = rawTitle.match(/\b(19|20)\d{2}\b/);
     if (yearMatch) year = yearMatch[0];
@@ -86,10 +82,9 @@ async function scrapeMovies4u(targetUrl: string) {
             screenshots.push(src);
         }
     });
-    // Deduplicate and slice
     screenshots = Array.from(new Set(screenshots)).slice(0, 10);
 
-    // 3. DOWNLOAD SECTIONS (Long Logic: Iterative Header Parsing)
+    // 3. DOWNLOAD SECTIONS (Restored Long Logic)
     const downloadSections: any[] = [];
     let currentQuality = 'Standard';
     let currentSectionTitle = 'Download Links';
@@ -100,13 +95,16 @@ async function scrapeMovies4u(targetUrl: string) {
     const titleSeasonMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
     if (titleSeasonMatch) currentSeason = parseInt(titleSeasonMatch[1]);
 
-    // Robust Parser: Scan all P, H3, H4 inside entry-content
-    $('.entry-content').find('h3, h4, h5, p').each((_, el) => {
+    // Robust Parser: Scan all elements inside entry-content
+    $('.entry-content > *').each((_, el) => {
+        const tagName = el.tagName.toLowerCase();
         const text = $(el).text().trim();
         const $el = $(el);
 
-        // Header Detection
-        if (text.match(/Download|480p|720p|1080p|2160p/i) && (el.tagName.match(/^H\d/) || $el.find('strong').length)) {
+        // HEADER DETECTION (h3, h4, h5, p strong)
+        const isHeader = tagName.match(/^h[3-6]$/) || (tagName === 'p' && $el.find('strong').length > 0 && text.length < 100);
+        
+        if (isHeader && (text.match(/Download|Links|480p|720p|1080p|2160p|Season/i))) {
             // Save previous section if exists
             if (currentLinks.length > 0) {
                 downloadSections.push({
@@ -118,37 +116,43 @@ async function scrapeMovies4u(targetUrl: string) {
                 currentLinks = [];
             }
 
-            // Set new context
-            currentSectionTitle = text;
+            // Update Context
+            currentSectionTitle = text.replace(/Download/i, '').trim();
             
             // Extract Quality
             if (text.includes('480p')) currentQuality = '480p';
             else if (text.includes('720p')) currentQuality = '720p';
             else if (text.includes('1080p')) currentQuality = '1080p';
             else if (text.includes('4K') || text.includes('2160p')) currentQuality = '4K';
-            else currentQuality = 'Standard';
-
-            // Extract Season from Header (e.g., "Download Season 2 720p")
+            
+            // Extract Season from Header
             const sMatch = text.match(/(?:Season|S)\s*0?(\d+)/i);
             if (sMatch) currentSeason = parseInt(sMatch[1]);
         }
 
-        // Link Detection
-        $el.find('a').each((_, linkEl) => {
-            const href = $(linkEl).attr('href');
-            const label = $(linkEl).text().trim() || "Download Link";
-            
-            if (href && href.startsWith('http') && !href.includes('imdb.com') && !href.includes('youtube.com')) {
-                // Ignore junk links
-                if (!label.toLowerCase().includes('telegram') && !label.toLowerCase().includes('whatsapp')) {
-                    currentLinks.push({
-                        label: label,
-                        url: href,
-                        isZip: label.toLowerCase().includes('zip') || label.toLowerCase().includes('pack')
-                    });
+        // LINK DETECTION
+        if (tagName === 'p' || tagName === 'div' || tagName === 'span') {
+             $el.find('a').each((_, linkEl) => {
+                const href = $(linkEl).attr('href');
+                let label = $(linkEl).text().trim();
+                
+                // Fallback label logic
+                if (!label || label.toLowerCase() === 'download' || label.toLowerCase() === 'link') {
+                    label = currentSectionTitle; // Use header text as label
                 }
-            }
-        });
+
+                if (href && href.startsWith('http') && !href.includes('imdb.com') && !href.includes('youtube.com')) {
+                    // Ignore junk links
+                    if (!label.toLowerCase().includes('telegram') && !label.toLowerCase().includes('whatsapp')) {
+                        currentLinks.push({
+                            label: label,
+                            url: href,
+                            isZip: label.toLowerCase().includes('zip') || label.toLowerCase().includes('pack')
+                        });
+                    }
+                }
+            });
+        }
     });
 
     // Push last section
@@ -178,7 +182,7 @@ async function scrapeMovies4u(targetUrl: string) {
 }
 
 // =====================================================================
-// 🔵 ENGINE 2: MOVIESDRIVE UPGRADED SCRAPER (Preserved)
+// 🔵 ENGINE 2: MOVIESDRIVE UPGRADED SCRAPER (Unchanged)
 // =====================================================================
 async function scrapeMoviesDrive(targetUrl: string) {
     const res = await fetch(targetUrl, { headers: HEADERS });
