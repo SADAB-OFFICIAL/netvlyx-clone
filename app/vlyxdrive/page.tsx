@@ -63,74 +63,63 @@ function VlyxDriveContent() {
   }, [key]);
 
   const handlePlay = (url: string) => {
-    // Agar HubCloud/NCloud link hai to NCloud page pe bhejo
-    if (url.includes('hubcloud') || url.includes('ncloud') || url.includes('hubdrive')) {
-        const nCloudKey = btoa(JSON.stringify({ url: url, title: metaData?.title || "Stream" }))
-           .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-        router.push(`/ncloud?key=${nCloudKey}`);
-    } else {
-        // Direct Links (GDFlix etc) ko direct open karo
-        window.open(url, '_blank');
-    }
+    const nCloudKey = btoa(JSON.stringify({ url: url, title: "Stream" }))
+       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    router.push(`/ncloud?key=${nCloudKey}`);
   };
 
   const toggleServerExpand = (idx: number) => {
     setExpandedServers(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
-  // 🧠 SMART SORTING LOGIC
-  // 1. GDFlix / Direct -> Priority #1 (Main Button)
-  // 2. HubCloud -> Priority #2
-  // 3. Others -> Priority #3
+  // ---------------------------------------------------------
+  // 🧠 PRIORITY LOGIC (Updated)
+  // ---------------------------------------------------------
   const splitLinks = (links: ApiLink[]) => {
+      // Priority Keywords (Order Matters: Top to Bottom)
+      const priorityList = [
+          'hubcloud', 'n-cloud', 'fast cloud', 'fsl', 'hub', // Rank 1: VIP/NCloud
+          '10gbps', 'g-direct', 'drive', 'google',           // Rank 2: High Speed
+          'gdflix', 'cloud'                                  // Rank 3: Standard
+      ];
+
+      const getPriorityScore = (name: string) => {
+          const lower = name.toLowerCase();
+          const index = priorityList.findIndex(p => lower.includes(p));
+          // Agar list me nahi hai, to sabse last (999)
+          return index === -1 ? 999 : index;
+      };
+
       const sorted = [...links].sort((a, b) => {
-          const nameA = a.name.toLowerCase();
-          const nameB = b.name.toLowerCase();
-
-          // Check Priority 1: GDFlix / Direct / Drive
-          const isHighA = nameA.includes('gdflix') || nameA.includes('drive') || nameA.includes('direct');
-          const isHighB = nameB.includes('gdflix') || nameB.includes('drive') || nameB.includes('direct');
-
-          if (isHighA && !isHighB) return -1; // A upar aayega
-          if (!isHighA && isHighB) return 1;  // B upar aayega
-
-          // Check Priority 2: HubCloud / Cloud
-          const isMedA = nameA.includes('hub') || nameA.includes('cloud');
-          const isMedB = nameB.includes('hub') || nameB.includes('cloud');
-
-          if (isMedA && !isMedB) return -1;
-          if (!isMedA && isMedB) return 1;
-
-          return 0;
+          return getPriorityScore(a.name) - getPriorityScore(b.name);
       });
 
       return {
-          main: sorted[0], // Top priority wala link Main Button banega
-          others: sorted.slice(1) // Baaki sab 'Show More' mein jayenge
+          main: sorted[0],       // Highest Priority Link
+          others: sorted.slice(1) // Rest go to "Show More"
       };
   };
 
-  // Helper for button styling based on Link Type
+  // Helper for button styling (Updated for FSL/Fast Cloud)
   const getButtonClass = (name: string) => {
       const lower = name.toLowerCase();
-      // Green for GDFlix/Drive (High Priority)
-      if (lower.includes('gdflix') || lower.includes('drive') || lower.includes('direct')) 
-          return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-green-900/20";
-      
-      // Orange/Yellow for HubCloud
-      if (lower.includes('hub') || lower.includes('cloud')) 
-          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400 shadow-orange-900/20";
-      
-      // Gray for Others
+      // VIP / N-Cloud Style (Orange/Gold)
+      if (lower.includes('hub') || lower.includes('cloud') || lower.includes('fast') || lower.includes('fsl')) 
+          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
+      // Drive / High Speed Style (Green)
+      if (lower.includes('gdflix') || lower.includes('drive') || lower.includes('10gbps')) 
+          return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
+      // Standard (Gray)
       return "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600";
   };
 
+  // Helper for Main Button Text (Updated)
   const getMainButtonText = (name: string) => {
       const lower = name.toLowerCase();
-      if (lower.includes('hub') || lower.includes('cloud') || lower.includes('n-cloud')) {
+      if (lower.includes('hub') || lower.includes('n-cloud') || lower.includes('fast') || lower.includes('fsl')) {
           return "Continue with N-Cloud";
       }
-      return `Play via ${name}`; // e.g., "Play via GDFlix"
+      return `Play via ${name}`;
   };
 
   // --- FILTERING LOGIC ---
@@ -227,7 +216,7 @@ function VlyxDriveContent() {
                                       </h3>
                                    </div>
                                    <div className="p-5 flex flex-col gap-3">
-                                      {/* MAIN BUTTON (Priority 1) */}
+                                      {/* MAIN BUTTON (Priority Link) */}
                                       <button 
                                           onClick={() => handlePlay(main.url)} 
                                           className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name)}`}
@@ -239,7 +228,7 @@ function VlyxDriveContent() {
                                           <Play size={24} className="fill-current" />
                                       </button>
 
-                                      {/* EXPAND BUTTON (For Lower Priority Servers) */}
+                                      {/* EXPAND BUTTON */}
                                       {otherServers.length > 0 && (
                                           <div className="mt-2">
                                               <button 
@@ -271,7 +260,7 @@ function VlyxDriveContent() {
                               );
                            })}
 
-                           {/* OTHER QUALITIES (Initially Hidden) */}
+                           {/* OTHER QUALITIES */}
                            {others.length > 0 && (
                                <div className="mt-8 pt-6 border-t border-gray-800">
                                    <button 
