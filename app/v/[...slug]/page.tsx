@@ -1,424 +1,273 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useEffect, useState } from "react";
+import Image from "next/image";
+import { useParams } from "next/navigation";
 import { 
-  ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  ImageIcon, Archive, Tv, Loader2, Star, Users 
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+  Play, 
+  Download, 
+  Star, 
+  Share2, 
+  ArrowLeft, 
+  HardDrive, 
+  Loader2,
+  AlertCircle
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion"; 
+import Link from "next/link";
 
-// --- SKELETON COMPONENT (Animated) ---
-const MovieSkeleton = () => (
-  <div className="min-h-screen bg-[#050505] animate-pulse">
-      <div className="relative w-full h-[85vh] bg-gray-900">
-          <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 flex flex-col items-center justify-end space-y-6">
-              <div className="h-6 w-24 bg-gray-800 rounded-full"></div>
-              <div className="h-12 md:h-20 w-3/4 max-w-3xl bg-gray-800 rounded-lg"></div>
-              <div className="h-4 w-full max-w-2xl bg-gray-800 rounded"></div>
-              <div className="flex gap-4 pt-4">
-                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div>
-                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div>
-              </div>
-          </div>
-      </div>
-  </div>
-);
+// --- Types ---
+interface DownloadLink {
+  quality: string;
+  size: string;
+  url: string;
+  type?: string;
+}
 
-export default function MoviePage() {
-  const { slug } = useParams();
-  const router = useRouter();
-  const downloadRef = useRef<HTMLDivElement>(null);
+interface MovieData {
+  title: string;
+  description: string;
+  rating: string;
+  year: string;
+  duration: string;
+  genres: string[];
+  poster: string;
+  background: string;
+  downloadLinks: DownloadLink[];
+}
 
-  // Data States
-  const [data, setData] = useState<any>(null);
-  const [tmdbData, setTmdbData] = useState<any>(null);
+export default function MovieSlugPage() {
+  const params = useParams();
+  const slug = params?.slug;
+
+  const [data, setData] = useState<MovieData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  
+  // Animation State
+  const [showDownloads, setShowDownloads] = useState(false);
 
-  // Filter States
-  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
-  const [actionType, setActionType] = useState<'watch' | 'download' | null>(null);
-  const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
-  const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
-  const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
-
-  const movieUrl = slug 
-    ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
-    : '';
-
-  // 1. FETCH DATA
+  // --- Data Fetching ---
   useEffect(() => {
-    if (!movieUrl) return;
-    setData(null);
-    setTmdbData(null);
-    setLoading(true);
-
+    // Mocking Data fetch for demonstration
+    // Replace this with your actual API call logic
     const fetchData = async () => {
+      if (!slug) return;
       try {
-        const res = await fetch(`/api/movie-details?url=${encodeURIComponent(movieUrl)}`);
-        if (!res.ok) throw new Error("Failed");
-        const result = await res.json();
-        setData(result);
+        setLoading(true);
+        // Simulate API delay (Remove this in production)
+        // await new Promise(resolve => setTimeout(resolve, 500)); 
         
-        const seasonSet = new Set<number>();
-        if (result.seasons) result.seasons.forEach((s: number) => seasonSet.add(s));
-        if (result.downloadSections) {
-             result.downloadSections.forEach((sec: any) => {
-                 const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
-                 if (m) seasonSet.add(parseInt(m[1]));
-             });
-        }
-        if (seasonSet.size > 0) setAvailableSeasons(Array.from(seasonSet).sort((a,b)=>a-b));
-
-      } catch (e) { 
-          setError("Failed to load content");
-          setLoading(false); 
+        // Mock Data (Delete this when connecting real API)
+        setData({
+             title: "Stranger Things",
+             description: "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces, and one strange little girl.",
+             rating: "9.8",
+             year: "2024",
+             duration: "2h 15m",
+             genres: ["Sci-Fi", "Horror", "Drama"],
+             poster: "https://image.tmdb.org/t/p/original/xETnLqYn5lD0yOaK3hN9rK1j1y.jpg",
+             background: "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYkQV8462nZ.jpg",
+             downloadLinks: [
+               { quality: "480p", size: "450MB", url: "#" },
+               { quality: "720p", size: "1.2GB", url: "#" },
+               { quality: "1080p", size: "2.5GB", url: "#" },
+               { quality: "4K HDR", size: "6.8GB", url: "#" },
+             ],
+        });
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load");
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
-  }, [movieUrl]);
+  }, [slug]);
 
-  // 2. FETCH TMDB (Fallback)
-  useEffect(() => {
-    if (!data) return;
-    
-    let apiUrl = '';
-    if (data.imdbId) {
-        apiUrl = `/api/tmdb-details?imdb_id=${data.imdbId}`;
-    } else if (data.title) {
-        apiUrl = `/api/tmdb-details?query=${encodeURIComponent(data.title)}`;
-        if (data.year) apiUrl += `&year=${data.year}`;
-    }
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#141414] text-white">
+        <Loader2 className="h-10 w-10 animate-spin text-red-600" />
+      </div>
+    );
+  }
 
-    if (apiUrl) {
-        fetch(apiUrl)
-            .then(res => res.json())
-            .then(res => { if (res.found) setTmdbData(res); })
-            .catch(err => console.error("TMDB Error", err))
-            .finally(() => setLoading(false));
-    } else {
-        setLoading(false);
-    }
-  }, [data]);
-
-  const finalTitle = tmdbData?.title || data?.title;
-  const finalOverview = tmdbData?.overview || data?.plot;
-  const finalPoster = tmdbData?.poster || data?.poster;
-  const finalBackdrop = tmdbData?.backdrop || data?.poster;
-  const finalRating = tmdbData?.rating;
-  const trailerKey = tmdbData?.trailerKey;
-
-  // 📸 SCREENSHOT LOGIC (Movies4u Priority)
-  const galleryImages = (data?.screenshots && data.screenshots.length > 0) 
-      ? data.screenshots 
-      : tmdbData?.images;
-
-  // --- FILTER LOGIC ---
-  const getFilteredData = () => {
-      if (!data?.downloadSections) return { links: [], qualities: [] };
-
-      let validSections = data.downloadSections.filter((sec: any) => {
-          if (selectedSeason !== null) {
-              let secSeason = sec.season;
-              if (!secSeason) {
-                  const m = sec.title.match(/(?:Season|S)\s*0?(\d+)/i);
-                  if (m) secSeason = parseInt(m[1]);
-              }
-              if (secSeason !== null && secSeason !== undefined && secSeason !== selectedSeason) return false;
-          }
-          return true;
-      });
-
-      let allLinks: any[] = [];
-      let qualSet = new Set<string>();
-
-      validSections.forEach((sec: any) => {
-          sec.links.forEach((link: any) => {
-              const isBatch = (link.isZip === true) || /batch|zip|pack|complete|volume|collection/i.test(sec.title + " " + link.label);
-
-              if (actionType === 'download') {
-                  if (downloadType === 'bulk' && !isBatch) return;
-                  if (downloadType === 'episode' && isBatch) return;
-              } else if (actionType === 'watch' && isBatch) return;
-
-              let q = sec.quality;
-              if (!q || q === 'Standard') {
-                  const t = (sec.title + " " + link.label).toLowerCase();
-                  if (t.includes('4k') || t.includes('2160p')) q = '4K';
-                  else if (t.includes('1080p')) q = '1080p';
-                  else if (t.includes('720p')) q = '720p';
-                  else if (t.includes('480p')) q = '480p';
-                  else q = 'Standard';
-              }
-              qualSet.add(q);
-              allLinks.push({ ...link, quality: q, size: sec.size || link.size, sectionTitle: sec.title });
-          });
-      });
-
-      return { links: allLinks, qualities: Array.from(qualSet).sort((a,b) => ['4K','1080p','720p','480p','Standard'].indexOf(a) - ['4K','1080p','720p','480p','Standard'].indexOf(b)) };
-  };
-
-  const { links: filteredLinks, qualities: currentQualities } = getFilteredData();
-
-  useEffect(() => { 
-      if (selectedQuality && !currentQualities.includes(selectedQuality)) setSelectedQuality(null); 
-  }, [currentQualities, selectedQuality]);
-
-  const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
-
-  const handleLinkClick = (url: string) => {
-    if (!url) return;
-    try {
-        const safeTitle = finalTitle ? finalTitle.replace(/[^\x00-\x7F]/g, "") : "Unknown Title";
-        const payload = { link: url, title: safeTitle, poster: finalPoster || "", quality: selectedQuality };
-        const key = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-        router.push(`/vlyxdrive?key=${key}`);
-    } catch (err) { alert("Error opening link"); }
-  };
-
-  const handleHeroAction = (type: 'watch' | 'download') => {
-      setActionType(type);
-      setTimeout(() => {
-          downloadRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
-  };
-
-  const goBackStep = () => {
-      if (selectedQuality) setSelectedQuality(null);
-      else if (downloadType) setDownloadType(null);
-      else if (actionType) setActionType(null);
-      else if (selectedSeason) setSelectedSeason(null);
-      else router.back();
-  };
-
-  // --- ANIMATION VARIANTS ---
-  const fadeInUp = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
-  };
-
-  const slideIn = {
-    hidden: { opacity: 0, x: -20 },
-    visible: { opacity: 1, x: 0, transition: { duration: 0.4 } },
-    exit: { opacity: 0, x: 20, transition: { duration: 0.3 } }
-  };
-
-  if (loading) return <MovieSkeleton />;
-  if (error) return <div className="h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
+  if (error || !data) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#141414] text-white">
+        <div className="text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+          <h2 className="text-2xl font-bold">Data Not Found</h2>
+          <Link href="/" className="mt-6 inline-block rounded bg-white px-6 py-2 text-black font-bold">
+            Go Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans pb-20 overflow-x-hidden">
+    <div className="relative min-h-screen w-full bg-[#141414] text-white overflow-x-hidden">
       
-      {/* 1. HERO SECTION */}
-      <div className="relative w-full h-[80vh] md:h-[90vh]">
-          <div className="absolute inset-0 pointer-events-none">
-              <div className="w-full h-full bg-cover bg-center transition-all duration-1000 transform scale-105" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
-              <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-transparent"></div>
-          </div>
-
-          <div className="absolute top-6 left-6 z-50">
-             <button onClick={() => router.back()} className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all cursor-pointer hover:scale-105 active:scale-95 duration-200 hover:bg-white/10">
-                 <ArrowLeft size={20}/> Back
-             </button>
-          </div>
-
-          <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto">
-              {/* Content wrapped in Motion */}
-              <motion.div initial="hidden" animate="visible" variants={fadeInUp} className="flex flex-col items-center">
-                  
-                  {finalRating && (
-                      <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full">
-                          <Star className="w-4 h-4 text-yellow-400 fill-current"/>
-                          <span className="text-yellow-400 font-bold text-sm">{finalRating} IMDb</span>
-                      </div>
-                  )}
-
-                  <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400">
-                      {finalTitle}
-                  </h1>
-
-                  <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md">
-                      {finalOverview}
-                  </p>
-
-                  <div className="flex gap-4 relative z-50">
-                      <motion.button 
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleHeroAction('watch')}
-                        className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer"
-                      >
-                          <Play className="fill-current" size={20}/> Watch Now
-                      </motion.button>
-                      <motion.button 
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleHeroAction('download')}
-                        className="bg-gray-800/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-gray-700 hover:text-white transition-all hover:shadow-lg cursor-pointer"
-                      >
-                          <Download size={20}/> Download
-                      </motion.button>
-                  </div>
-              </motion.div>
-          </div>
+      {/* Background Image - STATIC (No Animation for performance) */}
+      <div className="absolute inset-0 h-[85vh] w-full">
+        <Image
+          src={data.background}
+          alt={data.title}
+          fill
+          className="object-cover opacity-50"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/30 to-transparent" />
       </div>
 
-      {/* 2. POSTER */}
-      <motion.div 
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.8 }}
-        className="relative z-20 -mt-10 mb-16 flex justify-center px-4"
-      >
-          <div className="relative group">
-              <div className="absolute inset-0 bg-cover bg-center blur-3xl opacity-40 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-60 pointer-events-none" style={{ backgroundImage: `url(${finalPoster})` }}></div>
-              <img src={finalPoster} alt="Poster" className="relative w-[180px] md:w-[260px] rounded-2xl shadow-2xl border-4 border-[#050505] transform transition-transform duration-500 group-hover:-translate-y-2 pointer-events-none"/>
-          </div>
-      </motion.div>
+      <div className="absolute top-0 left-0 z-50 p-6">
+        <Link href="/" className="flex items-center gap-2 rounded-full bg-black/40 px-4 py-2 backdrop-blur-md hover:bg-white/20">
+          <ArrowLeft className="h-5 w-5" />
+          <span className="font-medium">Back</span>
+        </Link>
+      </div>
 
-      <div className="max-w-6xl mx-auto px-4 md:px-8 space-y-16">
+      {/* Main Content */}
+      <div className="relative z-10 mx-auto max-w-7xl px-4 pt-[35vh] pb-20 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-[300px_1fr]">
           
-          {/* 3. TRAILER */}
-          {trailerKey && (
-              <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}>
-                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-red-600 pl-3">Official Trailer</h2>
-                  <div className="aspect-video w-full rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-black hover:border-red-500/30 transition-all duration-300 hover:scale-[1.01]">
-                      <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${trailerKey}?rel=0&showinfo=0`} title="Trailer" allowFullScreen></iframe>
-                  </div>
-              </motion.div>
-          )}
-
-          {/* 4. GALLERY */}
-          {galleryImages && galleryImages.length > 0 && (
-              <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}>
-                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-blue-600 pl-3">Gallery</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                      {galleryImages.slice(0, 4).map((img: any, i: number) => {
-                          const src = typeof img === 'string' ? img : `https://image.tmdb.org/t/p/w780${img.file_path}`;
-                          return (
-                            <motion.div 
-                              key={i} 
-                              whileHover={{ scale: 1.02 }}
-                              className="aspect-video rounded-xl overflow-hidden border border-gray-800 group relative shadow-lg"
-                            >
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300"></div>
-                                <img src={src} className="w-full h-full object-cover transition-transform duration-700" loading="lazy"/>
-                            </motion.div>
-                          );
-                      })}
-                  </div>
-              </motion.div>
-          )}
-
-          {/* 5. DOWNLOAD SECTION (Animated with AnimatePresence) */}
-          <div id="download-section" ref={downloadRef} className="pt-10">
-              <motion.div 
-                initial={{ opacity: 0, y: 50 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden transition-all duration-500 hover:border-white/10 group"
-              >
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none animate-pulse"></div>
-                  
-                  <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                      Download & Watch Options
-                  </h2>
-
-                  <AnimatePresence mode="wait">
-                    
-                    {/* HEADER */}
-                    {(selectedSeason || actionType) && (
-                       <motion.div 
-                         key="header"
-                         initial={{ opacity: 0, height: 0 }}
-                         animate={{ opacity: 1, height: 'auto' }}
-                         exit={{ opacity: 0, height: 0 }}
-                         className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800"
-                       >
-                          <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer hover:underline hover:scale-105 transform"><ArrowLeft size={16}/> Go Back</button>
-                          <div className="text-xs font-mono text-gray-500 uppercase tracking-widest">{selectedSeason ? `S${selectedSeason}` : ''} {actionType ? `/ ${actionType}` : ''} {selectedQuality ? `/ ${selectedQuality}` : ''}</div>
-                       </motion.div>
-                    )}
-
-                    {/* SEASON SELECTOR */}
-                    {availableSeasons.length > 0 && selectedSeason === null && (
-                        <motion.div key="seasons" variants={slideIn} initial="hidden" animate="visible" exit="exit">
-                            <h3 className="text-lg font-semibold text-gray-400 mb-4 flex items-center gap-2"><Tv size={18}/> Select Season</h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                                {availableSeasons.map(s => (
-                                    <motion.button 
-                                      whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                                      key={s} onClick={() => setSelectedSeason(s)} 
-                                      className="p-4 bg-gray-800 hover:bg-red-600 border border-gray-700 rounded-xl font-bold text-lg transition-colors duration-300 cursor-pointer shadow-lg hover:shadow-red-600/20"
-                                    >
-                                      Season {s}
-                                    </motion.button>
-                                ))}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* ACTION SELECTOR */}
-                    {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
-                        <motion.div key="actions" variants={slideIn} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setActionType('download')} className="p-8 bg-gradient-to-br from-blue-600/20 to-blue-900/20 border border-blue-500/30 rounded-2xl hover:border-blue-400 transition-colors duration-300 text-center cursor-pointer group hover:shadow-blue-500/20 shadow-lg">
-                                <h3 className="text-2xl font-bold text-white group-hover:scale-110 transition-transform duration-300">Download</h3>
-                            </motion.button>
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setActionType('watch')} className="p-8 bg-gradient-to-br from-green-600/20 to-green-900/20 border border-green-500/30 rounded-2xl hover:border-green-400 transition-colors duration-300 text-center cursor-pointer group hover:shadow-green-500/20 shadow-lg">
-                                <h3 className="text-2xl font-bold text-white group-hover:scale-110 transition-transform duration-300">Watch Online</h3>
-                            </motion.button>
-                        </motion.div>
-                    )}
-
-                    {/* TYPE SELECTOR (Episode vs Bulk) */}
-                    {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
-                        <motion.div key="types" variants={slideIn} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setDownloadType('episode')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-colors flex items-center justify-center gap-3 cursor-pointer shadow-md"><Tv size={24} className="text-purple-400"/> Episode Wise</motion.button>
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setDownloadType('bulk')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-colors flex items-center justify-center gap-3 cursor-pointer shadow-md"><Archive size={24} className="text-orange-400"/> Bulk / Zip</motion.button>
-                        </motion.div>
-                    )}
-
-                    {/* QUALITY SELECTOR */}
-                    {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
-                        <motion.div key="quality" variants={slideIn} initial="hidden" animate="visible" exit="exit">
-                            <h3 className="text-lg font-semibold text-gray-400 mb-4 text-center">Select Quality</h3>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-3xl mx-auto">
-                                {currentQualities.length > 0 ? currentQualities.map(q => (
-                                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 rounded-xl font-bold text-lg transition-colors duration-300 cursor-pointer shadow-md hover:shadow-blue-500/30">{q}</motion.button>
-                                )) : <div className="col-span-full text-center text-gray-500 py-4">No options found. Try changing filters.</div>}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* LINKS LIST */}
-                    {selectedQuality !== null && (
-                        <motion.div key="links" variants={slideIn} initial="hidden" animate="visible" exit="exit" className="space-y-3 max-w-3xl mx-auto">
-                            <h3 className="text-green-400 font-bold mb-4 flex items-center gap-2"><CheckCircle size={20}/> Available Links</h3>
-                            {displayLinks.length > 0 ? displayLinks.map((link: any, idx: number) => (
-                                <motion.button 
-                                  initial={{ opacity: 0, x: -10 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: idx * 0.05 }}
-                                  key={idx} onClick={() => handleLinkClick(link.url)} 
-                                  className="w-full text-left p-4 bg-black/40 hover:bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-between group transition-all duration-200 cursor-pointer hover:border-gray-500 hover:shadow-lg active:scale-[0.99]"
-                                >
-                                    <div>
-                                        <span className="font-bold text-gray-200 group-hover:text-white block text-sm md:text-base transition-colors">{link.label}</span>
-                                        <div className="flex gap-2 text-xs text-gray-500 mt-1">{link.size && <span className="bg-gray-800 px-1.5 rounded">{link.size}</span>}{link.sectionTitle && <span className="text-gray-600">• {link.sectionTitle}</span>}</div>
-                                    </div>
-                                    {actionType === 'watch' ? <Play className="w-5 h-5 text-green-500 group-hover:scale-125 transition-transform duration-300"/> : <Download className="w-5 h-5 text-blue-500 group-hover:scale-125 transition-transform duration-300"/>}
-                                </motion.button>
-                            )) : <div className="text-center py-10 text-gray-500">No links available.</div>}
-                        </motion.div>
-                    )}
-
-                  </AnimatePresence>
-
-              </motion.div>
+          {/* Poster - STATIC (Removed motion.div) */}
+          <div className="hidden lg:block">
+            <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl shadow-2xl shadow-red-900/20 border border-white/10">
+              <Image
+                src={data.poster}
+                alt={data.title}
+                fill
+                className="object-cover"
+              />
+            </div>
           </div>
+
+          {/* Details Section */}
+          <div className="flex flex-col justify-end">
+            
+            {/* Title & Metadata - STATIC (Instant Load) */}
+            <div>
+              <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl">
+                {data.title}
+              </h1>
+
+              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm font-medium text-gray-300">
+                <span className="flex items-center gap-1 text-green-400">
+                  <Star className="h-4 w-4 fill-current" /> {data.rating} Match
+                </span>
+                <span>{data.year}</span>
+                <span className="rounded bg-white/20 px-2 py-0.5 text-xs text-white">HD</span>
+                <span>{data.duration}</span>
+              </div>
+
+              <p className="mt-6 max-w-3xl text-lg text-gray-300 leading-relaxed line-clamp-4">
+                {data.description}
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                {data.genres?.map((genre, idx) => (
+                  <span
+                    key={idx}
+                    className="rounded-full border border-white/20 bg-white/5 px-4 py-1 text-sm hover:bg-white/10"
+                  >
+                    {genre}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons - STATIC Container */}
+            <div className="mt-8 flex flex-wrap gap-4">
+              <button className="flex items-center gap-2 rounded bg-white px-8 py-3 text-lg font-bold text-black transition hover:bg-white/90 active:scale-95">
+                <Play className="h-6 w-6 fill-current" />
+                Play Now
+              </button>
+
+              <button
+                onClick={() => setShowDownloads(!showDownloads)}
+                className={`flex items-center gap-2 rounded border px-8 py-3 text-lg font-bold transition active:scale-95 
+                  ${showDownloads 
+                    ? "bg-red-600 border-red-600 text-white" 
+                    : "bg-white/20 border-white/20 text-white hover:bg-white/30"
+                  }`}
+              >
+                <Download className={`h-6 w-6 ${showDownloads ? "animate-bounce" : ""}`} />
+                {showDownloads ? "Close Downloads" : "Download"}
+              </button>
+
+              <button className="flex items-center gap-2 rounded border border-white/20 bg-white/10 px-4 py-3 text-white transition hover:bg-white/20">
+                <Share2 className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* -------------------------------------------------------
+               ANIMATION ZONE START (Sirf yaha animation hai)
+               -------------------------------------------------------
+            */}
+            <AnimatePresence>
+              {showDownloads && data.downloadLinks && (
+                <motion.div
+                  // Fast & Snappy Animation
+                  initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                  animate={{ 
+                    height: "auto", 
+                    opacity: 1, 
+                    marginTop: 32,
+                    transition: { duration: 0.25, ease: "easeOut" } // 0.25s is fast
+                  }}
+                  exit={{ 
+                    height: 0, 
+                    opacity: 0, 
+                    marginTop: 0,
+                    transition: { duration: 0.2, ease: "easeIn" }
+                  }}
+                  className="overflow-hidden w-full max-w-2xl"
+                >
+                  <div className="rounded-xl border border-white/10 bg-[#1f1f1f]/95 p-6 backdrop-blur-md shadow-2xl">
+                    <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-2">
+                      <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <HardDrive className="text-red-500 w-5 h-5"/> Available Qualities
+                      </h3>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {data.downloadLinks.map((link, index) => (
+                        <motion.a
+                          key={index}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          // Very subtle stagger, almost instant
+                          initial={{ x: -10, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          transition={{ delay: index * 0.05, duration: 0.2 }}
+                          className="group flex items-center justify-between rounded-lg bg-black/40 p-4 transition duration-200 hover:bg-white/10 hover:border-l-4 hover:border-red-600 border-l-4 border-transparent cursor-pointer"
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-bold text-white text-lg group-hover:text-red-500 transition-colors">
+                              {link.quality}
+                            </span>
+                            <span className="text-xs text-gray-400">{link.size} • {link.type || "MKV"}</span>
+                          </div>
+                          
+                          <div className="rounded-full bg-white/10 p-2 text-white transition group-hover:bg-red-600">
+                            <Download className="h-5 w-5" />
+                          </div>
+                        </motion.a>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {/* ANIMATION ZONE END */}
+
+          </div>
+        </div>
       </div>
     </div>
   );
