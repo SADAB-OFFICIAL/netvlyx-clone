@@ -71,10 +71,9 @@ function VlyxDriveContent() {
   };
 
   // ---------------------------------------------------------
-  // 🧠 STRICT TIER SYSTEM (Priority Logic)
+  // 🧠 UPDATED PRIORITY LOGIC (GDFlix + HubCloud = Kings)
   // ---------------------------------------------------------
   const splitLinks = (links: ApiLink[]) => {
-      // Helper to check keywords safely
       const matches = (text: string, keywords: string[]) => 
           keywords.some(k => text.toLowerCase().includes(k));
 
@@ -82,20 +81,25 @@ function VlyxDriveContent() {
           const n = name.toLowerCase();
           const u = url.toLowerCase();
 
-          // 💎 TIER 1: KING (HubCloud, FSL, N-Cloud) -> Score 100
+          // 👑 RANK 1: GDFLIX (Supreme Priority) -> Score 110
+          // Agar GDFlix hai to yahi Main Button banega
+          if (matches(n, ['gdflix']) || matches(u, ['gdflix'])) 
+              return 110;
+
+          // 💎 RANK 2: HUBCLOUD / FAST CLOUD (High Priority) -> Score 100
+          // Agar GDFlix nahi hai to ye Main Button banega
           if (matches(n, ['hub', 'fsl', 'fast', 'n-cloud']) || matches(u, ['hubcloud', 'hubdrive', 'fsl', 'workers.dev'])) 
               return 100;
 
-          // 🚀 TIER 2: HIGH SPEED (G-Direct, 10Gbps) -> Score 80
+          // 🚀 RANK 3: HIGH SPEED (G-Direct, 10Gbps) -> Score 80
           if (matches(n, ['10gbps', 'g-direct', 'direct']) || matches(u, ['g-direct'])) 
               return 80;
 
-          // 🔻 TIER 4: LOW PRIORITY (FileBee, GDFlix, Drive) -> Score 10
-          // Inhe sabse neeche bhejo taaki ye Main Button na bane
-          if (matches(n, ['filebee', 'gdflix', 'drive', 'google']) || matches(u, ['filebee', 'gdflix', 'drive.google'])) 
+          // 🔻 RANK 4: LOW PRIORITY (FileBee, Drive) -> Score 10
+          if (matches(n, ['filebee', 'drive', 'google']) || matches(u, ['filebee', 'drive.google'])) 
               return 10;
 
-          // 😐 TIER 3: STANDARD -> Score 50
+          // 😐 RANK 5: STANDARD -> Score 50
           return 50;
       };
 
@@ -105,8 +109,8 @@ function VlyxDriveContent() {
       });
 
       return {
-          main: sorted[0],       // Winner (Highest Score)
-          others: sorted.slice(1) // Runners up
+          main: sorted[0],       // Winner (GDFlix or HubCloud)
+          others: sorted.slice(1) // Rest go to "Show More"
       };
   };
 
@@ -115,15 +119,19 @@ function VlyxDriveContent() {
       const lowerName = name.toLowerCase();
       const lowerUrl = url.toLowerCase();
 
-      // VIP Style (Orange/Gold)
+      // GDFlix Style (Green/Teal)
+      if (lowerName.includes('gdflix') || lowerUrl.includes('gdflix'))
+          return "bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 text-white border-teal-500 shadow-teal-500/20";
+
+      // HubCloud/VIP Style (Orange/Gold)
       if (lowerName.includes('hub') || lowerName.includes('fast') || lowerName.includes('fsl') || lowerUrl.includes('hubcloud')) 
           return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400 shadow-orange-500/20";
       
-      // High Speed Style (Green)
+      // High Speed Style (Emerald)
       if (lowerName.includes('10gbps') || lowerName.includes('g-direct')) 
           return "bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-500/20";
       
-      // Standard Style (Gray/Blue mix)
+      // Standard Style
       return "bg-[#1f2937] hover:bg-[#374151] text-gray-200 border border-gray-700";
   };
 
@@ -132,6 +140,9 @@ function VlyxDriveContent() {
       const lower = name.toLowerCase();
       if (lower.includes('hub') || lower.includes('n-cloud') || lower.includes('fast') || lower.includes('fsl')) {
           return "Stream Fast (N-Cloud)";
+      }
+      if (lower.includes('gdflix')) {
+          return "Play via GDFlix (Fast)";
       }
       return `Play via ${name}`;
   };
