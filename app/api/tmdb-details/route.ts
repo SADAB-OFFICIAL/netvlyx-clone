@@ -6,59 +6,84 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   let imdbId = searchParams.get('imdb_id');
   const query = searchParams.get('query');
-  const year = searchParams.get('year'); // ✅ Year Support
+  const year = searchParams.get('year'); 
 
   if (!imdbId && !query) {
       return NextResponse.json({ error: 'ID or Query Required' }, { status: 400 });
   }
 
   try {
-    // 1. Search by Title (+ Year) if ID missing
+    // ---------------------------------------------------------
+    // 1. SMART SEARCH (If IMDB ID is missing)
+    // ---------------------------------------------------------
     if (!imdbId && query) {
-        const cleanQuery = query.replace(/\s*(?:Season|S)\s*\d+.*$/i, '').trim();
+        // Remove Season/Episode info for better matching (e.g. "Money Heist S05" -> "Money Heist")
+        const cleanQuery = query.replace(/\s*(?:Season|S)\s*\d+.*$/i, '')
+                                .replace(/[\[\(].*?[\]\)]/g, '') // Remove brackets like (2024)
+                                .trim();
         
-        // Search URL logic
-        let searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(cleanQuery)}`;
+        // Construct Search URL
+        let searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(cleanQuery)}&include_adult=true&language=en-US`;
         
-        // Add Year filter if available (Greatly improves accuracy)
+        // Year Logic: Movies ke liye strict, Series ke liye first_air_date_year
         if (year) {
-             // For movies
-             searchUrl += `&year=${year}`; 
-             // Note: 'multi' search supports 'year' param but primarily for movies.
+             searchUrl += `&year=${year}`; // Works for movies primarily
         }
 
         const searchRes = await fetch(searchUrl);
         const searchData = await searchRes.json();
         
-        // Pick first result
-        const firstResult = searchData.results?.[0];
-        if (firstResult) {
-            const type = firstResult.media_type === 'tv' ? 'tv' : 'movie';
-            const idUrl = `https://api.themoviedb.org/3/${type}/${firstResult.id}/external_ids?api_key=${TMDB_KEY}`;
+        // Result Filter Logic
+        let bestMatch = searchData.results?.[0];
+        
+        // Agar Year diya hai aur wo TV Show hai, to manual check karo
+        if (year && searchData.results) {
+             const yearMatch = searchData.results.find((item: any) => 
+                (item.release_date?.startsWith(year)) || (item.first_air_date?.startsWith(year))
+             );
+             if (yearMatch) bestMatch = yearMatch;
+        }
+
+        if (bestMatch) {
+            const type = bestMatch.media_type === 'tv' ? 'tv' : 'movie';
+            // Fetch External IDs to get IMDB ID
+            const idUrl = `https://api.themoviedb.org/3/${type}/${bestMatch.id}/external_ids?api_key=${TMDB_KEY}`;
             const idRes = await fetch(idUrl);
             const idData = await idRes.json();
-            imdbId = idData.imdb_id;
+            
+            if (idData.imdb_id) {
+                imdbId = idData.imdb_id;
+            } else {
+                // Agar IMDB ID nahi mila, to TMDB ID hi return kar do (Netvlyx API might handle it)
+                // Lekin usually Netvlyx IMDB ID mangta hai. 
+                // Fallback: Return raw TMDB data if needed, but let's stick to flow.
+            }
         }
     }
 
-    if (!imdbId) return NextResponse.json({ found: false });
+    if (!imdbId) {
+        return NextResponse.json({ found: false, message: "No IMDB ID found on TMDB" });
+    }
 
-    // 2. Call Netvlyx API
+    // ---------------------------------------------------------
+    // 2. FETCH METADATA (Netvlyx API)
+    // ---------------------------------------------------------
     const targetApi = `https://netvlyx.pages.dev/api/tmdb-details?imdb_id=${imdbId}`;
     const response = await fetch(targetApi, {
         headers: {
-            'User-Agent': 'Mozilla/5.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Referer': 'https://netvlyx.pages.dev/'
         },
-        next: { revalidate: 3600 }
+        next: { revalidate: 3600 } // Cache for 1 hour
     });
 
-    if (!response.ok) throw new Error("API Failed");
+    if (!response.ok) throw new Error("Netvlyx API Failed");
     const data = await response.json();
 
     return NextResponse.json({ found: true, ...data });
 
-  } catch (error) {
-    return NextResponse.json({ found: false });
+  } catch (error: any) {
+    console.error("TMDB Route Error:", error.message);
+    return NextResponse.json({ found: false, error: error.message });
   }
 }
