@@ -71,57 +71,67 @@ function VlyxDriveContent() {
   };
 
   // ---------------------------------------------------------
-  // 🧠 STRICT PRIORITY LOGIC (Updated)
+  // 🧠 STRICT TIER SYSTEM (Priority Logic)
   // ---------------------------------------------------------
   const splitLinks = (links: ApiLink[]) => {
-      // 1. Define High Priority Keywords (N-Cloud / HubCloud)
-      const highPriority = ['hubcloud', 'n-cloud', 'fast cloud', 'fsl', 'hub'];
-      
-      // 2. Define Low Priority Keywords (Drive / FileBee / GDFlix)
-      const lowPriority = ['filebee', 'drive', 'google', 'gdflix', 'g-direct', '10gbps'];
+      // Helper to check keywords safely
+      const matches = (text: string, keywords: string[]) => 
+          keywords.some(k => text.toLowerCase().includes(k));
 
       const getScore = (name: string, url: string) => {
-          const lowerName = name.toLowerCase();
-          const lowerUrl = url.toLowerCase();
+          const n = name.toLowerCase();
+          const u = url.toLowerCase();
 
-          // Rule 1: Agar HubCloud/Fast hai -> Score 0 (Top)
-          if (highPriority.some(k => lowerName.includes(k) || lowerUrl.includes(k))) return 0;
+          // 💎 TIER 1: KING (HubCloud, FSL, N-Cloud) -> Score 100
+          if (matches(n, ['hub', 'fsl', 'fast', 'n-cloud']) || matches(u, ['hubcloud', 'hubdrive', 'fsl', 'workers.dev'])) 
+              return 100;
 
-          // Rule 2: Agar FileBee/Drive hai -> Score 10 (Bottom)
-          if (lowPriority.some(k => lowerName.includes(k) || lowerUrl.includes(k))) return 10;
+          // 🚀 TIER 2: HIGH SPEED (G-Direct, 10Gbps) -> Score 80
+          if (matches(n, ['10gbps', 'g-direct', 'direct']) || matches(u, ['g-direct'])) 
+              return 80;
 
-          // Rule 3: Baaki sab -> Score 5 (Middle)
-          return 5;
+          // 🔻 TIER 4: LOW PRIORITY (FileBee, GDFlix, Drive) -> Score 10
+          // Inhe sabse neeche bhejo taaki ye Main Button na bane
+          if (matches(n, ['filebee', 'gdflix', 'drive', 'google']) || matches(u, ['filebee', 'gdflix', 'drive.google'])) 
+              return 10;
+
+          // 😐 TIER 3: STANDARD -> Score 50
+          return 50;
       };
 
+      // Sort Descending (Highest Score First)
       const sorted = [...links].sort((a, b) => {
-          return getScore(a.name, a.url) - getScore(b.name, b.url);
+          return getScore(b.name, b.url) - getScore(a.name, a.url);
       });
 
       return {
-          main: sorted[0],       // Highest Priority Link (Score 0 preferred)
-          others: sorted.slice(1) // Rest go to "Show More"
+          main: sorted[0],       // Winner (Highest Score)
+          others: sorted.slice(1) // Runners up
       };
   };
 
   // Helper for button styling
-  const getButtonClass = (name: string) => {
-      const lower = name.toLowerCase();
-      // VIP / N-Cloud Style (Orange/Gold)
-      if (lower.includes('hub') || lower.includes('cloud') || lower.includes('fast') || lower.includes('fsl')) 
-          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
-      // Drive / High Speed Style (Green)
-      if (lower.includes('gdflix') || lower.includes('drive') || lower.includes('10gbps') || lower.includes('filebee')) 
-          return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
-      // Standard (Gray)
-      return "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600";
+  const getButtonClass = (name: string, url: string) => {
+      const lowerName = name.toLowerCase();
+      const lowerUrl = url.toLowerCase();
+
+      // VIP Style (Orange/Gold)
+      if (lowerName.includes('hub') || lowerName.includes('fast') || lowerName.includes('fsl') || lowerUrl.includes('hubcloud')) 
+          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400 shadow-orange-500/20";
+      
+      // High Speed Style (Green)
+      if (lowerName.includes('10gbps') || lowerName.includes('g-direct')) 
+          return "bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-500/20";
+      
+      // Standard Style (Gray/Blue mix)
+      return "bg-[#1f2937] hover:bg-[#374151] text-gray-200 border border-gray-700";
   };
 
   // Helper for Main Button Text
   const getMainButtonText = (name: string) => {
       const lower = name.toLowerCase();
       if (lower.includes('hub') || lower.includes('n-cloud') || lower.includes('fast') || lower.includes('fsl')) {
-          return "Continue with N-Cloud";
+          return "Stream Fast (N-Cloud)";
       }
       return `Play via ${name}`;
   };
@@ -219,10 +229,10 @@ function VlyxDriveContent() {
                                       </h3>
                                    </div>
                                    <div className="p-5 flex flex-col gap-3">
-                                      {/* MAIN BUTTON */}
+                                      {/* MAIN BUTTON (Winner) */}
                                       <button 
                                           onClick={() => handlePlay(main.url)} 
-                                          className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name)}`}
+                                          className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name, main.url)}`}
                                       >
                                           <span className="flex items-center gap-3">
                                               <CloudLightning size={24} className="fill-current" />
@@ -231,7 +241,7 @@ function VlyxDriveContent() {
                                           <Play size={24} className="fill-current" />
                                       </button>
 
-                                      {/* OTHER SERVERS */}
+                                      {/* SHOW MORE */}
                                       {otherServers.length > 0 && (
                                           <div className="mt-2">
                                               <button 
@@ -248,7 +258,7 @@ function VlyxDriveContent() {
                                                           <button 
                                                               key={i} 
                                                               onClick={() => handlePlay(link.url)} 
-                                                              className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all border ${getButtonClass(link.name)}`}
+                                                              className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all border ${getButtonClass(link.name, link.url)}`}
                                                           >
                                                               <Server size={16} /> {link.name}
                                                           </button>
@@ -286,13 +296,13 @@ function VlyxDriveContent() {
                                   {/* MAIN BUTTON */}
                                   <button 
                                       onClick={() => handlePlay(main.url)}
-                                      className={`w-full py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg ${getButtonClass(main.name)}`}
+                                      className={`w-full py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg ${getButtonClass(main.name, main.url)}`}
                                   >
                                       <Play size={20} className="fill-current" /> 
                                       {getMainButtonText(main.name)}
                                   </button>
                                   
-                                  {/* OTHER SERVERS */}
+                                  {/* SHOW MORE */}
                                   {otherServers.length > 0 && (
                                       <div className="relative">
                                           {!isExpanded ? (
