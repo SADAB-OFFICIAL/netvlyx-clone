@@ -6,7 +6,6 @@ import {
   Play, Info, Search, Bell, MonitorPlay, 
   ChevronRight, Star, X, Mail
 } from 'lucide-react';
-
 import TwinklingStars from '@/components/TwinklingStars';
 
 // --- SKELETON COMPONENTS ---
@@ -44,7 +43,7 @@ const NavbarSkeleton = () => (
   </div>
 );
 
-// --- NAVBAR COMPONENT ---
+// --- NAVBAR COMPONENT (PROFESSIONAL GLASS UI UPDATE) ---
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -52,7 +51,7 @@ const Navbar = () => {
   const router = useRouter();
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
+    const handleScroll = () => setScrolled(window.scrollY > 30);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -66,24 +65,35 @@ const Navbar = () => {
   };
 
   return (
-    <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${
-      scrolled ? 'bg-[#0a0a0a]/90 shadow-2xl py-2' : 'bg-transparent py-4'
-    }`}>
+    <nav 
+      className={`fixed top-0 w-full z-50 transition-all duration-500 ease-in-out border-b ${
+        scrolled 
+          ? 'bg-[#050505]/70 backdrop-blur-xl border-white/5 py-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]' 
+          : 'bg-gradient-to-b from-black/80 via-black/40 to-transparent border-transparent py-6'
+      }`}
+    >
       <div className="px-4 md:px-12 flex items-center justify-between">
         <div className="flex items-center gap-4 md:gap-12">
            {/* LOGO */}
            <div className="flex items-center gap-2 cursor-pointer group" onClick={() => router.push('/')}>
-              <MonitorPlay className="text-yellow-500 group-hover:scale-110 transition-transform" size={28} />
-              <span className="text-xl md:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 drop-shadow-sm">
+              <div className="relative">
+                <div className="absolute inset-0 bg-yellow-500 blur-[10px] opacity-20 group-hover:opacity-40 transition-opacity rounded-full"></div>
+                <MonitorPlay className="text-yellow-500 relative z-10 group-hover:scale-110 transition-transform duration-300" size={28} />
+              </div>
+              <span className="text-xl md:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-600 drop-shadow-sm font-sans">
                 SADABEFY
               </span>
            </div>
 
            {/* DESKTOP LINKS */}
-           <div className="hidden md:flex gap-8 text-sm font-medium text-gray-300">
-              {['Home', 'Series', 'Movies', 'New & Popular', 'My List'].map((item) => (
-                <span key={item} className="hover:text-yellow-400 transition-colors cursor-pointer hover:drop-shadow-[0_0_8px_rgba(253,224,71,0.3)]">
+           <div className="hidden md:flex gap-8 text-sm font-medium text-gray-300/90">
+             {['Home', 'Series', 'Movies', 'New & Popular', 'My List'].map((item) => (
+                <span 
+                  key={item} 
+                  className="hover:text-white transition-all cursor-pointer relative group/link"
+                >
                   {item}
+                  <span className="absolute -bottom-1 left-0 w-0 h-[2px] bg-yellow-500 transition-all duration-300 group-hover/link:w-full"></span>
                 </span>
               ))}
            </div>
@@ -91,32 +101,35 @@ const Navbar = () => {
 
         {/* RIGHT ACTIONS */}
         <div className="flex items-center gap-4 md:gap-6">
-           {/* Search Bar */}
+           {/* Search Bar (Glassy) */}
            {searchOpen ? (
-             <form onSubmit={handleSearch} className="relative flex items-center animate-fade-in">
+             <form onSubmit={handleSearch} className="relative flex items-center animate-fade-in-right origin-right">
                 <input 
                   autoFocus
                   type="text" 
                   placeholder="Titles, people, genres" 
-                  className="bg-black/80 border border-gray-600 pl-4 pr-10 py-2 rounded-full text-sm w-48 md:w-64 focus:outline-none focus:border-yellow-500 transition-all shadow-lg"
+                  className="bg-white/10 backdrop-blur-md border border-white/10 text-white placeholder-gray-400 pl-4 pr-10 py-2 rounded-full text-sm w-48 md:w-64 focus:outline-none focus:border-yellow-500/50 focus:bg-black/60 transition-all shadow-lg"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onBlur={() => !query && setSearchOpen(false)}
                 />
                 <X 
                   size={16} 
-                  className="absolute right-3 text-gray-400 cursor-pointer hover:text-white"
+                  className="absolute right-3 text-gray-400 cursor-pointer hover:text-white transition-colors"
                   onClick={() => setSearchOpen(false)} 
                 />
              </form>
            ) : (
              <Search 
-                className="w-5 h-5 md:w-6 md:h-6 text-gray-300 hover:text-yellow-400 cursor-pointer transition-transform hover:scale-110" 
+                className="w-5 h-5 md:w-6 md:h-6 text-gray-300 hover:text-white cursor-pointer transition-all hover:scale-110" 
                 onClick={() => setSearchOpen(true)}
              />
            )}
-           <Bell className="w-5 h-5 md:w-6 md:h-6 text-gray-300 hover:text-yellow-400 cursor-pointer" />
-           <div className="hidden md:block w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-600 cursor-pointer hover:ring-2 hover:ring-white transition-all"></div>
+           
+           <Bell className="w-5 h-5 md:w-6 md:h-6 text-gray-300 hover:text-white cursor-pointer transition-all hover:rotate-12" />
+           
+           {/* Profile Icon */}
+           <div className="hidden md:block w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-yellow-500 to-amber-700 cursor-pointer hover:ring-2 hover:ring-white/50 transition-all shadow-lg"></div>
         </div>
       </div>
     </nav>
@@ -134,10 +147,10 @@ const HeroSlider = ({ data }: { data: any[] }) => {
       }, 7000);
       return () => clearInterval(timer);
     }, [data]);
-  
+
     if (!data || data.length === 0) return null;
     const movie = data[current];
-  
+
     const handlePlayClick = () => {
         if (movie.link) {
             const encodedLink = btoa(movie.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -165,7 +178,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
          <div className="absolute bottom-0 left-0 w-full max-w-4xl flex flex-col gap-4 md:gap-6 z-10 px-6 md:px-16 pb-24 md:pb-48">
              <div className="flex items-center gap-3 animate-fade-in-up">
                  <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 md:px-3 md:py-1 text-[10px] md:text-xs font-bold rounded-md border border-yellow-500/30 flex items-center gap-1">
-                    <Star size={10} fill="currentColor" /> {movie.rating}
+                   <Star size={10} fill="currentColor" /> {movie.rating}
                  </span>
                  <div className="flex gap-2 overflow-hidden">
                     {movie.tags?.slice(0, 3).map((tag: string, i: number) => (
@@ -199,7 +212,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
          </div>
   
          <div className="absolute right-4 md:right-12 bottom-1/2 translate-y-1/2 flex flex-col gap-2 md:gap-4 z-20">
-            {data.map((_, idx) => (
+             {data.map((_, idx) => (
                 <div 
                   key={idx} 
                   className={`w-1 md:w-1.5 h-8 md:h-12 rounded-full transition-all duration-300 ${
@@ -212,7 +225,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     );
 };
 
-// --- MOVIE ROW SECTION (UPDATED: FRESH NAME BELOW CARD 🌟) ---
+// --- MOVIE ROW SECTION ---
 const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
@@ -224,7 +237,7 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
         rowRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
       }
     };
-  
+
     const handleItemClick = (item: any) => {
         if (item.link) {
             const encodedLink = btoa(item.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -240,24 +253,22 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
         }
     };
 
-    // 🌟 HELPER: Clean Title Function
     const getCleanTitle = (text: string) => {
         if (!text) return "Unknown";
         return text
             .replace(/^Download\s+/i, "")
-            .replace(/\s*\(\d{4}\).*/, "")  // Remove (2024)...
-            .replace(/\s*\[\d{4}\].*/, "")  // Remove [2024]...
-            .replace(/\s*(?:4k|1080p|720p|480p|hd|cam|rip).*/i, "") // Remove Quality tags
-            .replace(/\s*(?:Season|S)\s*0?\d+.*/i, "") // Remove Season if you want base title
-            .replace(/[\[\]\(\)]/g, "") // Remove left over brackets
+            .replace(/\s*\(\d{4}\).*/, "")
+            .replace(/\s*\[\d{4}\].*/, "")
+            .replace(/\s*(?:4k|1080p|720p|480p|hd|cam|rip).*/i, "")
+            .replace(/\s*(?:Season|S)\s*0?\d+.*/i, "")
+            .replace(/[\[\]\(\)]/g, "")
             .trim();
     };
-  
+
     if (!items || items.length === 0) return null;
   
     return (
       <div className="mb-8 md:mb-12 relative group/section px-4 md:px-12">
-        {/* Title + View All */}
         <div className="flex justify-between items-end mb-4 md:mb-6 px-1">
             <h2 className="text-xl md:text-2xl font-bold text-gray-100 flex items-center gap-2 group-hover/section:text-yellow-400 transition-colors">
                 {title} 
@@ -285,32 +296,28 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
               className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 px-1"
             >
               {items.map((item, idx) => (
-                // WRAPPER DIV: Holds Image + Title
                 <div 
                   key={idx} 
                   className="flex flex-col gap-2 min-w-[130px] md:min-w-[180px] group/item cursor-pointer"
                   onClick={() => handleItemClick(item)}
                 >
-                    {/* POSTER IMAGE CONTAINER */}
                     <div className="relative w-full h-[200px] md:h-[270px] rounded-lg overflow-hidden transition-all duration-300 group-hover/item:scale-105 group-hover/item:shadow-lg group-hover/item:shadow-yellow-500/20 bg-gray-900 z-10">
                         <img 
                           src={item.image || item.poster} 
                           alt={item.title} 
                           className="w-full h-full object-cover opacity-90 group-hover/item:opacity-100 transition-opacity" 
                           loading="lazy"
-                        />
+                          />
                         
-                        {/* Hover Overlay (Optional: keep for quick info) */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
                             <div className="flex gap-2 justify-center">
                                  <div className="bg-white text-black p-2 rounded-full hover:bg-yellow-400 transition-colors scale-0 group-hover/item:scale-100 duration-300">
-                                    <Play size={12} fill="currentColor" />
+                                     <Play size={12} fill="currentColor" />
                                  </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* ✅ FRESH NAME BELOW CARD */}
                     <h3 className="text-gray-300 font-medium text-xs md:text-sm truncate pl-1 group-hover/item:text-yellow-400 transition-colors">
                         {getCleanTitle(item.title)}
                     </h3>
@@ -373,10 +380,10 @@ function HomePageContent() {
   return (
     <div className="min-h-screen relative bg-transparent text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
       
-      {/* 🌟 Twinkling Stars Background */}
+      {/* Stars Background */}
       <TwinklingStars />
 
-      {/* ✅ Premium Background (Transparent Overlay) */}
+      {/* Main Content Overlay */}
       <div className="relative z-10 bg-gradient-to-b from-transparent via-black/50 to-[#0a0a0a]">
           <Navbar />
 
@@ -385,7 +392,6 @@ function HomePageContent() {
 
             <div className="-mt-16 md:-mt-24 relative z-20 space-y-6 md:space-y-8">
                 {data?.sections?.map((sec: any, idx: number) => (
-                    // ✅ Slug Prop Pass Kiya
                     <MovieSection key={idx} title={sec.title} items={sec.items} slug={sec.slug} />
                 ))}
             </div>
@@ -413,7 +419,7 @@ function HomePageContent() {
                   <div>
                       <h4 className="text-white font-bold mb-4 md:mb-6">Support</h4>
                       <ul className="space-y-2 md:space-y-3 text-gray-400 text-sm">
-                          {['Terms of Service', 'Privacy Policy'].map(item => (
+                           {['Terms of Service', 'Privacy Policy'].map(item => (
                               <li key={item} className="hover:text-yellow-400 cursor-pointer transition-colors">{item}</li>
                           ))}
                       </ul>
@@ -421,10 +427,10 @@ function HomePageContent() {
                   <div>
                       <h4 className="text-white font-bold mb-4 md:mb-6">Contact</h4>
                       <ul className="space-y-4 text-sm">
-                          <li className="flex items-center gap-3 text-gray-400">
+                           <li className="flex items-center gap-3 text-gray-400">
                               <Mail size={18} className="text-yellow-500"/> 
                               <span className="hover:text-white cursor-pointer break-all">contact@sadabefy.com</span>
-                          </li>
+                           </li>
                       </ul>
                   </div>
               </div>
