@@ -4,15 +4,13 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { 
   CloudLightning, Loader2, Play, AlertTriangle, 
-  FolderOpen, Server, ChevronDown, ChevronUp, Database, Film
+  FolderOpen, Server, ChevronDown, ChevronUp, Database, Film, ShieldCheck
 } from 'lucide-react';
 
 // --- Types ---
 interface ApiLink {
   name: string;
   url: string;
-  isVCloud?: boolean;
-  isHubCloud?: boolean;
 }
 
 interface LinkGroup {
@@ -71,7 +69,7 @@ function VlyxDriveContent() {
   };
 
   // ---------------------------------------------------------
-  // 🧠 UPDATED PRIORITY LOGIC (GDFlix + HubCloud = Kings)
+  // 🧠 PRIORITY LOGIC (Updated)
   // ---------------------------------------------------------
   const splitLinks = (links: ApiLink[]) => {
       const matches = (text: string, keywords: string[]) => 
@@ -81,57 +79,50 @@ function VlyxDriveContent() {
           const n = name.toLowerCase();
           const u = url.toLowerCase();
 
-          // 👑 RANK 1: GDFLIX (Supreme Priority) -> Score 110
-          // Agar GDFlix hai to yahi Main Button banega
-          if (matches(n, ['gdflix']) || matches(u, ['gdflix'])) 
-              return 110;
+          // 👑 RANK 1: GDFlix (Top Priority)
+          if (matches(n, ['gdflix']) || matches(u, ['gdflix'])) return 110;
 
-          // 💎 RANK 2: HUBCLOUD / FAST CLOUD (High Priority) -> Score 100
-          // Agar GDFlix nahi hai to ye Main Button banega
+          // 💎 RANK 2: HubCloud / Fast Cloud (VIP)
           if (matches(n, ['hub', 'fsl', 'fast', 'n-cloud']) || matches(u, ['hubcloud', 'hubdrive', 'fsl', 'workers.dev'])) 
               return 100;
 
-          // 🚀 RANK 3: HIGH SPEED (G-Direct, 10Gbps) -> Score 80
+          // 🚀 RANK 3: High Speed (G-Direct, 10Gbps)
           if (matches(n, ['10gbps', 'g-direct', 'direct']) || matches(u, ['g-direct'])) 
               return 80;
 
-          // 🔻 RANK 4: LOW PRIORITY (FileBee, Drive) -> Score 10
+          // 🔻 RANK 4: Low Priority (FileBee, Drive)
           if (matches(n, ['filebee', 'drive', 'google']) || matches(u, ['filebee', 'drive.google'])) 
               return 10;
 
-          // 😐 RANK 5: STANDARD -> Score 50
+          // 😐 RANK 5: Standard
           return 50;
       };
 
-      // Sort Descending (Highest Score First)
       const sorted = [...links].sort((a, b) => {
           return getScore(b.name, b.url) - getScore(a.name, a.url);
       });
 
       return {
-          main: sorted[0],       // Winner (GDFlix or HubCloud)
-          others: sorted.slice(1) // Rest go to "Show More"
+          main: sorted[0],       
+          others: sorted.slice(1) 
       };
   };
 
-  // Helper for button styling
+  // Helper for button styling (Restored Yellow-Orange Gradient)
   const getButtonClass = (name: string, url: string) => {
       const lowerName = name.toLowerCase();
       const lowerUrl = url.toLowerCase();
 
-      // GDFlix Style (Green/Teal)
-      if (lowerName.includes('gdflix') || lowerUrl.includes('gdflix'))
-          return "bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 text-white border-teal-500 shadow-teal-500/20";
-
-      // HubCloud/VIP Style (Orange/Gold)
-      if (lowerName.includes('hub') || lowerName.includes('fast') || lowerName.includes('fsl') || lowerUrl.includes('hubcloud')) 
+      // VIP / Main Button Style (Yellow-Orange Gradient)
+      // HubCloud, Fast Cloud, GDFlix - Sabke liye yahi premium color
+      if (lowerName.includes('hub') || lowerName.includes('fast') || lowerName.includes('fsl') || lowerUrl.includes('hubcloud') || lowerName.includes('gdflix') || lowerUrl.includes('gdflix')) 
           return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400 shadow-orange-500/20";
       
-      // High Speed Style (Emerald)
+      // High Speed (Emerald)
       if (lowerName.includes('10gbps') || lowerName.includes('g-direct')) 
           return "bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-500/20";
       
-      // Standard Style
+      // Standard (Gray)
       return "bg-[#1f2937] hover:bg-[#374151] text-gray-200 border border-gray-700";
   };
 
@@ -192,7 +183,7 @@ function VlyxDriveContent() {
                 />
                 <div className="text-center md:text-left flex-1">
                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold mb-3 border border-blue-500/30">
-                      <FolderOpen size={12} /> SECURE DRIVE
+                      <ShieldCheck size={12} /> SECURE STREAM
                    </div>
                    <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
                       {metaData.title}
@@ -207,11 +198,12 @@ function VlyxDriveContent() {
           </div>
         )}
 
-        {/* Loading */}
+        {/* Loading (Updated Text) */}
         {status === 'processing' && (
-           <div className="text-center py-20">
+           <div className="text-center py-20 animate-pulse">
               <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
-              <p className="text-gray-400">Fetching links from secure API...</p>
+              <h3 className="text-lg font-bold text-white mb-1">Initializing Secure Stream...</h3>
+              <p className="text-gray-500 text-sm">Please wait while we prepare your content.</p>
            </div>
         )}
 
@@ -240,7 +232,7 @@ function VlyxDriveContent() {
                                       </h3>
                                    </div>
                                    <div className="p-5 flex flex-col gap-3">
-                                      {/* MAIN BUTTON (Winner) */}
+                                      {/* MAIN BUTTON */}
                                       <button 
                                           onClick={() => handlePlay(main.url)} 
                                           className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name, main.url)}`}
@@ -358,8 +350,8 @@ function VlyxDriveContent() {
         {status === 'error' && (
            <div className="text-center py-20">
               <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-white">Data Fetch Failed</h3>
-              <p className="text-gray-400">Could not retrieve links from the API.</p>
+              <h3 className="text-xl font-bold text-white">Stream Unavailable</h3>
+              <p className="text-gray-400">Please try again later.</p>
            </div>
         )}
       </div>
