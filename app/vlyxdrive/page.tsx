@@ -63,50 +63,77 @@ function VlyxDriveContent() {
   }, [key]);
 
   const handlePlay = (url: string) => {
-    const nCloudKey = btoa(JSON.stringify({ url: url, title: "Stream" }))
-       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    router.push(`/ncloud?key=${nCloudKey}`);
+    // Agar HubCloud/NCloud link hai to NCloud page pe bhejo
+    if (url.includes('hubcloud') || url.includes('ncloud') || url.includes('hubdrive')) {
+        const nCloudKey = btoa(JSON.stringify({ url: url, title: metaData?.title || "Stream" }))
+           .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        router.push(`/ncloud?key=${nCloudKey}`);
+    } else {
+        // Direct Links (GDFlix etc) ko direct open karo
+        window.open(url, '_blank');
+    }
   };
 
   const toggleServerExpand = (idx: number) => {
     setExpandedServers(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
-  // Helper to split links into Main (HubCloud) and Others
+  // 🧠 SMART SORTING LOGIC
+  // 1. GDFlix / Direct -> Priority #1 (Main Button)
+  // 2. HubCloud -> Priority #2
+  // 3. Others -> Priority #3
   const splitLinks = (links: ApiLink[]) => {
-      // Sort: HubCloud/N-Cloud first
       const sorted = [...links].sort((a, b) => {
-          const aHub = a.name.toLowerCase().includes('hub') || a.name.toLowerCase().includes('cloud');
-          const bHub = b.name.toLowerCase().includes('hub') || b.name.toLowerCase().includes('cloud');
-          return aHub === bHub ? 0 : aHub ? -1 : 1;
+          const nameA = a.name.toLowerCase();
+          const nameB = b.name.toLowerCase();
+
+          // Check Priority 1: GDFlix / Direct / Drive
+          const isHighA = nameA.includes('gdflix') || nameA.includes('drive') || nameA.includes('direct');
+          const isHighB = nameB.includes('gdflix') || nameB.includes('drive') || nameB.includes('direct');
+
+          if (isHighA && !isHighB) return -1; // A upar aayega
+          if (!isHighA && isHighB) return 1;  // B upar aayega
+
+          // Check Priority 2: HubCloud / Cloud
+          const isMedA = nameA.includes('hub') || nameA.includes('cloud');
+          const isMedB = nameB.includes('hub') || nameB.includes('cloud');
+
+          if (isMedA && !isMedB) return -1;
+          if (!isMedA && isMedB) return 1;
+
+          return 0;
       });
 
       return {
-          main: sorted[0],
-          others: sorted.slice(1)
+          main: sorted[0], // Top priority wala link Main Button banega
+          others: sorted.slice(1) // Baaki sab 'Show More' mein jayenge
       };
   };
 
-  // Helper for button styling
+  // Helper for button styling based on Link Type
   const getButtonClass = (name: string) => {
       const lower = name.toLowerCase();
+      // Green for GDFlix/Drive (High Priority)
+      if (lower.includes('gdflix') || lower.includes('drive') || lower.includes('direct')) 
+          return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-green-900/20";
+      
+      // Orange/Yellow for HubCloud
       if (lower.includes('hub') || lower.includes('cloud')) 
-          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
-      if (lower.includes('gdflix') || lower.includes('drive')) 
-          return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
+          return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400 shadow-orange-900/20";
+      
+      // Gray for Others
       return "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600";
   };
 
-  // Helper for Main Button Text
   const getMainButtonText = (name: string) => {
       const lower = name.toLowerCase();
       if (lower.includes('hub') || lower.includes('cloud') || lower.includes('n-cloud')) {
           return "Continue with N-Cloud";
       }
-      return `Play via ${name}`;
+      return `Play via ${name}`; // e.g., "Play via GDFlix"
   };
 
-  // --- FILTERING LOGIC (Same as before) ---
+  // --- FILTERING LOGIC ---
   const getFilteredGroups = () => {
     if (!apiData || apiData.type !== 'quality') return { preferred: [], others: [] };
     const userQuality = metaData?.quality?.toLowerCase(); 
@@ -200,7 +227,7 @@ function VlyxDriveContent() {
                                       </h3>
                                    </div>
                                    <div className="p-5 flex flex-col gap-3">
-                                      {/* MAIN BUTTON (Always Visible) */}
+                                      {/* MAIN BUTTON (Priority 1) */}
                                       <button 
                                           onClick={() => handlePlay(main.url)} 
                                           className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name)}`}
@@ -212,7 +239,7 @@ function VlyxDriveContent() {
                                           <Play size={24} className="fill-current" />
                                       </button>
 
-                                      {/* EXPAND BUTTON (If other servers exist) */}
+                                      {/* EXPAND BUTTON (For Lower Priority Servers) */}
                                       {otherServers.length > 0 && (
                                           <div className="mt-2">
                                               <button 
