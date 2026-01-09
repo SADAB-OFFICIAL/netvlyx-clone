@@ -14,32 +14,32 @@ export async function GET(request: Request) {
 
     try {
         // ---- ENGINE SWITCHER ----
-        // 1. MoviesDrive (Custom Logic)
+        // 1. MoviesDrive
         if (url.includes('moviesdrive') || url.includes('mdrive')) {
             return await scrapeMoviesDrive(url);
         }
-        // 2. Movies4u (Robust Scraper)
+        // 2. Movies4u
         else if (url.includes('movies4u') || url.includes('movie4u') || url.includes('m4u') || url.includes('fans') || url.includes('forex')) {
             try {
                 return await scrapeMovies4u(url);
             } catch (e) {
-                console.error("M4U Local Scrape Failed, falling back to API:", e);
+                console.error("M4U Scrape Failed:", e);
                 return await fetchOfficialApiData(url);
             }
         }
-        // 3. Fallback (Netvlyx API)
+        // 3. Fallback
         else {
             return await fetchOfficialApiData(url);
         }
 
     } catch (error) {
-        console.error("Scraping Error:", error);
+        console.error("Global Scraping Error:", error);
         return NextResponse.json({ error: 'Failed to fetch details' }, { status: 500 });
     }
 }
 
 // =====================================================================
-// 🟢 ENGINE 1: MOVIES4U SCRAPER (Fixed Link Logic)
+// 🟢 ENGINE 1: MOVIES4U SCRAPER (Universal Parser)
 // =====================================================================
 async function scrapeMovies4u(targetUrl: string) {
     const res = await fetch(targetUrl, { headers: HEADERS });
@@ -47,12 +47,12 @@ async function scrapeMovies4u(targetUrl: string) {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // 1. Metadata Parsing
+    // 1. Metadata
     let rawTitle = $('meta[property="og:title"]').attr('content') || $('title').text();
     let title = rawTitle
         .replace(/^Download\s+/i, '')
-        .replace(/\s*\[.*?\]/g, '') // Remove [Hindi (CLEAN)]
-        .replace(/\s*\(.*?\)/g, '') // Remove (2025)
+        .replace(/\s*\[.*?\]/g, '')
+        .replace(/\s*\(.*?\)/g, '')
         .split('–')[0]
         .trim();
 
@@ -74,7 +74,7 @@ async function scrapeMovies4u(targetUrl: string) {
     const yearMatch = rawTitle.match(/\b(19|20)\d{2}\b/);
     if (yearMatch) year = yearMatch[0];
 
-    // 2. SCREENSHOTS (Specific Fix for .ss-img)
+    // 2. Screenshots (Works perfectly now)
     let screenshots: string[] = [];
     $('.ss-img img, .container.ss-img img, center img').each((_, el) => {
         const src = $(el).attr('src');
@@ -84,84 +84,85 @@ async function scrapeMovies4u(targetUrl: string) {
     });
     screenshots = Array.from(new Set(screenshots)).slice(0, 10);
 
-    // 3. DOWNLOAD SECTIONS (Restored Long Logic)
+    // 3. DOWNLOAD SECTIONS (Universal Parser)
     const downloadSections: any[] = [];
+    
     let currentQuality = 'Standard';
-    let currentSectionTitle = 'Download Links';
+    let currentTitle = 'Download Links';
     let currentSeason: number | null = null;
-    let currentLinks: any[] = [];
+    let tempLinks: any[] = [];
 
-    // Check Main Title for Season
+    // Global Season Check
     const titleSeasonMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
     if (titleSeasonMatch) currentSeason = parseInt(titleSeasonMatch[1]);
 
-    // Robust Parser: Scan all elements inside entry-content
-    $('.entry-content > *').each((_, el) => {
-        const tagName = el.tagName.toLowerCase();
+    // Iterate over ALL elements in content to find flow
+    $('.entry-content').children().each((i, el) => {
         const text = $(el).text().trim();
-        const $el = $(el);
-
-        // HEADER DETECTION (h3, h4, h5, p strong)
-        const isHeader = tagName.match(/^h[3-6]$/) || (tagName === 'p' && $el.find('strong').length > 0 && text.length < 100);
+        const tagName = el.tagName.toLowerCase();
         
-        if (isHeader && (text.match(/Download|Links|480p|720p|1080p|2160p|Season/i))) {
-            // Save previous section if exists
-            if (currentLinks.length > 0) {
+        // Detect Header (h3, h4, h5, or p with strong/bold)
+        // Checks for "Download", "480p", "720p", "Links"
+        const isHeader = tagName.match(/^h[3-6]$/) || (tagName === 'p' && $(el).find('strong, b, span').length > 0 && text.length < 150);
+        const hasKeywords = text.match(/Download|Links|480p|720p|1080p|2160p|Season/i);
+
+        if (isHeader && hasKeywords) {
+            // Save previous section if it has links
+            if (tempLinks.length > 0) {
                 downloadSections.push({
-                    title: currentSectionTitle,
+                    title: currentTitle,
                     quality: currentQuality,
                     season: currentSeason,
-                    links: [...currentLinks]
+                    links: [...tempLinks]
                 });
-                currentLinks = [];
+                tempLinks = [];
             }
 
-            // Update Context
-            currentSectionTitle = text.replace(/Download/i, '').trim();
+            // Update Context for next links
+            currentTitle = text.replace(/Download/i, '').trim() || "Download Links";
             
-            // Extract Quality
+            // Detect Quality
             if (text.includes('480p')) currentQuality = '480p';
             else if (text.includes('720p')) currentQuality = '720p';
             else if (text.includes('1080p')) currentQuality = '1080p';
             else if (text.includes('4K') || text.includes('2160p')) currentQuality = '4K';
             
-            // Extract Season from Header
+            // Detect Season in Header
             const sMatch = text.match(/(?:Season|S)\s*0?(\d+)/i);
             if (sMatch) currentSeason = parseInt(sMatch[1]);
         }
 
-        // LINK DETECTION
-        if (tagName === 'p' || tagName === 'div' || tagName === 'span') {
-             $el.find('a').each((_, linkEl) => {
-                const href = $(linkEl).attr('href');
-                let label = $(linkEl).text().trim();
-                
-                // Fallback label logic
-                if (!label || label.toLowerCase() === 'download' || label.toLowerCase() === 'link') {
-                    label = currentSectionTitle; // Use header text as label
-                }
-
-                if (href && href.startsWith('http') && !href.includes('imdb.com') && !href.includes('youtube.com')) {
-                    // Ignore junk links
-                    if (!label.toLowerCase().includes('telegram') && !label.toLowerCase().includes('whatsapp')) {
-                        currentLinks.push({
-                            label: label,
-                            url: href,
-                            isZip: label.toLowerCase().includes('zip') || label.toLowerCase().includes('pack')
-                        });
+        // Find Links inside this element (p, div, ul, or even the header itself)
+        $(el).find('a').each((_, linkEl) => {
+            const href = $(linkEl).attr('href');
+            let label = $(linkEl).text().trim();
+            
+            if (href && href.startsWith('http') && !href.includes('imdb.com') && !href.includes('youtube.com')) {
+                // Filter Junk
+                if (!label.toLowerCase().includes('telegram') && !label.toLowerCase().includes('whatsapp') && !href.includes('wp-admin')) {
+                    
+                    // Fallback Label
+                    if (!label || label.toLowerCase() === 'download' || label.toLowerCase() === 'link' || label.toLowerCase() === 'click here') {
+                        label = currentTitle;
                     }
+
+                    tempLinks.push({
+                        label: label,
+                        url: href,
+                        isZip: label.toLowerCase().includes('zip') || label.toLowerCase().includes('pack')
+                    });
                 }
-            });
-        }
+            }
+        });
     });
 
-    // Push last section
-    if (currentLinks.length > 0) {
+    // Save the last batch
+    if (tempLinks.length > 0) {
         downloadSections.push({
-            title: currentSectionTitle,
+            title: currentTitle,
             quality: currentQuality,
             season: currentSeason,
-            links: currentLinks
+            links: tempLinks
         });
     }
 
