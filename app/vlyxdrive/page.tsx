@@ -32,9 +32,7 @@ function VlyxDriveContent() {
   const [metaData, setMetaData] = useState<any>(null);
   const [apiData, setApiData] = useState<any>(null);
   
-  // State to track which server lists are expanded
   const [expandedServers, setExpandedServers] = useState<Record<number, boolean>>({});
-  // State to track hidden qualities (Movie mode)
   const [showOtherQualities, setShowOtherQualities] = useState(false);
 
   useEffect(() => {
@@ -73,47 +71,53 @@ function VlyxDriveContent() {
   };
 
   // ---------------------------------------------------------
-  // 🧠 PRIORITY LOGIC (Updated)
+  // 🧠 STRICT PRIORITY LOGIC (Updated)
   // ---------------------------------------------------------
   const splitLinks = (links: ApiLink[]) => {
-      // Priority Keywords (Order Matters: Top to Bottom)
-      const priorityList = [
-          'hubcloud', 'n-cloud', 'fast cloud', 'fsl', 'hub', // Rank 1: VIP/NCloud
-          '10gbps', 'g-direct', 'drive', 'google',           // Rank 2: High Speed
-          'gdflix', 'cloud'                                  // Rank 3: Standard
-      ];
+      // 1. Define High Priority Keywords (N-Cloud / HubCloud)
+      const highPriority = ['hubcloud', 'n-cloud', 'fast cloud', 'fsl', 'hub'];
+      
+      // 2. Define Low Priority Keywords (Drive / FileBee / GDFlix)
+      const lowPriority = ['filebee', 'drive', 'google', 'gdflix', 'g-direct', '10gbps'];
 
-      const getPriorityScore = (name: string) => {
-          const lower = name.toLowerCase();
-          const index = priorityList.findIndex(p => lower.includes(p));
-          // Agar list me nahi hai, to sabse last (999)
-          return index === -1 ? 999 : index;
+      const getScore = (name: string, url: string) => {
+          const lowerName = name.toLowerCase();
+          const lowerUrl = url.toLowerCase();
+
+          // Rule 1: Agar HubCloud/Fast hai -> Score 0 (Top)
+          if (highPriority.some(k => lowerName.includes(k) || lowerUrl.includes(k))) return 0;
+
+          // Rule 2: Agar FileBee/Drive hai -> Score 10 (Bottom)
+          if (lowPriority.some(k => lowerName.includes(k) || lowerUrl.includes(k))) return 10;
+
+          // Rule 3: Baaki sab -> Score 5 (Middle)
+          return 5;
       };
 
       const sorted = [...links].sort((a, b) => {
-          return getPriorityScore(a.name) - getPriorityScore(b.name);
+          return getScore(a.name, a.url) - getScore(b.name, b.url);
       });
 
       return {
-          main: sorted[0],       // Highest Priority Link
+          main: sorted[0],       // Highest Priority Link (Score 0 preferred)
           others: sorted.slice(1) // Rest go to "Show More"
       };
   };
 
-  // Helper for button styling (Updated for FSL/Fast Cloud)
+  // Helper for button styling
   const getButtonClass = (name: string) => {
       const lower = name.toLowerCase();
       // VIP / N-Cloud Style (Orange/Gold)
       if (lower.includes('hub') || lower.includes('cloud') || lower.includes('fast') || lower.includes('fsl')) 
           return "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-yellow-400";
       // Drive / High Speed Style (Green)
-      if (lower.includes('gdflix') || lower.includes('drive') || lower.includes('10gbps')) 
+      if (lower.includes('gdflix') || lower.includes('drive') || lower.includes('10gbps') || lower.includes('filebee')) 
           return "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white";
       // Standard (Gray)
       return "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600";
   };
 
-  // Helper for Main Button Text (Updated)
+  // Helper for Main Button Text
   const getMainButtonText = (name: string) => {
       const lower = name.toLowerCase();
       if (lower.includes('hub') || lower.includes('n-cloud') || lower.includes('fast') || lower.includes('fsl')) {
@@ -194,14 +198,13 @@ function VlyxDriveContent() {
         {status === 'ready' && apiData && (
            <div className="space-y-6">
               
-              {/* CASE 1: MOVIE / BULK (Quality Groups) */}
+              {/* CASE 1: MOVIE / BULK */}
               {apiData.type === 'quality' && (
                  (() => {
                     const { preferred, others } = getFilteredGroups();
                     
                     return (
                         <>
-                           {/* PREFERRED QUALITY */}
                            {preferred.map((group: LinkGroup, idx: number) => {
                               const { main, others: otherServers } = splitLinks(group.links);
                               const isExpanded = expandedServers[idx];
@@ -216,7 +219,7 @@ function VlyxDriveContent() {
                                       </h3>
                                    </div>
                                    <div className="p-5 flex flex-col gap-3">
-                                      {/* MAIN BUTTON (Priority Link) */}
+                                      {/* MAIN BUTTON */}
                                       <button 
                                           onClick={() => handlePlay(main.url)} 
                                           className={`w-full py-4 px-6 rounded-xl font-bold flex items-center justify-between shadow-lg transform hover:scale-[1.01] transition-all ${getButtonClass(main.name)}`}
@@ -228,7 +231,7 @@ function VlyxDriveContent() {
                                           <Play size={24} className="fill-current" />
                                       </button>
 
-                                      {/* EXPAND BUTTON */}
+                                      {/* OTHER SERVERS */}
                                       {otherServers.length > 0 && (
                                           <div className="mt-2">
                                               <button 
@@ -239,7 +242,6 @@ function VlyxDriveContent() {
                                                   {isExpanded ? 'Hide Servers' : `Show ${otherServers.length} more servers`}
                                               </button>
 
-                                              {/* HIDDEN SERVERS LIST */}
                                               {isExpanded && (
                                                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
                                                       {otherServers.map((link, i) => (
@@ -259,45 +261,12 @@ function VlyxDriveContent() {
                                 </div>
                               );
                            })}
-
-                           {/* OTHER QUALITIES */}
-                           {others.length > 0 && (
-                               <div className="mt-8 pt-6 border-t border-gray-800">
-                                   <button 
-                                      onClick={() => setShowOtherQualities(!showOtherQualities)}
-                                      className="w-full py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-gray-300 hover:text-white flex items-center justify-center gap-2 transition-all"
-                                   >
-                                      {showOtherQualities ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                                      {showOtherQualities ? 'Hide Other Qualities' : `Show ${others.length} Other Qualities`}
-                                   </button>
-                                   
-                                   {showOtherQualities && (
-                                       <div className="mt-4 space-y-4 animate-fade-in">
-                                           {others.map((group: LinkGroup, idx: number) => (
-                                              <div key={idx} className="bg-gray-900/40 border border-gray-800 rounded-xl overflow-hidden grayscale hover:grayscale-0 transition-all duration-300">
-                                                 <div className="px-6 py-3 border-b border-gray-800 bg-black/20 flex justify-between items-center">
-                                                    <h3 className="text-lg font-bold text-gray-400">{group.quality}</h3>
-                                                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">{group.size}</span>
-                                                 </div>
-                                                 <div className="p-4 flex flex-col gap-2">
-                                                    {group.links.map((link, i) => (
-                                                       <button key={i} onClick={() => handlePlay(link.url)} className="w-full py-3 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-left text-sm text-gray-300 flex items-center gap-2 border border-gray-700 hover:border-blue-500">
-                                                          <Server size={16} className="text-blue-500"/> {link.name}
-                                                       </button>
-                                                    ))}
-                                                 </div>
-                                              </div>
-                                           ))}
-                                       </div>
-                                   )}
-                               </div>
-                           )}
                         </>
                     );
                  })()
               )}
 
-              {/* CASE 2: SERIES (Episode Groups) */}
+              {/* CASE 2: SERIES */}
               {apiData.type === 'episode' && (
                  (apiData.linkData as LinkGroup[]).map((group: LinkGroup, idx: number) => {
                     const { main, others: otherServers } = splitLinks(group.links);
@@ -323,7 +292,7 @@ function VlyxDriveContent() {
                                       {getMainButtonText(main.name)}
                                   </button>
                                   
-                                  {/* SHOW MORE TOGGLE */}
+                                  {/* OTHER SERVERS */}
                                   {otherServers.length > 0 && (
                                       <div className="relative">
                                           {!isExpanded ? (
