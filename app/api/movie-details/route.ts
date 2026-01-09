@@ -1,28 +1,252 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
+const HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+};
+
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
+    const { searchParams } = new URL(request.url);
+    const url = searchParams.get('url');
 
-  if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
+    if (!url) return NextResponse.json({ error: 'URL Required' }, { status: 400 });
 
-  try {
-    // ---- ENGINE SWITCHER ----
-    if (url.includes('moviesdrive') || url.includes('mdrive')) {
-        return await scrapeMoviesDrive(url);
-    } else {
-        return await fetchOfficialApiData(url);
+    try {
+        // ---- ENGINE SWITCHER ----
+        // 1. MoviesDrive (Custom Logic)
+        if (url.includes('moviesdrive') || url.includes('mdrive')) {
+            return await scrapeMoviesDrive(url);
+        }
+        // 2. Movies4u (New Robust Scraper with Long Logic)
+        else if (url.includes('movies4u') || url.includes('movie4u') || url.includes('m4u') || url.includes('fans') || url.includes('forex')) {
+            try {
+                return await scrapeMovies4u(url);
+            } catch (e) {
+                console.error("M4U Local Scrape Failed, falling back to API:", e);
+                return await fetchOfficialApiData(url);
+            }
+        }
+        // 3. Fallback (Netvlyx API)
+        else {
+            return await fetchOfficialApiData(url);
+        }
+
+    } catch (error) {
+        console.error("Scraping Error:", error);
+        return NextResponse.json({ error: 'Failed to fetch details' }, { status: 500 });
     }
-
-  } catch (error) {
-    console.error("Scraping Error:", error);
-    return NextResponse.json({ error: 'Failed to fetch details' }, { status: 500 });
-  }
 }
 
 // =====================================================================
-// 🟢 ENGINE 1: OFFICIAL NETVLYX API (No Changes Here)
+// 🟢 ENGINE 1: MOVIES4U SCRAPER (New Long Logic)
+// =====================================================================
+async function scrapeMovies4u(targetUrl: string) {
+    const res = await fetch(targetUrl, { headers: HEADERS });
+    if (!res.ok) throw new Error(`Failed to fetch ${targetUrl}`);
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    // 1. Metadata Parsing
+    let rawTitle = $('meta[property="og:title"]').attr('content') || $('title').text();
+    // Clean Title: Remove "Download", Quality info, [Hindi] etc.
+    let title = rawTitle
+        .replace(/^Download\s+/i, '')
+        .replace(/\s*\[.*?\]/g, '') // Remove [Hindi (CLEAN)]
+        .replace(/\s*\(.*?\)/g, '') // Remove (2025)
+        .split('–')[0]
+        .trim();
+
+    const poster = $('meta[property="og:image"]').attr('content') || $('.entry-content img').first().attr('src');
+    
+    // Plot Logic: Meta Desc or Entry Content
+    let plot = $('meta[property="og:description"]').attr('content');
+    if (!plot || plot.length < 50) {
+        plot = $('.entry-content p').not(':has(a)').first().text().trim();
+    }
+
+    // IMDb ID
+    let imdbId = null;
+    const imdbLink = $('a[href*="imdb.com/title/tt"]').attr('href');
+    if (imdbLink) {
+        const match = imdbLink.match(/tt\d+/);
+        if (match) imdbId = match[0];
+    }
+
+    // Year
+    let year = null;
+    const yearMatch = rawTitle.match(/\b(19|20)\d{2}\b/);
+    if (yearMatch) year = yearMatch[0];
+
+    // 2. SCREENSHOTS (Specific Fix for .ss-img)
+    let screenshots: string[] = [];
+    $('.ss-img img, .container.ss-img img, center img').each((_, el) => {
+        const src = $(el).attr('src');
+        if (src && !src.includes('download') && !src.includes('icon') && !src.includes('ads') && !src.includes('telegram')) {
+            screenshots.push(src);
+        }
+    });
+    // Deduplicate and slice
+    screenshots = Array.from(new Set(screenshots)).slice(0, 10);
+
+    // 3. DOWNLOAD SECTIONS (Long Logic: Iterative Header Parsing)
+    const downloadSections: any[] = [];
+    let currentQuality = 'Standard';
+    let currentSectionTitle = 'Download Links';
+    let currentSeason: number | null = null;
+    let currentLinks: any[] = [];
+
+    // Check Main Title for Season
+    const titleSeasonMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
+    if (titleSeasonMatch) currentSeason = parseInt(titleSeasonMatch[1]);
+
+    // Robust Parser: Scan all P, H3, H4 inside entry-content
+    $('.entry-content').find('h3, h4, h5, p').each((_, el) => {
+        const text = $(el).text().trim();
+        const $el = $(el);
+
+        // Header Detection
+        if (text.match(/Download|480p|720p|1080p|2160p/i) && (el.tagName.match(/^H\d/) || $el.find('strong').length)) {
+            // Save previous section if exists
+            if (currentLinks.length > 0) {
+                downloadSections.push({
+                    title: currentSectionTitle,
+                    quality: currentQuality,
+                    season: currentSeason,
+                    links: [...currentLinks]
+                });
+                currentLinks = [];
+            }
+
+            // Set new context
+            currentSectionTitle = text;
+            
+            // Extract Quality
+            if (text.includes('480p')) currentQuality = '480p';
+            else if (text.includes('720p')) currentQuality = '720p';
+            else if (text.includes('1080p')) currentQuality = '1080p';
+            else if (text.includes('4K') || text.includes('2160p')) currentQuality = '4K';
+            else currentQuality = 'Standard';
+
+            // Extract Season from Header (e.g., "Download Season 2 720p")
+            const sMatch = text.match(/(?:Season|S)\s*0?(\d+)/i);
+            if (sMatch) currentSeason = parseInt(sMatch[1]);
+        }
+
+        // Link Detection
+        $el.find('a').each((_, linkEl) => {
+            const href = $(linkEl).attr('href');
+            const label = $(linkEl).text().trim() || "Download Link";
+            
+            if (href && href.startsWith('http') && !href.includes('imdb.com') && !href.includes('youtube.com')) {
+                // Ignore junk links
+                if (!label.toLowerCase().includes('telegram') && !label.toLowerCase().includes('whatsapp')) {
+                    currentLinks.push({
+                        label: label,
+                        url: href,
+                        isZip: label.toLowerCase().includes('zip') || label.toLowerCase().includes('pack')
+                    });
+                }
+            }
+        });
+    });
+
+    // Push last section
+    if (currentLinks.length > 0) {
+        downloadSections.push({
+            title: currentSectionTitle,
+            quality: currentQuality,
+            season: currentSeason,
+            links: currentLinks
+        });
+    }
+
+    // Collect Seasons
+    const allSeasons = new Set<number>();
+    downloadSections.forEach(s => { if(s.season) allSeasons.add(s.season) });
+
+    return NextResponse.json({
+        title,
+        year,
+        poster,
+        plot,
+        imdbId,
+        seasons: Array.from(allSeasons).sort((a,b) => a-b),
+        screenshots,
+        downloadSections
+    });
+}
+
+// =====================================================================
+// 🔵 ENGINE 2: MOVIESDRIVE UPGRADED SCRAPER (Preserved)
+// =====================================================================
+async function scrapeMoviesDrive(targetUrl: string) {
+    const res = await fetch(targetUrl, { headers: HEADERS });
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    // 1. Basic Info
+    const rawTitle = $('h1.page-title .material-text').text().trim();
+    let title = rawTitle.replace(/^Download\s+/i, '').split(/[\(\[]/)[0].trim();
+    
+    const yearMatch = rawTitle.match(/\((\d{4})\)/);
+    const year = yearMatch ? yearMatch[1] : null;
+
+    const poster = $('.page-body img.aligncenter').attr('src') || '';
+    const imdbId = extractImdbId(html);
+    
+    let plot = "Overview unavailable.";
+    $('h3').each((i, el) => {
+        if ($(el).text().includes('Storyline')) {
+            const nextDiv = $(el).nextAll('div, p').first().text().trim();
+            if (nextDiv) plot = nextDiv;
+        }
+    });
+
+    const screenshots: string[] = [];
+    $('center img, .page-body img').each((i, el) => {
+        const src = $(el).attr('src');
+        if (src && !src.includes('t.jpg') && src !== poster) {
+            screenshots.push(src);
+        }
+    });
+
+    // 2. Links Extraction
+    let downloadSections = await scrapeMDriveLinks(targetUrl);
+
+    // 3. SERIES DETECTION & MERGER LOGIC
+    const isSeries = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
+    
+    if (isSeries) {
+        const seriesName = rawTitle.replace(/\s*(?:Season|S)\s*0?\d+.*/i, "").replace(/^Download\s+/i, "").trim();
+        const otherSeasons = await findOtherSeasons(seriesName, targetUrl);
+
+        if (otherSeasons.length > 0) {
+            const promises = otherSeasons.map(os => scrapeMDriveLinks(os.url, os.season));
+            const results = await Promise.all(promises);
+            results.forEach(sections => {
+                downloadSections = [...downloadSections, ...sections];
+            });
+        }
+    }
+
+    const allSeasons = new Set<number>();
+    downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
+
+    return NextResponse.json({
+        title: title,
+        year: year,
+        poster: poster,
+        plot: plot,
+        imdbId: imdbId,
+        seasons: Array.from(allSeasons).sort((a, b) => a - b),
+        screenshots: screenshots.slice(0, 8),
+        downloadSections: downloadSections
+    });
+}
+
+// =====================================================================
+// 🟠 ENGINE 3: OFFICIAL NETVLYX API (Fallback)
 // =====================================================================
 async function fetchOfficialApiData(targetUrl: string) {
     const targetApi = `https://netvlyx.pages.dev/api/m4ulinks-scraper?url=${encodeURIComponent(targetUrl)}`;
@@ -44,7 +268,7 @@ async function fetchOfficialApiData(targetUrl: string) {
         } catch (e) {}
     }
 
-    const cleanStrongTitle = (rawText: string) => {
+    const cleanTitle = (rawText: string) => {
         if (!rawText) return "";
         let text = rawText.replace(/-/g, ' ');
         const splitRegex = /[\(\[\.]|Season|S\d+|Ep\d+|\b\d{4}\b/i;
@@ -53,7 +277,7 @@ async function fetchOfficialApiData(targetUrl: string) {
         return cleanPart.replace(/\b\w/g, (l) => l.toUpperCase());
     };
 
-    let finalTitle = cleanStrongTitle(data.title);
+    let finalTitle = cleanTitle(data.title);
     let releaseYear = null;
 
     if (!finalTitle || finalTitle.length < 2 || finalTitle.toLowerCase().includes('unknown')) {
@@ -61,7 +285,7 @@ async function fetchOfficialApiData(targetUrl: string) {
             const slug = new URL(targetUrl).pathname.split('/').filter(Boolean).pop() || "";
             const yearMatch = slug.match(/-(\d{4})-/);
             if (yearMatch) releaseYear = yearMatch[1];
-            finalTitle = cleanStrongTitle(slug);
+            finalTitle = cleanTitle(slug);
         } catch (e) {
             finalTitle = "Unknown Movie";
         }
@@ -118,57 +342,64 @@ async function fetchOfficialApiData(targetUrl: string) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 2: MOVIESDRIVE UPGRADED SCRAPER (Virtual Merger Added 🚀)
+// 🛠️ HELPERS
 // =====================================================================
 
-// --- Helper: Extract Links from ANY Page (Current or Other Seasons) ---
-async function scrapePageForLinks(url: string, forceSeason: number | null = null) {
+// Helper: Extract IMDb ID
+const extractImdbId = (html: string): string | null => {
+    const $ = cheerio.load(html);
+    let imdbId = null;
+    $('strong').each((i, el) => {
+        const text = $(el).text();
+        if (text.includes('iMDB Rating')) {
+            const link = $(el).next('a').attr('href');
+            if (link) {
+                const match = link.match(/(tt\d+)/);
+                if (match) imdbId = match[1];
+            }
+        }
+    });
+    return imdbId;
+};
+
+// Helper: MoviesDrive Link Scraper
+async function scrapeMDriveLinks(url: string, forceSeason: number | null = null) {
     try {
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const res = await fetch(url, { headers: HEADERS });
         const html = await res.text();
         const $ = cheerio.load(html);
-
         const sections: any[] = [];
         const processedUrls = new Set();
-        
-        // Page Title se Season nikalne ki koshish (Fallback)
         const rawTitle = $('h1.page-title').text().trim();
         let pageLevelSeason = null;
         const sMatch = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
         if (sMatch) pageLevelSeason = parseInt(sMatch[1]);
 
-        // Links Extraction (Your Fixed Sidebar Logic)
         $('.page-body a').each((i, el) => {
             const link = $(el).attr('href');
             let text = $(el).text().trim();
-            
             let contextText = text;
             const parentHeader = $(el).closest('h5, p, h3');
             const prevHeader = parentHeader.prev('h5, p, h3, h4');
             if (prevHeader.length) contextText += " " + prevHeader.text();
 
             if (link && (link.includes('mdrive') || link.includes('drive') || link.includes('archives')) && !processedUrls.has(link)) {
-                
                 let quality = "HD";
                 if (contextText.match(/4k|2160p/i)) quality = '4K';
                 else if (contextText.match(/1080p/i)) quality = '1080p';
                 else if (contextText.match(/720p/i)) quality = '720p';
                 else if (contextText.match(/480p/i)) quality = '480p';
-
+                
                 const sizeMatch = contextText.match(/\[(\d+(\.\d+)?\s?(MB|GB))\]/i);
                 const size = sizeMatch ? sizeMatch[1] : "";
-
-                // Season Detection Logic
-                // 1. ForceSeason (agar humne bahar se bataya hai)
-                // 2. Link Context (agar link ke paas likha hai S1, S2)
-                // 3. Page Title (agar page title hi Season 2 hai)
+                
                 let season = forceSeason; 
                 if (season === null) {
                     let localMatch = contextText.match(/(?:Season|S)\s*0?(\d+)/i);
                     if (localMatch) season = parseInt(localMatch[1]);
                     else season = pageLevelSeason;
                 }
-
+                
                 if (!processedUrls.has(link)) {
                     processedUrls.add(link);
                     sections.push({
@@ -187,130 +418,26 @@ async function scrapePageForLinks(url: string, forceSeason: number | null = null
         });
         return sections;
     } catch (e) {
-        console.error(`Error scraping ${url}:`, e);
         return [];
     }
 }
 
-// --- Helper: Find Other Seasons ---
+// Helper: Find Other Seasons
 async function findOtherSeasons(seriesTitle: string, currentUrl: string) {
     try {
-        // Series naam se search karo
         const searchUrl = `https://moviesdrive.forum/?s=${encodeURIComponent(seriesTitle)}`;
-        const res = await fetch(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const res = await fetch(searchUrl, { headers: HEADERS });
         const html = await res.text();
         const $ = cheerio.load(html);
-
         const seasonPages: { season: number, url: string }[] = [];
-
         $('ul.recent-movies li.thumb').each((i, el) => {
             const title = $(el).find('figcaption p').text().trim();
             const link = $(el).find('figure a').attr('href');
-
-            // Agar title match kare aur ye current page na ho
             if (title.toLowerCase().includes(seriesTitle.toLowerCase()) && link && link !== currentUrl) {
                 const match = title.match(/(?:Season|S)\s*0?(\d+)/i);
-                if (match) {
-                    seasonPages.push({ season: parseInt(match[1]), url: link });
-                }
+                if (match) seasonPages.push({ season: parseInt(match[1]), url: link });
             }
         });
-
         return seasonPages;
-    } catch (e) {
-        return [];
-    }
-}
-
-// --- Helper: Extract IMDb ID ---
-const extractImdbId = (html: string): string | null => {
-    const $ = cheerio.load(html);
-    let imdbId = null;
-    $('strong').each((i, el) => {
-        const text = $(el).text();
-        if (text.includes('iMDB Rating')) {
-            const link = $(el).next('a').attr('href');
-            if (link) {
-                const match = link.match(/(tt\d+)/);
-                if (match) imdbId = match[1];
-            }
-        }
-    });
-    return imdbId;
-};
-
-// --- MAIN SCRAPER FUNCTION ---
-async function scrapeMoviesDrive(targetUrl: string) {
-    const res = await fetch(targetUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
-    });
-    const html = await res.text();
-    const $ = cheerio.load(html);
-
-    // 1. Basic Info
-    const rawTitle = $('h1.page-title .material-text').text().trim();
-    let title = rawTitle.replace(/^Download\s+/i, '').split(/[\(\[]/)[0].trim();
-    
-    const yearMatch = rawTitle.match(/\((\d{4})\)/);
-    const year = yearMatch ? yearMatch[1] : null;
-
-    const poster = $('.page-body img.aligncenter').attr('src') || '';
-    const imdbId = extractImdbId(html);
-    
-    let plot = "Overview unavailable.";
-    $('h3').each((i, el) => {
-        if ($(el).text().includes('Storyline')) {
-            const nextDiv = $(el).nextAll('div, p').first().text().trim();
-            if (nextDiv) plot = nextDiv;
-        }
-    });
-
-    const screenshots: string[] = [];
-    $('center img, .page-body img').each((i, el) => {
-        const src = $(el).attr('src');
-        if (src && !src.includes('t.jpg') && src !== poster) {
-            screenshots.push(src);
-        }
-    });
-
-    // 2. Links Extraction (Current Page)
-    // Hum naya helper use kar rahe hain taaki logic consistent rahe
-    let downloadSections = await scrapePageForLinks(targetUrl);
-
-    // 3. SERIES DETECTION & MERGER LOGIC 🌟
-    const isSeries = rawTitle.match(/(?:Season|S)\s*0?(\d+)/i);
-    
-    if (isSeries) {
-        // Clean Series Name (e.g. "Mirzapur Season 2" -> "Mirzapur")
-        const seriesName = rawTitle.replace(/\s*(?:Season|S)\s*0?\d+.*/i, "").replace(/^Download\s+/i, "").trim();
-        
-        // Find other seasons
-        const otherSeasons = await findOtherSeasons(seriesName, targetUrl);
-
-        if (otherSeasons.length > 0) {
-            // Fetch all other season pages in parallel (Fast!)
-            const promises = otherSeasons.map(os => scrapePageForLinks(os.url, os.season));
-            const results = await Promise.all(promises);
-
-            // Merge results
-            results.forEach(sections => {
-                downloadSections = [...downloadSections, ...sections];
-            });
-        }
-    }
-
-    // 4. Collect All Unique Seasons for Metadata
-    const allSeasons = new Set<number>();
-    downloadSections.forEach((sec: any) => { if (sec.season) allSeasons.add(sec.season); });
-
-    return NextResponse.json({
-        title: title,
-        year: year,
-        poster: poster,
-        plot: plot,
-        imdbId: imdbId,
-        seasons: Array.from(allSeasons).sort((a, b) => a - b),
-        screenshots: screenshots.slice(0, 8),
-        downloadSections: downloadSections
-    });
+    } catch (e) { return []; }
 }
