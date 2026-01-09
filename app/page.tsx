@@ -31,7 +31,7 @@ const NavbarSkeleton = () => (
 );
 
 // =====================================================================
-// 💧 ULTRA-TRANSPARENT LIQUID NAVBAR (Pic Style)
+// 💧 GOLD LIQUID NAVBAR (Always Visible Search + Capsule Morph)
 // =====================================================================
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -53,74 +53,86 @@ const Navbar = () => {
 
   return (
     <motion.nav
-      className={`fixed left-0 right-0 z-50 flex justify-center transition-all duration-500 ease-in-out ${
+      className={`fixed left-0 right-0 z-50 flex justify-center transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${
         scrolled ? 'top-4' : 'top-0'
       }`}
     >
-      {/* CAPSULE CONTAINER 
-         - Logic: Scroll hone pe 'Float' + 'Capsule' + 'Glass' banega.
-         - Top pe: Full transparency, no border, blend with hero.
+      {/* CONTAINER:
+         - Top: Full width, Transparent, Minimal Padding.
+         - Scrolled: Capsule Width, Heavy Liquid Glass, Shadow.
       */}
       <div 
         className={`
-          flex items-center gap-3 md:gap-4 px-3 py-2 transition-all duration-500
+          flex items-center justify-between transition-all duration-500 ease-in-out
           ${scrolled 
-             ? 'w-auto rounded-full bg-black/20 border border-white/10 backdrop-blur-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]' 
-             : 'w-full px-6 py-6 bg-transparent border-transparent backdrop-blur-0 shadow-none justify-between md:justify-start'}
+             ? 'w-[92%] md:w-auto px-4 py-2.5 rounded-full bg-black/40 border border-white/10 backdrop-blur-3xl backdrop-saturate-200 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]' 
+             : 'w-full px-6 py-5 bg-gradient-to-b from-black/80 to-transparent border-transparent'}
         `}
       >
         
-        {/* 1. LOGO SECTION (Red Icon + White Text) */}
+        {/* 1. LOGO SECTION (GOLD) */}
         <div 
            className="flex items-center gap-2 cursor-pointer group shrink-0" 
            onClick={() => router.push('/')}
         >
-            {/* Red Circle Play Icon (Same as Pic) */}
-            <div className="w-8 h-8 rounded-full bg-[#E50914] flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                <Play size={12} fill="white" className="text-white ml-0.5" />
+            <div className="relative">
+                {/* Gold Glow */}
+                <div className="absolute inset-0 bg-yellow-500 blur-[10px] opacity-20 group-hover:opacity-50 transition-opacity rounded-full"></div>
+                {/* Gold Icon */}
+                <MonitorPlay 
+                  size={scrolled ? 28 : 32} 
+                  className="text-yellow-500 relative z-10 transition-all duration-300 group-hover:scale-110 drop-shadow-md" 
+                />
             </div>
             
-            {/* Text (White) */}
-            <span className="font-bold tracking-tight text-xl text-white font-sans drop-shadow-md">
+            {/* Gold Text (Responsive Size) */}
+            <span className={`font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600 font-sans drop-shadow-sm transition-all duration-300 ${scrolled ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'}`}>
               SADABEFY
             </span>
         </div>
 
-        {/* 2. SEARCH SECTION (Only visible as capsule when scrolled, or inline on desktop) */}
+        {/* 2. SEARCH SECTION (Always Visible, Morphs style) */}
         <form 
           onSubmit={handleSearchSubmit}
-          className={`relative group/search transition-all duration-500 ${!scrolled ? 'hidden md:block' : 'block'}`}
+          className="relative group/search ml-4 flex-1 md:flex-none flex justify-end"
         >
-          {/* Search Pill Style 
-              - bg-black/30 -> Increased transparency (More background visible) 
+          {/* Search Pill 
+              - Top: Darker background to stand out against hero.
+              - Scrolled: Blends with capsule but stays distinct.
           */}
           <div className={`
-             flex items-center rounded-full transition-colors border border-white/5
-             ${scrolled ? 'bg-black/30 hover:bg-black/40 w-[160px] md:w-[220px]' : 'bg-black/40 hover:bg-black/60 w-[240px]'}
-             px-3 py-2
+             flex items-center rounded-full transition-all duration-500 border border-white/5
+             ${scrolled 
+                ? 'bg-black/30 hover:bg-black/50 w-full md:w-[220px] py-2 px-3' 
+                : 'bg-black/40 hover:bg-black/60 w-full md:w-[260px] py-2.5 px-4 backdrop-blur-md'}
           `}>
-             <Search className="text-gray-300 group-focus-within/search:text-white transition-colors mr-2 opacity-80" size={16} />
+             <Search className="text-gray-400 group-focus-within/search:text-yellow-500 transition-colors mr-2 shrink-0" size={18} />
              
              <input 
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search Movies..."
-                className="bg-transparent border-none outline-none text-white text-sm placeholder-gray-300/70 w-full font-medium"
+                placeholder="Search..."
+                className="bg-transparent border-none outline-none text-white text-sm placeholder-gray-400/80 w-full font-medium"
              />
           </div>
         </form>
 
-        {/* Top-Right Profile/Menu (Visible only when NOT scrolled/floating to keep capsule clean, or can be added if needed) */}
-        {!scrolled && (
-           <div className="hidden md:flex ml-auto items-center gap-4">
-               {['Home', 'Series', 'Movies', 'My List'].map((item) => (
-                  <span key={item} className="text-sm font-medium text-gray-300 hover:text-white cursor-pointer transition-colors shadow-black drop-shadow-md">
-                    {item}
-                  </span>
-               ))}
-           </div>
-        )}
+        {/* 3. DESKTOP LINKS (Hide on Scroll/Capsule to keep it clean, Show at Top) */}
+        <div className={`hidden md:flex items-center gap-6 ml-6 transition-opacity duration-300 ${scrolled ? 'w-0 overflow-hidden opacity-0' : 'w-auto opacity-100'}`}>
+             {['Home', 'Series', 'Movies', 'New'].map((item) => (
+                <span key={item} className="text-sm font-medium text-gray-300 hover:text-yellow-400 cursor-pointer transition-colors relative group/link">
+                  {item}
+                  <span className="absolute -bottom-1 left-0 w-0 h-[2px] bg-yellow-500 transition-all group-hover/link:w-full"></span>
+                </span>
+             ))}
+             {/* Profile Icon */}
+             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-500 to-amber-700 p-[1px] cursor-pointer">
+                <div className="w-full h-full bg-black rounded-full flex items-center justify-center">
+                    <span className="text-yellow-500 text-xs font-bold">S</span>
+                </div>
+             </div>
+        </div>
 
       </div>
     </motion.nav>
@@ -156,7 +168,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                  style={{ backgroundImage: `url(${data[(current - 1 + data.length) % data.length]?.poster})` }}></div>
             <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000 scale-105 group-hover:scale-110"
                  style={{ backgroundImage: `url(${movie.poster})` }}></div>
-            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-[#0a0a0a]"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[#0a0a0a]"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent"></div>
          </div>
   
