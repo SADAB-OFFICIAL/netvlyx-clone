@@ -4,11 +4,13 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Play, Info, Search, Bell, MonitorPlay, 
-  ChevronRight, Star, X, Mail
+  ChevronRight, Star, X, Mail, User
 } from 'lucide-react';
+// Animations ke liye Framer Motion zaroori hai is effect ke liye
+import { motion, AnimatePresence } from 'framer-motion';
 import TwinklingStars from '@/components/TwinklingStars';
 
-// --- SKELETON COMPONENTS ---
+// --- SKELETON COMPONENTS (Same as before) ---
 const HeroSkeleton = () => (
   <div className="w-full h-[85vh] bg-gray-900/50 animate-pulse relative">
       <div className="absolute bottom-0 left-0 p-6 md:p-12 w-full max-w-3xl space-y-4 pb-24 md:pb-48">
@@ -43,100 +45,143 @@ const NavbarSkeleton = () => (
   </div>
 );
 
-// --- NAVBAR COMPONENT (PROFESSIONAL GLASS UI UPDATE) ---
+// =====================================================================
+// 💎 NEW PREMIUM "LIQUID GLASS" NAVBAR (iPhone Style)
+// =====================================================================
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
   const [query, setQuery] = useState('');
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 30);
+    const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (searchActive && inputRef.current) {
+        inputRef.current.focus();
+    }
+  }, [searchActive]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
         router.push(`/search?q=${encodeURIComponent(query)}`);
-        setSearchOpen(false);
+        setSearchActive(false);
     }
   };
 
+  // Navbar Container Style (Floating capsule on scroll)
+  const navContainerStyle = scrolled 
+    ? "top-4 inset-x-4 md:inset-x-auto md:w-[90%] max-w-6xl mx-auto rounded-full border-[0.5px] border-white/20 bg-black/40 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] backdrop-blur-2xl saturate-150"
+    : "top-0 inset-x-0 bg-gradient-to-b from-black/70 to-transparent border-transparent";
+
   return (
-    <nav 
-      className={`fixed top-0 w-full z-50 transition-all duration-500 ease-in-out border-b ${
-        scrolled 
-          ? 'bg-[#050505]/70 backdrop-blur-xl border-white/5 py-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]' 
-          : 'bg-gradient-to-b from-black/80 via-black/40 to-transparent border-transparent py-6'
-      }`}
+    <motion.nav 
+      layout // Smooth layout transitions for morphing
+      className={`fixed z-50 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${navContainerStyle} py-3 md:py-4 px-6 flex justify-center`}
+      style={{ 
+        // Subtle inner glow for liquid effect
+        boxShadow: scrolled ? "inset 0 0 20px rgba(255,255,255,0.05), 0 8px 32px 0 rgba(0,0,0,0.36)" : "none"
+      }}
     >
-      <div className="px-4 md:px-12 flex items-center justify-between">
-        <div className="flex items-center gap-4 md:gap-12">
-           {/* LOGO */}
-           <div className="flex items-center gap-2 cursor-pointer group" onClick={() => router.push('/')}>
-              <div className="relative">
-                <div className="absolute inset-0 bg-yellow-500 blur-[10px] opacity-20 group-hover:opacity-40 transition-opacity rounded-full"></div>
-                <MonitorPlay className="text-yellow-500 relative z-10 group-hover:scale-110 transition-transform duration-300" size={28} />
-              </div>
-              <span className="text-xl md:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-600 drop-shadow-sm font-sans">
-                SADABEFY
-              </span>
-           </div>
-
-           {/* DESKTOP LINKS */}
-           <div className="hidden md:flex gap-8 text-sm font-medium text-gray-300/90">
-             {['Home', 'Series', 'Movies', 'New & Popular', 'My List'].map((item) => (
-                <span 
-                  key={item} 
-                  className="hover:text-white transition-all cursor-pointer relative group/link"
-                >
-                  {item}
-                  <span className="absolute -bottom-1 left-0 w-0 h-[2px] bg-yellow-500 transition-all duration-300 group-hover/link:w-full"></span>
-                </span>
-              ))}
-           </div>
-        </div>
-
-        {/* RIGHT ACTIONS */}
-        <div className="flex items-center gap-4 md:gap-6">
-           {/* Search Bar (Glassy) */}
-           {searchOpen ? (
-             <form onSubmit={handleSearch} className="relative flex items-center animate-fade-in-right origin-right">
-                <input 
-                  autoFocus
-                  type="text" 
-                  placeholder="Titles, people, genres" 
-                  className="bg-white/10 backdrop-blur-md border border-white/10 text-white placeholder-gray-400 pl-4 pr-10 py-2 rounded-full text-sm w-48 md:w-64 focus:outline-none focus:border-yellow-500/50 focus:bg-black/60 transition-all shadow-lg"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onBlur={() => !query && setSearchOpen(false)}
-                />
-                <X 
-                  size={16} 
-                  className="absolute right-3 text-gray-400 cursor-pointer hover:text-white transition-colors"
-                  onClick={() => setSearchOpen(false)} 
-                />
-             </form>
-           ) : (
-             <Search 
-                className="w-5 h-5 md:w-6 md:h-6 text-gray-300 hover:text-white cursor-pointer transition-all hover:scale-110" 
-                onClick={() => setSearchOpen(true)}
+      <div className="w-full flex items-center justify-between max-w-7xl relative">
+      
+      <AnimatePresence mode="wait">
+        {searchActive ? (
+        // ============ 🔍 EXPANDED SEARCH BAR MODE ============
+         <motion.form 
+           key="search-bar"
+           initial={{ opacity: 0, scale: 0.95 }}
+           animate={{ opacity: 1, scale: 1 }}
+           exit={{ opacity: 0, scale: 0.95 }}
+           transition={{ duration: 0.3, ease: "easeOut" }}
+           onSubmit={handleSearchSubmit}
+           className="w-full flex items-center gap-4"
+         >
+             <Search className="text-yellow-500 shrink-0" size={24} />
+             <input 
+               ref={inputRef}
+               type="text" 
+               placeholder="Search movies, shows, genres..." 
+               className="flex-grow bg-transparent border-none outline-none text-white placeholder-gray-400 text-lg h-full"
+               value={query}
+               onChange={(e) => setQuery(e.target.value)}
+               onBlur={() => !query && setSearchActive(false)}
              />
-           )}
-           
-           <Bell className="w-5 h-5 md:w-6 md:h-6 text-gray-300 hover:text-white cursor-pointer transition-all hover:rotate-12" />
-           
-           {/* Profile Icon */}
-           <div className="hidden md:block w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-yellow-500 to-amber-700 cursor-pointer hover:ring-2 hover:ring-white/50 transition-all shadow-lg"></div>
-        </div>
+             <button 
+                type="button" 
+                onClick={() => setSearchActive(false)}
+                className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors shrink-0"
+             >
+                 <X size={20} className="text-gray-300 hover:text-white"/>
+             </button>
+         </motion.form>
+
+        ) : (
+        // ============ 📺 NORMAL NAVIGATION MODE ============
+         <motion.div 
+           key="normal-nav"
+           initial={{ opacity: 0 }}
+           animate={{ opacity: 1 }}
+           exit={{ opacity: 0 }}
+           transition={{ duration: 0.2 }}
+           className="w-full flex items-center justify-between"
+         >
+            {/* LOGO */}
+            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => router.push('/')}>
+                <div className="relative p-1">
+                    <div className="absolute inset-0 bg-yellow-500 blur-[12px] opacity-30 group-hover:opacity-50 transition-opacity rounded-full animate-pulse-slow"></div>
+                    <MonitorPlay className="text-yellow-500 relative z-10 drop-shadow-[0_2px_10px_rgba(234,179,8,0.5)] transition-transform group-hover:scale-110" size={30} />
+                </div>
+                <span className="hidden md:block text-xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-yellow-200 to-yellow-500 font-sans drop-shadow-sm">
+                    SADABEFY
+                </span>
+            </div>
+
+            {/* DESKTOP LINKS (Clean & Minimal) */}
+            <div className="hidden md:flex items-center gap-8 font-medium text-sm text-gray-300/80">
+                {['Home', 'Movies', 'Series', 'My List'].map((item) => (
+                <motion.span 
+                    key={item} 
+                    className="hover:text-white transition-all cursor-pointer relative group/link px-3 py-2 rounded-full hover:bg-white/5"
+                    whileHover={{ scale: 1.05 }}
+                >
+                    {item}
+                </motion.span>
+                ))}
+            </div>
+
+            {/* RIGHT ACTIONS */}
+            <div className="flex items-center gap-3 md:gap-5">
+                <motion.button whileHover={{ scale: 1.1, rotate: 5 }} onClick={() => setSearchActive(true)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                    <Search className="w-6 h-6 text-gray-200" />
+                </motion.button>
+                <motion.button whileHover={{ scale: 1.1, rotate: -10 }} className="p-2 hover:bg-white/10 rounded-full transition-colors relative">
+                    <Bell className="w-6 h-6 text-gray-200" />
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+                </motion.button>
+                
+                {/* Profile (Gradient Border) */}
+                <motion.div whileHover={{ scale: 1.05 }} className="hidden md:flex p-[2px] rounded-full bg-gradient-to-tr from-yellow-400 to-amber-700 cursor-pointer">
+                    <div className="w-8 h-8 rounded-full bg-[#111] flex items-center justify-center">
+                        <User size={18} className="text-yellow-100" />
+                    </div>
+                </motion.div>
+            </div>
+         </motion.div>
+        )}
+      </AnimatePresence>
       </div>
-    </nav>
+    </motion.nav>
   );
 };
 
-// --- HERO SLIDER COMPONENT ---
+// --- HERO SLIDER COMPONENT (Unchanged mostly, just container adjustment) ---
 const HeroSlider = ({ data }: { data: any[] }) => {
     const [current, setCurrent] = useState(0);
     const router = useRouter();
@@ -170,6 +215,8 @@ const HeroSlider = ({ data }: { data: any[] }) => {
             <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out scale-105 group-hover:scale-110"
                  style={{ backgroundImage: `url(${movie.poster})` }}>
             </div>
+            {/* Extra dark gradient at top for navbar contrast */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-[#0a0a0a]"></div> 
             <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/40 to-transparent"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent"></div>
          </div>
@@ -225,7 +272,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     );
 };
 
-// --- MOVIE ROW SECTION ---
+// --- MOVIE ROW SECTION (Unchanged) ---
 const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
@@ -334,7 +381,7 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
     );
 };
 
-// --- MAIN PAGE LOGIC ---
+// --- MAIN PAGE LOGIC (Unchanged) ---
 function HomePageContent() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -384,7 +431,7 @@ function HomePageContent() {
       <TwinklingStars />
 
       {/* Main Content Overlay */}
-      <div className="relative z-10 bg-gradient-to-b from-transparent via-black/50 to-[#0a0a0a]">
+      <div className="relative z-10 bg-[#0a0a0a]">
           <Navbar />
 
           <div className="pb-20">
