@@ -3,10 +3,10 @@
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Play, Info, Search, Bell, MonitorPlay, 
-  ChevronRight, Star, X, Mail, User, Menu
+  Play, Info, Search, MonitorPlay, 
+  ChevronRight, Star, X, Mail
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import TwinklingStars from '@/components/TwinklingStars';
 
 // --- SKELETONS (Unchanged) ---
@@ -15,7 +15,6 @@ const HeroSkeleton = () => (
       <div className="absolute bottom-0 left-0 p-6 md:p-12 w-full max-w-3xl space-y-4 pb-24 md:pb-48">
           <div className="h-10 md:h-12 w-3/4 bg-gray-800 rounded-lg"></div>
           <div className="h-4 w-full bg-gray-800 rounded"></div>
-          <div className="h-4 w-2/3 bg-gray-800 rounded"></div>
       </div>
   </div>
 );
@@ -32,14 +31,12 @@ const NavbarSkeleton = () => (
 );
 
 // =====================================================================
-// 💧 ULTRA-LIQUID RESPONSIVE NAVBAR
+// 💧 UPDATED: PHOTO-MATCHED LIQUID NAVBAR (Logo + Text + Search)
 // =====================================================================
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
-  const [searchActive, setSearchActive] = useState(false);
   const [query, setQuery] = useState('');
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -47,142 +44,82 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (searchActive && inputRef.current) inputRef.current.focus();
-  }, [searchActive]);
-
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
         router.push(`/search?q=${encodeURIComponent(query)}`);
-        setSearchActive(false);
     }
   };
 
-  // 🌟 Liquid Glass Styles
-  const glassClasses = scrolled
-    ? "bg-black/40 backdrop-blur-[20px] backdrop-saturate-[180%] border-[0.5px] border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] rounded-full py-3"
-    : "bg-gradient-to-b from-black/80 to-transparent border-transparent py-5";
-
-  // 🌟 Responsive Widths (Island Mode vs Full Mode)
-  const widthClasses = scrolled 
-    ? "w-[95%] md:w-auto md:min-w-[600px] max-w-5xl top-4 md:top-6" 
-    : "w-full top-0 rounded-none";
-
   return (
     <motion.nav
-      layout
-      transition={{ type: "spring", stiffness: 200, damping: 25 }} // Apple-like physics
-      className={`fixed left-0 right-0 mx-auto z-50 flex items-center justify-center transition-all duration-500 ${widthClasses} ${glassClasses}`}
-      style={{
-        // Inner Glow for "Liquid" Thickness
-        boxShadow: scrolled ? "inset 0 0 15px rgba(255,255,255,0.08), 0 10px 40px -10px rgba(0,0,0,0.5)" : "none"
-      }}
+      initial={{ y: -100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 100, damping: 20 }}
+      className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 px-4"
     >
-      <div className={`w-full relative flex items-center justify-between ${scrolled ? 'px-5 md:px-8' : 'px-6 md:px-12'}`}>
+      {/* THE CAPSULE CONTAINER 
+         - High Blur (backdrop-blur-3xl)
+         - Heavy Saturation for Glass feel
+         - Inner Glow via box-shadow
+      */}
+      <div 
+        className={`
+          relative flex items-center gap-4 px-2 py-2 pr-2 md:px-3 md:py-2.5 rounded-full transition-all duration-500
+          ${scrolled ? 'bg-black/60 border-white/10' : 'bg-black/40 border-white/5'}
+          border backdrop-blur-3xl backdrop-saturate-[200%] shadow-[0_8px_40px_-10px_rgba(0,0,0,0.6)]
+        `}
+        style={{
+          // Deep Liquid Glass Shadow
+          boxShadow: "inset 0 1px 1px rgba(255,255,255,0.15), 0 20px 40px rgba(0,0,0,0.4)"
+        }}
+      >
         
-        <AnimatePresence mode="wait">
-          {searchActive ? (
-            // 🔍 SEARCH MODE (Expands Fluidly)
-            <motion.form 
-              key="search"
-              initial={{ opacity: 0, scale: 0.9, width: "90%" }}
-              animate={{ opacity: 1, scale: 1, width: "100%" }}
-              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.1 } }}
-              onSubmit={handleSearchSubmit}
-              className="flex items-center gap-3 w-full"
-            >
-                <Search className="text-yellow-500 shrink-0" size={22} />
-                <input 
-                  ref={inputRef}
-                  className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-400 text-base md:text-lg h-full"
-                  placeholder="Search movies..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onBlur={() => !query && setSearchActive(false)}
-                />
-                <motion.button 
-                   whileTap={{ scale: 0.9 }}
-                   type="button"
-                   onClick={() => setSearchActive(false)}
-                   className="p-1.5 bg-white/10 rounded-full hover:bg-white/20"
-                >
-                   <X size={18} className="text-gray-300"/>
-                </motion.button>
-            </motion.form>
-          ) : (
-            // 📺 NAV MODE (Logo + Links + Actions)
-            <motion.div 
-              key="nav"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex items-center justify-between w-full"
-            >
-              {/* LOGO */}
-              <div 
-                 className="flex items-center gap-2 cursor-pointer group" 
-                 onClick={() => router.push('/')}
-              >
-                  <div className="relative">
-                      <div className="absolute inset-0 bg-yellow-500 blur-[10px] opacity-0 group-hover:opacity-40 transition-opacity rounded-full"></div>
-                      <MonitorPlay className="text-yellow-500 relative z-10 transition-transform group-hover:scale-110" size={scrolled ? 24 : 28} />
-                  </div>
-                  <span className={`font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600 font-sans ${scrolled ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'} ${scrolled ? 'hidden md:block' : 'block'}`}>
-                    SADABEFY
-                  </span>
-              </div>
+        {/* 1. LOGO SECTION (Left Side) */}
+        <div 
+           className="flex items-center gap-3 pl-3 cursor-pointer group shrink-0" 
+           onClick={() => router.push('/')}
+        >
+            <div className="relative flex items-center justify-center">
+                {/* Glow behind logo */}
+                <div className="absolute inset-0 bg-red-600 blur-[15px] opacity-40 group-hover:opacity-60 transition-opacity rounded-full"></div>
+                {/* Using a Red Circle BG for Icon to match 'HZ Flix' look */}
+                <div className="relative z-10 w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                   <Play size={14} fill="white" className="text-white ml-0.5" />
+                </div>
+            </div>
+            
+            {/* TEXT: SADABEFY (Always Visible) */}
+            <span className="font-black tracking-tight text-xl md:text-2xl text-white font-sans drop-shadow-md">
+              SADABEFY
+            </span>
+        </div>
 
-              {/* DESKTOP LINKS */}
-              <div className="hidden md:flex items-center gap-6 lg:gap-8 font-medium text-sm text-gray-300/90">
-                {['Home', 'Series', 'Movies', 'New & Popular'].map((item) => (
-                  <motion.span 
-                    key={item} 
-                    className="hover:text-white cursor-pointer relative py-1"
-                    whileHover={{ scale: 1.05 }}
-                  >
-                    {item}
-                  </motion.span>
-                ))}
-              </div>
+        {/* 2. SEARCH SECTION (Right Side - Attached like image) */}
+        <form 
+          onSubmit={handleSearchSubmit}
+          className="relative group/search"
+        >
+          {/* Search Capsule Background (Darker) */}
+          <div className="flex items-center bg-[#1a1a1a]/80 hover:bg-[#2a2a2a] transition-colors rounded-full border border-white/5 px-4 py-2.5 w-[180px] md:w-[240px] shadow-inner">
+             <Search className="text-gray-400 group-focus-within/search:text-white transition-colors mr-3" size={18} />
+             
+             <input 
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search Movies..."
+                className="bg-transparent border-none outline-none text-white text-sm placeholder-gray-500 w-full font-medium"
+             />
+          </div>
+        </form>
 
-              {/* ACTIONS */}
-              <div className="flex items-center gap-3 md:gap-5">
-                  <motion.button 
-                    whileHover={{ scale: 1.1 }} 
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setSearchActive(true)} 
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                  >
-                      <Search className="w-5 h-5 md:w-6 md:h-6 text-gray-200" />
-                  </motion.button>
-                  
-                  <motion.div className="relative cursor-pointer" whileHover={{ scale: 1.1 }}>
-                      <Bell className="w-5 h-5 md:w-6 md:h-6 text-gray-200" />
-                      <span className="absolute top-0 right-0.5 w-2 h-2 bg-red-500 rounded-full border border-black"></span>
-                  </motion.div>
-
-                  {/* Mobile Menu Icon (Visible only on mobile) */}
-                  <motion.button className="md:hidden p-1" whileTap={{ scale: 0.9 }}>
-                      <Menu className="w-6 h-6 text-gray-200" />
-                  </motion.button>
-
-                  {/* Desktop Profile */}
-                  <div className="hidden md:block w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-yellow-500 to-amber-700 p-[1px] cursor-pointer shadow-lg hover:shadow-yellow-500/20 transition-all">
-                      <div className="w-full h-full rounded-full bg-black/80 flex items-center justify-center">
-                         <User size={16} className="text-yellow-500"/>
-                      </div>
-                  </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </motion.nav>
   );
 };
 
-// --- HERO SLIDER (Standard) ---
+// --- HERO SLIDER (Unchanged) ---
 const HeroSlider = ({ data }: { data: any[] }) => {
     const [current, setCurrent] = useState(0);
     const router = useRouter();
@@ -211,7 +148,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                  style={{ backgroundImage: `url(${data[(current - 1 + data.length) % data.length]?.poster})` }}></div>
             <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000 scale-105 group-hover:scale-110"
                  style={{ backgroundImage: `url(${movie.poster})` }}></div>
-            {/* Added Dark Gradient at Top for Navbar Contrast */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[#0a0a0a]"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent"></div>
          </div>
