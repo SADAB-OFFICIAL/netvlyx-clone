@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 }
 
 // =====================================================================
-// 🟢 ENGINE 1: MOVIES4U SCRAPER (Targeted Fix for download-links-div)
+// 🟢 ENGINE 1: MOVIES4U SCRAPER (With TMDB Screenshot Fallback)
 // =====================================================================
 async function scrapeMovies4u(targetUrl: string) {
     const res = await fetch(targetUrl, { headers: HEADERS });
@@ -63,6 +63,7 @@ async function scrapeMovies4u(targetUrl: string) {
         plot = $('.entry-content p').not(':has(a)').first().text().trim();
     }
 
+    // Extract IMDB ID (Crucial for Fallback)
     let imdbId = null;
     const imdbLink = $('a[href*="imdb.com/title/tt"]').attr('href');
     if (imdbLink) {
@@ -74,7 +75,7 @@ async function scrapeMovies4u(targetUrl: string) {
     const yearMatch = rawTitle.match(/\b(19|20)\d{2}\b/);
     if (yearMatch) year = yearMatch[0];
 
-    // 2. Screenshots (Fixed selector for ss-img container)
+    // 2. Screenshots (Primary: Movies4u)
     let screenshots: string[] = [];
     $('.ss-img img, .container.ss-img img, center img').each((_, el) => {
         const src = $(el).attr('src');
@@ -84,7 +85,17 @@ async function scrapeMovies4u(targetUrl: string) {
     });
     screenshots = Array.from(new Set(screenshots)).slice(0, 10);
 
-    // 3. DOWNLOAD SECTIONS (Targeted Logic for .download-links-div)
+    // --- 🌟 LOGIC ADDED: TMDB FALLBACK FOR SCREENSHOTS 🌟 ---
+    // Agar screenshots empty hain aur hamare paas IMDB ID hai, to TMDB se fetch karo
+    if (screenshots.length === 0 && imdbId) {
+        console.log(`No screenshots found on Movies4u. Fetching from TMDB for ${imdbId}...`);
+        const tmdbImages = await fetchTmdbScreenshots(imdbId);
+        if (tmdbImages.length > 0) {
+            screenshots = tmdbImages;
+        }
+    }
+
+    // 3. DOWNLOAD SECTIONS
     const downloadSections: any[] = [];
     
     // Logic A: Standard Movies4u Structure (.download-links-div > h4 + .downloads-btns-div)
@@ -92,8 +103,8 @@ async function scrapeMovies4u(targetUrl: string) {
     
     if (linkContainer.length > 0) {
         linkContainer.find('h4').each((_, el) => {
-            const headerText = $(el).text().trim(); // e.g. "Dhurandhar (2025) 480p [700MB]"
-            const nextDiv = $(el).next('.downloads-btns-div'); // The buttons container immediately after h4
+            const headerText = $(el).text().trim(); 
+            const nextDiv = $(el).next('.downloads-btns-div');
             
             if (nextDiv.length > 0) {
                 let quality = 'Standard';
@@ -134,7 +145,7 @@ async function scrapeMovies4u(targetUrl: string) {
             }
         });
     } else {
-        // Logic B: Fallback (Legacy/Universal Parser if structure changes)
+        // Logic B: Fallback (Legacy/Universal Parser)
         let currentQuality = 'Standard';
         let currentSectionTitle = 'Download Links';
         let currentLinks: any[] = [];
@@ -368,6 +379,34 @@ const extractImdbId = (html: string): string | null => {
     });
     return imdbId;
 };
+
+// --- NEW HELPER: Fetch Screenshots from TMDB via IMDB ID ---
+async function fetchTmdbScreenshots(imdbId: string) {
+    try {
+        const apiKey = '15d2ea6d0dc1d476efbca3eba2b9bbfb'; // Public/Demo Key (Change if you have your own)
+        
+        // Step 1: Find TMDB ID using IMDB ID
+        const findRes = await fetch(`https://api.themoviedb.org/3/find/${imdbId}?api_key=${apiKey}&external_source=imdb_id`);
+        if (!findRes.ok) return [];
+        const findData = await findRes.json();
+        
+        const media = findData.movie_results?.[0] || findData.tv_results?.[0];
+
+        if (media) {
+            // Step 2: Fetch Images for that ID
+            const type = findData.movie_results?.length ? 'movie' : 'tv';
+            const imgRes = await fetch(`https://api.themoviedb.org/3/${type}/${media.id}/images?api_key=${apiKey}&include_image_language=en,null`);
+            if (imgRes.ok) {
+                const imgData = await imgRes.json();
+                // Return top 8 backdrops (High Quality)
+                return imgData.backdrops?.slice(0, 8).map((img:any) => `https://image.tmdb.org/t/p/original${img.file_path}`) || [];
+            }
+        }
+    } catch (e) { 
+        console.error('TMDB Fallback Error:', e);
+    }
+    return [];
+}
 
 async function scrapeMDriveLinks(url: string, forceSeason: number | null = null) {
     try {
