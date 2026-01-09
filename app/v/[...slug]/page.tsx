@@ -4,9 +4,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  ImageIcon, Archive, Tv, Loader2, Star, Users, X 
+  ImageIcon, Archive, Tv, Loader2, Star, Users 
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion'; [cite_start]// [cite: 1]
+import { motion, AnimatePresence } from 'framer-motion';
 
 // --- SKELETON COMPONENT (Animated) ---
 const MovieSkeleton = () => (
@@ -177,25 +177,32 @@ export default function MoviePage() {
     } catch (err) { alert("Error opening link"); }
   };
 
-  // --- REVISED HERO ACTION ---
   const handleHeroAction = (type: 'watch' | 'download') => {
-      setActionType(type); // State set hone par animation trigger hoga
-      // Thoda delay taaki animation start ho jaye fir scroll ho
+      setActionType(type);
       setTimeout(() => {
           downloadRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+      }, 50);
   };
 
   const goBackStep = () => {
       if (selectedQuality) setSelectedQuality(null);
       else if (downloadType) setDownloadType(null);
-      else if (actionType) setActionType(null); // Ye null hote hi section wapas hide ho jayega
+      else if (actionType) setActionType(null);
       else if (selectedSeason) setSelectedSeason(null);
       else router.back();
   };
 
-  // Logic to show/hide the download section
-  const showDownloadSection = actionType !== null || selectedSeason !== null;
+  // --- ANIMATION VARIANTS ---
+  const fadeInUp = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  };
+
+  const slideIn = {
+    hidden: { opacity: 0, x: -20 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.4 } },
+    exit: { opacity: 0, x: 20, transition: { duration: 0.3 } }
+  };
 
   if (loading) return <MovieSkeleton />;
   if (error) return <div className="h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
@@ -214,186 +221,203 @@ export default function MoviePage() {
           <div className="absolute top-6 left-6 z-50">
              <button onClick={() => router.back()} className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all cursor-pointer hover:scale-105 active:scale-95 duration-200 hover:bg-white/10">
                  <ArrowLeft size={20}/> Back
-              </button>
+             </button>
           </div>
 
-          <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto animate-slide-up">
-              {finalRating && (
-                  <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full animate-fade-in delay-100">
-                      <Star className="w-4 h-4 text-yellow-400 fill-current"/>
-                      <span className="text-yellow-400 font-bold text-sm">{finalRating} IMDb</span>
+          <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto">
+              {/* Content wrapped in Motion */}
+              <motion.div initial="hidden" animate="visible" variants={fadeInUp} className="flex flex-col items-center">
+                  
+                  {finalRating && (
+                      <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full">
+                          <Star className="w-4 h-4 text-yellow-400 fill-current"/>
+                          <span className="text-yellow-400 font-bold text-sm">{finalRating} IMDb</span>
+                      </div>
+                  )}
+
+                  <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400">
+                      {finalTitle}
+                  </h1>
+
+                  <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md">
+                      {finalOverview}
+                  </p>
+
+                  <div className="flex gap-4 relative z-50">
+                      <motion.button 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleHeroAction('watch')}
+                        className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer"
+                      >
+                          <Play className="fill-current" size={20}/> Watch Now
+                      </motion.button>
+                      <motion.button 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleHeroAction('download')}
+                        className="bg-gray-800/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-gray-700 hover:text-white transition-all hover:shadow-lg cursor-pointer"
+                      >
+                          <Download size={20}/> Download
+                      </motion.button>
                   </div>
-              )}
-
-              <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 animate-fade-in delay-200">
-                  {finalTitle}
-              </h1>
-
-              <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md animate-fade-in delay-300">
-                  {finalOverview}
-              </p>
-
-              <div className="flex gap-4 relative z-50 animate-fade-in delay-400">
-                  <button 
-                    onClick={() => handleHeroAction('watch')}
-                    className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer active:scale-95"
-                  >
-                      <Play className="fill-current" size={20}/> Watch Now
-                  </button>
-                  <button 
-                    onClick={() => handleHeroAction('download')}
-                    className="bg-gray-800/60 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-gray-700 hover:text-white transition-all duration-300 hover:scale-105 cursor-pointer active:scale-95 hover:shadow-lg"
-                  >
-                      <Download size={20}/> Download
-                  </button>
-              </div>
+              </motion.div>
           </div>
       </div>
 
       {/* 2. POSTER */}
-      <div className="relative z-20 -mt-10 mb-16 flex justify-center px-4 animate-fade-in delay-500">
+      <motion.div 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8 }}
+        className="relative z-20 -mt-10 mb-16 flex justify-center px-4"
+      >
           <div className="relative group">
               <div className="absolute inset-0 bg-cover bg-center blur-3xl opacity-40 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-60 pointer-events-none" style={{ backgroundImage: `url(${finalPoster})` }}></div>
               <img src={finalPoster} alt="Poster" className="relative w-[180px] md:w-[260px] rounded-2xl shadow-2xl border-4 border-[#050505] transform transition-transform duration-500 group-hover:-translate-y-2 pointer-events-none"/>
           </div>
-      </div>
+      </motion.div>
 
       <div className="max-w-6xl mx-auto px-4 md:px-8 space-y-16">
           
           {/* 3. TRAILER */}
           {trailerKey && (
-              <div className="animate-fade-in">
+              <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}>
                   <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-red-600 pl-3">Official Trailer</h2>
                   <div className="aspect-video w-full rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-black hover:border-red-500/30 transition-all duration-300 hover:scale-[1.01]">
                       <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${trailerKey}?rel=0&showinfo=0`} title="Trailer" allowFullScreen></iframe>
                   </div>
-              </div>
+              </motion.div>
           )}
 
           {/* 4. GALLERY */}
           {galleryImages && galleryImages.length > 0 && (
-              <div className="animate-fade-in">
+              <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}>
                   <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-blue-600 pl-3">Gallery</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       {galleryImages.slice(0, 4).map((img: any, i: number) => {
                           const src = typeof img === 'string' ? img : `https://image.tmdb.org/t/p/w780${img.file_path}`;
                           return (
-                            <div key={i} className="aspect-video rounded-xl overflow-hidden border border-gray-800 group relative shadow-lg">
+                            <motion.div 
+                              key={i} 
+                              whileHover={{ scale: 1.02 }}
+                              className="aspect-video rounded-xl overflow-hidden border border-gray-800 group relative shadow-lg"
+                            >
                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300"></div>
-                                <img src={src} className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700" loading="lazy"/>
-                            </div>
+                                <img src={src} className="w-full h-full object-cover transition-transform duration-700" loading="lazy"/>
+                            </motion.div>
                           );
                       })}
                   </div>
-              </div>
+              </motion.div>
           )}
 
-          {/* 5. DOWNLOAD SECTION (ANIMATED) */}
-          {/* Ref container is always here for scrolling, but content animates */}
-          <div id="download-section" ref={downloadRef} className="min-h-[20px]">
-            <AnimatePresence>
-              {showDownloadSection && (
-                <motion.div
-                    initial={{ height: 0, opacity: 0, y: 50 }}
-                    animate={{ height: "auto", opacity: 1, y: 0 }}
-                    exit={{ height: 0, opacity: 0, y: 50 }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} // Smooth bezier
-                    className="overflow-hidden"
-                >
-                  <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden transition-all duration-500 hover:border-white/10 group mb-10">
-                      
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none animate-pulse"></div>
-                      
-                      <div className="flex justify-between items-start mb-8">
-                        <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                            {actionType === 'watch' ? 'Watch Online' : 'Download Content'}
-                        </h2>
-                        {/* Close button for better UX */}
-                        <button onClick={() => setActionType(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                            <X className="text-gray-400" size={24}/>
-                        </button>
-                      </div>
+          {/* 5. DOWNLOAD SECTION (Animated with AnimatePresence) */}
+          <div id="download-section" ref={downloadRef} className="pt-10">
+              <motion.div 
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden transition-all duration-500 hover:border-white/10 group"
+              >
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none animate-pulse"></div>
+                  
+                  <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                      Download & Watch Options
+                  </h2>
 
-                      {/* HEADER */}
-                      {(selectedSeason || actionType) && (
-                        <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800">
-                            <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer hover:underline hover:scale-105 transform">
-                                <ArrowLeft size={16}/> Go Back
-                            </button>
-                            <div className="text-xs font-mono text-gray-500 uppercase tracking-widest">
-                                {selectedSeason ? `S${selectedSeason}` : ''} {actionType ? `/ ${actionType}` : ''} {selectedQuality ? `/ ${selectedQuality}` : ''}
+                  <AnimatePresence mode="wait">
+                    
+                    {/* HEADER */}
+                    {(selectedSeason || actionType) && (
+                       <motion.div 
+                         key="header"
+                         initial={{ opacity: 0, height: 0 }}
+                         animate={{ opacity: 1, height: 'auto' }}
+                         exit={{ opacity: 0, height: 0 }}
+                         className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800"
+                       >
+                          <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer hover:underline hover:scale-105 transform"><ArrowLeft size={16}/> Go Back</button>
+                          <div className="text-xs font-mono text-gray-500 uppercase tracking-widest">{selectedSeason ? `S${selectedSeason}` : ''} {actionType ? `/ ${actionType}` : ''} {selectedQuality ? `/ ${selectedQuality}` : ''}</div>
+                       </motion.div>
+                    )}
+
+                    {/* SEASON SELECTOR */}
+                    {availableSeasons.length > 0 && selectedSeason === null && (
+                        <motion.div key="seasons" variants={slideIn} initial="hidden" animate="visible" exit="exit">
+                            <h3 className="text-lg font-semibold text-gray-400 mb-4 flex items-center gap-2"><Tv size={18}/> Select Season</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                {availableSeasons.map(s => (
+                                    <motion.button 
+                                      whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                                      key={s} onClick={() => setSelectedSeason(s)} 
+                                      className="p-4 bg-gray-800 hover:bg-red-600 border border-gray-700 rounded-xl font-bold text-lg transition-colors duration-300 cursor-pointer shadow-lg hover:shadow-red-600/20"
+                                    >
+                                      Season {s}
+                                    </motion.button>
+                                ))}
                             </div>
-                        </div>
-                      )}
+                        </motion.div>
+                    )}
 
-                      {/* SEASON SELECTOR */}
-                      {availableSeasons.length > 0 && selectedSeason === null && (
-                          <motion.div 
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                            className=""
-                          >
-                              <h3 className="text-lg font-semibold text-gray-400 mb-4 flex items-center gap-2"><Tv size={18}/> Select Season</h3>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                                  {availableSeasons.map(s => (
-                                      <button key={s} onClick={() => setSelectedSeason(s)} className="p-4 bg-gray-800 hover:bg-red-600 border border-gray-700 rounded-xl font-bold text-lg transition-all duration-300 cursor-pointer transform hover:scale-105 shadow-lg hover:shadow-red-600/20 active:scale-95">Season {s}</button>
-                                  ))}
-                              </div>
-                          </motion.div>
-                      )}
+                    {/* ACTION SELECTOR */}
+                    {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
+                        <motion.div key="actions" variants={slideIn} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setActionType('download')} className="p-8 bg-gradient-to-br from-blue-600/20 to-blue-900/20 border border-blue-500/30 rounded-2xl hover:border-blue-400 transition-colors duration-300 text-center cursor-pointer group hover:shadow-blue-500/20 shadow-lg">
+                                <h3 className="text-2xl font-bold text-white group-hover:scale-110 transition-transform duration-300">Download</h3>
+                            </motion.button>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setActionType('watch')} className="p-8 bg-gradient-to-br from-green-600/20 to-green-900/20 border border-green-500/30 rounded-2xl hover:border-green-400 transition-colors duration-300 text-center cursor-pointer group hover:shadow-green-500/20 shadow-lg">
+                                <h3 className="text-2xl font-bold text-white group-hover:scale-110 transition-transform duration-300">Watch Online</h3>
+                            </motion.button>
+                        </motion.div>
+                    )}
 
-                      {/* ACTION SELECTOR (Hidden if trigger was Hero Button, but kept for fallback) */}
-                      {/* NOTE: Since Hero sets actionType, this part is skipped initially, which is what we want */}
-                      {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                              <button onClick={() => setActionType('download')} className="p-8 bg-gradient-to-br from-blue-600/20 to-blue-900/20 border border-blue-500/30 rounded-2xl hover:border-blue-400 transition-all duration-300 text-center cursor-pointer group hover:shadow-blue-500/20 shadow-lg hover:scale-[1.02] active:scale-95">
-                                  <h3 className="text-2xl font-bold text-white group-hover:scale-110 transition-transform duration-300">Download</h3>
-                              </button>
-                              <button onClick={() => setActionType('watch')} className="p-8 bg-gradient-to-br from-green-600/20 to-green-900/20 border border-green-500/30 rounded-2xl hover:border-green-400 transition-all duration-300 text-center cursor-pointer group hover:shadow-green-500/20 shadow-lg hover:scale-[1.02] active:scale-95">
-                                  <h3 className="text-2xl font-bold text-white group-hover:scale-110 transition-transform duration-300">Watch Online</h3>
-                              </button>
-                          </div>
-                      )}
+                    {/* TYPE SELECTOR (Episode vs Bulk) */}
+                    {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
+                        <motion.div key="types" variants={slideIn} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setDownloadType('episode')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-colors flex items-center justify-center gap-3 cursor-pointer shadow-md"><Tv size={24} className="text-purple-400"/> Episode Wise</motion.button>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} onClick={() => setDownloadType('bulk')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-colors flex items-center justify-center gap-3 cursor-pointer shadow-md"><Archive size={24} className="text-orange-400"/> Bulk / Zip</motion.button>
+                        </motion.div>
+                    )}
 
-                      {/* TYPE SELECTOR */}
-                      {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
-                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-                              <button onClick={() => setDownloadType('episode')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer hover:scale-[1.02] active:scale-95 shadow-md"><Tv size={24} className="text-purple-400"/> Episode Wise</button>
-                              <button onClick={() => setDownloadType('bulk')} className="p-6 bg-gray-800 rounded-xl font-bold text-xl hover:bg-gray-700 border border-gray-700 transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer hover:scale-[1.02] active:scale-95 shadow-md"><Archive size={24} className="text-orange-400"/> Bulk / Zip</button>
-                          </motion.div>
-                      )}
+                    {/* QUALITY SELECTOR */}
+                    {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
+                        <motion.div key="quality" variants={slideIn} initial="hidden" animate="visible" exit="exit">
+                            <h3 className="text-lg font-semibold text-gray-400 mb-4 text-center">Select Quality</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-3xl mx-auto">
+                                {currentQualities.length > 0 ? currentQualities.map(q => (
+                                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 rounded-xl font-bold text-lg transition-colors duration-300 cursor-pointer shadow-md hover:shadow-blue-500/30">{q}</motion.button>
+                                )) : <div className="col-span-full text-center text-gray-500 py-4">No options found. Try changing filters.</div>}
+                            </div>
+                        </motion.div>
+                    )}
 
-                      {/* QUALITY SELECTOR */}
-                      {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
-                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                              <h3 className="text-lg font-semibold text-gray-400 mb-4 text-center">Select Quality</h3>
-                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-3xl mx-auto">
-                                  {currentQualities.length > 0 ? currentQualities.map(q => (
-                                      <button key={q} onClick={() => setSelectedQuality(q)} className="p-4 bg-gray-800 border border-gray-700 hover:bg-blue-600 rounded-xl font-bold text-lg transition-all duration-300 cursor-pointer transform hover:scale-105 shadow-md hover:shadow-blue-500/30 active:scale-95">{q}</button>
-                                  )) : <div className="col-span-full text-center text-gray-500 py-4">No options found. Try changing filters.</div>}
-                              </div>
-                          </motion.div>
-                      )}
+                    {/* LINKS LIST */}
+                    {selectedQuality !== null && (
+                        <motion.div key="links" variants={slideIn} initial="hidden" animate="visible" exit="exit" className="space-y-3 max-w-3xl mx-auto">
+                            <h3 className="text-green-400 font-bold mb-4 flex items-center gap-2"><CheckCircle size={20}/> Available Links</h3>
+                            {displayLinks.length > 0 ? displayLinks.map((link: any, idx: number) => (
+                                <motion.button 
+                                  initial={{ opacity: 0, x: -10 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: idx * 0.05 }}
+                                  key={idx} onClick={() => handleLinkClick(link.url)} 
+                                  className="w-full text-left p-4 bg-black/40 hover:bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-between group transition-all duration-200 cursor-pointer hover:border-gray-500 hover:shadow-lg active:scale-[0.99]"
+                                >
+                                    <div>
+                                        <span className="font-bold text-gray-200 group-hover:text-white block text-sm md:text-base transition-colors">{link.label}</span>
+                                        <div className="flex gap-2 text-xs text-gray-500 mt-1">{link.size && <span className="bg-gray-800 px-1.5 rounded">{link.size}</span>}{link.sectionTitle && <span className="text-gray-600">• {link.sectionTitle}</span>}</div>
+                                    </div>
+                                    {actionType === 'watch' ? <Play className="w-5 h-5 text-green-500 group-hover:scale-125 transition-transform duration-300"/> : <Download className="w-5 h-5 text-blue-500 group-hover:scale-125 transition-transform duration-300"/>}
+                                </motion.button>
+                            )) : <div className="text-center py-10 text-gray-500">No links available.</div>}
+                        </motion.div>
+                    )}
 
-                      {/* LINKS LIST */}
-                      {selectedQuality !== null && (
-                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3 max-w-3xl mx-auto">
-                              <h3 className="text-green-400 font-bold mb-4 flex items-center gap-2"><CheckCircle size={20}/> Available Links</h3>
-                              {displayLinks.length > 0 ? displayLinks.map((link: any, idx: number) => (
-                                  <button key={idx} onClick={() => handleLinkClick(link.url)} className="w-full text-left p-4 bg-black/40 hover:bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-between group transition-all duration-200 cursor-pointer hover:border-gray-500 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99]">
-                                      <div>
-                                          <span className="font-bold text-gray-200 group-hover:text-white block text-sm md:text-base transition-colors">{link.label}</span>
-                                          <div className="flex gap-2 text-xs text-gray-500 mt-1">{link.size && <span className="bg-gray-800 px-1.5 rounded">{link.size}</span>}{link.sectionTitle && <span className="text-gray-600">• {link.sectionTitle}</span>}</div>
-                                      </div>
-                                      {actionType === 'watch' ? <Play className="w-5 h-5 text-green-500 group-hover:scale-125 transition-transform duration-300"/> : <Download className="w-5 h-5 text-blue-500 group-hover:scale-125 transition-transform duration-300"/>}
-                                  </button>
-                              )) : <div className="text-center py-10 text-gray-500">No links available.</div>}
-                          </motion.div>
-                      )}
+                  </AnimatePresence>
 
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+              </motion.div>
           </div>
       </div>
     </div>
