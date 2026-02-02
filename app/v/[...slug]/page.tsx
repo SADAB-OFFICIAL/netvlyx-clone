@@ -56,14 +56,14 @@ export default function MoviePage() {
   const { slug } = useParams();
   const router = useRouter();
   const downloadRef = useRef<HTMLDivElement>(null);
-  const ticketRef = useRef<HTMLDivElement>(null); // Ref for Hidden Ticket
+  const ticketRef = useRef<HTMLDivElement>(null); 
 
   // Data States
   const [data, setData] = useState<any>(null);
   const [tmdbData, setTmdbData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isSharing, setIsSharing] = useState(false); // Share loading state
+  const [isSharing, setIsSharing] = useState(false); 
 
   // Filter States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -135,28 +135,19 @@ export default function MoviePage() {
 
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- 🛠️ FIXED SHARE FUNCTION (With Logs & Cache Busting) 🛠️ ---
+  // --- SHARE FUNCTION ---
   const handleGoldenShare = async () => {
     if (!ticketRef.current || isSharing) return;
-    
-    console.log("Share: Starting Generation...");
     setIsSharing(true);
     
     try {
-        // Log the element to ensure it exists
-        console.log("Share: Ticket Element Found", ticketRef.current);
-
-        // Generate Image from Hidden Div
-        // Note: useCORS needs the server to support it (TMDB does)
         const canvas = await html2canvas(ticketRef.current, {
             useCORS: true, 
             allowTaint: true,
             scale: 2, 
             backgroundColor: '#050505',
-            logging: true, // Check console for html2canvas logs
-            onclone: (clonedDoc) => {
-                console.log("Share: Document Cloned for Canvas");
-                // Ensure cloned images are loaded
+            logging: false,
+            onclone: (clonedDoc: any) => {
                 const images = clonedDoc.getElementsByTagName('img');
                 for (let i = 0; i < images.length; i++) {
                      images[i].crossOrigin = "anonymous";
@@ -164,34 +155,35 @@ export default function MoviePage() {
             }
         });
 
-        console.log("Share: Canvas Created");
-
         const image = canvas.toDataURL("image/jpeg", 0.9);
         const blob = await (await fetch(image)).blob();
         const file = new File([blob], "netvlyx_ticket.jpg", { type: "image/jpeg" });
 
-        console.log("Share: File Object Created", file);
-
-        // Native Share (Mobile)
         if (navigator.share) {
             await navigator.share({
                 title: finalTitle,
                 text: `Watch ${finalTitle} on SADABEFY!`,
                 files: [file],
             });
-            console.log("Share: Native Share Success");
         } else {
-            // Desktop Fallback (Download)
             const link = document.createElement("a");
             link.href = image;
             link.download = `SADABEFY_Ticket_${finalTitle.substring(0,10)}.jpg`;
             link.click();
-            console.log("Share: Download Fallback Triggered");
         }
     } catch (err: any) {
-        console.error("Share: FAILED", err);
-        // Alert the actual error message to debugging
-        alert("Sharing Error: " + (err.message || err));
+        console.error("Share failed", err);
+        // Fallback: simple download
+        try {
+            const canvas = await html2canvas(ticketRef.current, { useCORS: true, allowTaint: true });
+            const image = canvas.toDataURL("image/jpeg");
+            const link = document.createElement("a");
+            link.href = image;
+            link.download = `SADABEFY_Card.jpg`;
+            link.click();
+        } catch (e) {
+            alert("Could not generate ticket. Please try again.");
+        }
     } finally {
         setIsSharing(false);
     }
@@ -291,12 +283,10 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- 🎫 HIDDEN GOLDEN TICKET (With Cache Busting Fix) 🎫 --- */}
+      {/* --- HIDDEN TICKET --- */}
       <div className="fixed top-0 left-[-9999px] z-[-1]">
          <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#050505] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 border-[8px] border-yellow-600/50 rounded-3xl">
              <div className="absolute inset-0 bg-gradient-to-br from-black via-black to-yellow-900/20"></div>
-             
-             {/* CACHE BUSTING: ?random=... forces browser to download fresh image with CORS headers */}
              {finalPoster && (
                <img 
                  src={`${finalPoster}?random=${new Date().getTime()}`} 
@@ -335,7 +325,7 @@ export default function MoviePage() {
          </div>
       </div>
 
-      {/* 1. HERO SECTION (Clean - No Extra Share Button) */}
+      {/* HERO SECTION */}
       <div className="relative w-full h-[80vh] md:h-[90vh] z-10">
           <div className="absolute inset-0 pointer-events-none">
               <div className="w-full h-full bg-cover bg-center opacity-40 mask-image-gradient" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
@@ -371,7 +361,7 @@ export default function MoviePage() {
           </div>
       </div>
 
-      {/* 2. POSTER (Floating) */}
+      {/* POSTER */}
       <div className="relative z-20 -mt-10 mb-16 flex justify-center px-4">
           <div className="relative group">
               <div className="absolute inset-0 bg-cover bg-center blur-3xl opacity-30 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-50 pointer-events-none" style={{ backgroundImage: `url(${finalPoster})` }}></div>
@@ -379,6 +369,7 @@ export default function MoviePage() {
           </div>
       </div>
 
+      {/* MAIN CONTENT */}
       <div className="relative z-20 max-w-6xl mx-auto px-4 md:px-8 space-y-16">
           {trailerKey && (
               <div>
@@ -480,7 +471,7 @@ export default function MoviePage() {
           </div>
       </div>
       
-      {/* 🚀 REPLACED BUG BUTTON WITH FLOATING SHARE TICKET BUTTON 🚀 */}
+      {/* FLOATING SHARE BUTTON (Replaces Bug Button) */}
       <button 
         onClick={handleGoldenShare} 
         disabled={isSharing}
@@ -488,11 +479,10 @@ export default function MoviePage() {
         title="Share Golden Ticket"
       >
         <div className="w-6 h-6 flex items-center justify-center">
-            {/* Spinning Loader or Share Icon */}
             {isSharing ? <Loader2 className="animate-spin" size={24}/> : <Share2 className="w-6 h-6 group-hover:text-yellow-100" />}
         </div>
       </button>
 
     </div>
   );
-}e
+}
