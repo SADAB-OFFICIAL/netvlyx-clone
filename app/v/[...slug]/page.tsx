@@ -4,43 +4,49 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  Archive, Tv, Star, MonitorPlay, X
+  Archive, Tv, Loader2, Star, Users, AlertCircle 
 } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
+import Link from 'next/link';
 
-// --- NEW COMPONENT IMPORT ---
-// Note: Agar tumne AmbientBackground alag file me banaya hai to import karo,
-// warna maine is file ke niche direct code bhi de diya hai simplify karne ke liye.
-
-// --- AMBIENT BACKGROUND COMPONENT (In-file for easy copy-paste) ---
+// --- 🌟 NEW: AMBIENT BACKGROUND COMPONENT 🌟 ---
+// Ye component puri screen ke piche movie ke colors ko animate karega
 const AmbientBackground = ({ image }: { image: string }) => {
-  if (!image) return null;
+  // Fallback agar image na ho to
+  const bgImage = image || ""; 
+
+  if (!bgImage) return null;
+
   return (
     <div className="fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none">
-      {/* Liquid Color Layer */}
+      {/* 1. Main Breathing Layer */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1.5 }}
         className="absolute inset-0 w-full h-full"
       >
-        <div 
-          className="absolute inset-0 bg-cover bg-center blur-[100px] saturate-[200%] opacity-50 scale-110"
-          style={{ backgroundImage: `url(${image})` }}
+        <motion.div 
+           // Animation: Scale aur Opacity change hoti rahegi
+           animate={{ 
+             scale: [1, 1.15, 1], 
+             opacity: [0.5, 0.7, 0.5] 
+           }}
+           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+           className="absolute inset-0 bg-cover bg-center blur-[80px] saturate-[180%]"
+           style={{ backgroundImage: `url(${bgImage})` }}
         />
-         {/* Breathing Animation Layer */}
-         <motion.div 
-            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-0 bg-cover bg-center blur-[150px] mix-blend-screen opacity-40"
-            style={{ backgroundImage: `url(${image})` }}
-         />
       </motion.div>
 
-      {/* Gradient Overlays for Readability */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/90 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/60 to-transparent" />
-      <div className="absolute inset-0 bg-black/30" />
+      {/* 2. Noise Texture (Optional: Professional feel ke liye) */}
+      <div className="absolute inset-0 bg-black/10 mix-blend-overlay" />
+
+      {/* 3. Gradient Overlays (Taaki text readable rahe) */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/40 via-transparent to-[#050505]/90" />
+      
+      {/* Solid background only at very bottom to blend with footer/end */}
+      <div className="absolute bottom-0 left-0 w-full h-1/3 bg-gradient-to-t from-[#050505] to-transparent" />
     </div>
   );
 };
@@ -53,6 +59,10 @@ const MovieSkeleton = () => (
               <div className="h-6 w-24 bg-gray-800 rounded-full"></div>
               <div className="h-12 md:h-20 w-3/4 max-w-3xl bg-gray-800 rounded-lg"></div>
               <div className="h-4 w-full max-w-2xl bg-gray-800 rounded"></div>
+              <div className="flex gap-4 pt-4">
+                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div>
+                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div>
+              </div>
           </div>
       </div>
   </div>
@@ -75,6 +85,9 @@ export default function MoviePage() {
   const [downloadType, setDownloadType] = useState<'episode' | 'bulk' | null>(null);
   const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
+
+  // Show/Hide Download Section Animation State
+  const [showDownloadSection, setShowDownloadSection] = useState(false);
 
   const movieUrl = slug 
     ? atob((slug as string[]).join('/').replace(/-/g, '+').replace(/_/g, '/')) 
@@ -138,7 +151,7 @@ export default function MoviePage() {
   const finalTitle = tmdbData?.title || data?.title;
   const finalOverview = tmdbData?.overview || data?.plot;
   const finalPoster = tmdbData?.poster || data?.poster;
-  const finalBackdrop = tmdbData?.backdrop || data?.poster; // Ambient source
+  const finalBackdrop = tmdbData?.backdrop || data?.poster; // Used for Hero BG
   const finalRating = tmdbData?.rating;
   const trailerKey = tmdbData?.trailerKey;
 
@@ -233,20 +246,28 @@ export default function MoviePage() {
   };
 
   if (loading) return <MovieSkeleton />;
-  if (error) return <div className="h-screen bg-black flex items-center justify-center text-red-500">{error}</div>;
+  if (error) return (
+    <div className="h-screen bg-[#050505] flex flex-col items-center justify-center text-white">
+      <AlertCircle className="w-12 h-12 text-red-500 mb-4"/>
+      <h2 className="text-xl font-bold">{error}</h2>
+      <button onClick={() => router.push('/')} className="mt-4 px-6 py-2 bg-white text-black rounded-full font-bold">Go Home</button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans pb-20 overflow-x-hidden relative">
+    // NOTE: bg-transparent is crucial here for AmbientBackground to show
+    <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       
-      {/* 🔥 DYNAMIC AMBIENT BACKGROUND 🔥 */}
+      {/* 🌟 AMBIENT BACKGROUND LAYER (Added Here) 🌟 */}
+      {/* Using finalPoster because it usually has the best colors */}
       <AmbientBackground image={finalPoster} />
 
       {/* 1. HERO SECTION */}
       <div className="relative w-full h-[80vh] md:h-[90vh] z-10">
           <div className="absolute inset-0 pointer-events-none">
-             {/* Note: We use the background image here too but with less blur for the hero header feel */}
+              {/* Hero Background - Reduced opacity to blend with Ambient */}
               <div className="w-full h-full bg-cover bg-center opacity-40 mask-image-gradient" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050505]/80 via-transparent to-transparent"></div>
           </div>
 
           <div className="absolute top-6 left-6 z-50">
@@ -330,8 +351,8 @@ export default function MoviePage() {
              5. DOWNLOAD SECTION (Glassmorphism & Fast Animation) 
              =====================================================
           */}
-          <div id="download-section" ref={downloadRef} className="pt-10">
-              {/* Glass Card Container */}
+          <div id="download-section" ref={downloadRef} className="pt-10 pb-20">
+              {/* Glass Card Container with semi-transparency so Ambient BG shows through */}
               <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden transition-all duration-500 hover:border-white/20 group">
                   
                   {/* Inner Glow Blob */}
@@ -452,17 +473,6 @@ export default function MoviePage() {
               </div>
           </div>
       </div>
-      
-      {/* 🚀 New Feature: Bug Report Floating Button */}
-      <button 
-        className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 backdrop-blur-sm border border-red-400/20 cursor-pointer" 
-        title="Report a Bug"
-      >
-        <div className="w-6 h-6 flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
-        </div>
-      </button>
-
     </div>
   );
 }
