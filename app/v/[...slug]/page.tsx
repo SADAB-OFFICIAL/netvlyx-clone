@@ -135,22 +135,18 @@ export default function MoviePage() {
 
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- 🛠️ ROBUST SHARE FUNCTION 🛠️ ---
+  // --- 🛠️ OKLAB FIX: USE STANDARD CSS FOR CAPTURE 🛠️ ---
   const handleGoldenShare = async () => {
     if (!ticketRef.current || isSharing) return;
     setIsSharing(true);
     
     try {
-        // Force the element to be momentarily visible for capture if needed, 
-        // though z-index -50 trick usually works.
-        
         const canvas = await html2canvas(ticketRef.current, {
             useCORS: true, 
-            allowTaint: false, // Strict taint check (prevents security errors later)
+            allowTaint: false, 
             scale: 2, 
-            backgroundColor: '#050505',
+            backgroundColor: '#050505', // Safe Hex Color
             logging: false,
-            // CORS fix for images inside canvas
             onclone: (clonedDoc: any) => {
                 const images = clonedDoc.getElementsByTagName('img');
                 for (let i = 0; i < images.length; i++) {
@@ -159,9 +155,7 @@ export default function MoviePage() {
             }
         });
 
-        // This line is where it usually fails if canvas is tainted
         const image = canvas.toDataURL("image/jpeg", 0.9);
-        
         const blob = await (await fetch(image)).blob();
         const file = new File([blob], "netvlyx_ticket.jpg", { type: "image/jpeg" });
 
@@ -179,8 +173,7 @@ export default function MoviePage() {
         }
     } catch (err: any) {
         console.error("Share failed", err);
-        // Show the ACTUAL error message to help debug
-        alert("Sharing Error: " + (err.message || "Security/Network Error"));
+        alert("Sharing Error: " + (err.message || "Unknown Error"));
     } finally {
         setIsSharing(false);
     }
@@ -280,46 +273,58 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- HIDDEN TICKET (RENDERED BEHIND EVERYTHING) --- */}
-      {/* z-index -50 makes it sit behind background, but it IS rendered, unlike left: -9999px */}
-      <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none" style={{ zIndex: -50 }}>
-         <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#050505] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 border-[8px] border-yellow-600/50 rounded-3xl">
-             <div className="absolute inset-0 bg-gradient-to-br from-black via-black to-yellow-900/20"></div>
+      {/* --- HIDDEN TICKET (HTML2CANVAS SAFE) --- */}
+      {/* Fix: Using zIndex -50 instead of off-screen to ensure rendering.
+         Fix: Replaced Tailwind gradients with inline styles to avoid 'oklab' error.
+         Fix: Replaced text gradients with standard colors.
+      */}
+      <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none" style={{ zIndex: -50, visibility: 'hidden' }}>
+         <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#050505] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 rounded-3xl" style={{ border: '8px solid #ca8a04' }}>
              
-             {/* Using standard crossorigin */}
+             {/* Safe Linear Gradient Background */}
+             <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #000000 0%, #000000 50%, #291202 100%)' }}></div>
+             
              {finalPoster && (
                <img 
                  src={finalPoster} 
                  crossOrigin="anonymous" 
-                 className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-125" 
+                 className="absolute inset-0 w-full h-full object-cover opacity-20" 
+                 style={{ filter: 'blur(20px)', transform: 'scale(1.25)' }}
                  alt="bg"
                />
              )}
              
              <div className="relative z-10 flex flex-col items-center w-full text-center space-y-6">
                 <div className="flex items-center gap-2 text-yellow-500 font-bold uppercase tracking-[0.3em] text-sm border-b border-yellow-500/30 pb-2">
-                    <Star size={14} fill="currentColor"/> Premium Access
+                    <Star size={14} fill="#eab308"/> Premium Access
                 </div>
                 
                 {finalPoster && (
                   <img 
                     src={finalPoster} 
                     crossOrigin="anonymous" 
-                    className="w-[280px] rounded-xl shadow-[0_0_40px_rgba(234,179,8,0.3)] border-2 border-white/10" 
+                    className="w-[280px] rounded-xl"
+                    style={{ 
+                        boxShadow: '0 0 40px rgba(234, 179, 8, 0.3)',
+                        border: '2px solid rgba(255,255,255,0.1)'
+                    }} 
                     alt="Poster"
                   />
                 )}
                 
+                {/* Standard Text Color (No Gradient Text to avoid parsing issues) */}
                 <h1 className="text-3xl font-black text-white leading-tight drop-shadow-lg font-serif px-2">{finalTitle}</h1>
+                
                 <div className="flex gap-4">
                     <span className="bg-white/10 px-3 py-1 rounded text-sm font-medium backdrop-blur-md">HD Quality</span>
-                    <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded text-sm font-bold flex items-center gap-1"><Star size={12} fill="currentColor"/> {finalRating}</span>
+                    <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded text-sm font-bold flex items-center gap-1"><Star size={12} fill="#facc15"/> {finalRating}</span>
                 </div>
              </div>
 
              <div className="relative z-10 w-full text-center pt-8 border-t border-white/10">
                  <p className="text-gray-400 text-sm mb-2">Streaming Now On</p>
-                 <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600">SADABEFY</h2>
+                 {/* Safe Gradient Text or just Gold Text */}
+                 <h2 className="text-3xl font-black" style={{ color: '#fbbf24' }}>SADABEFY</h2>
                  <p className="text-[10px] text-gray-500 mt-2 tracking-widest">www.sadabefy.com</p>
              </div>
          </div>
@@ -471,7 +476,7 @@ export default function MoviePage() {
           </div>
       </div>
       
-      {/* FLOATING SHARE BUTTON (Bottom Right) */}
+      {/* FLOATING SHARE BUTTON */}
       <button 
         onClick={handleGoldenShare} 
         disabled={isSharing}
