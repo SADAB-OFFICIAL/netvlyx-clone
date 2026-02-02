@@ -3,24 +3,20 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, Play, HardDrive, Download, CheckCircle, 
-  Archive, Tv, Loader2, Star, Users, AlertCircle 
+  ArrowLeft, Play, Download, CheckCircle, 
+  Archive, Tv, Star, AlertCircle, Share2, Loader2 
 } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
-import Link from 'next/link';
+// @ts-ignore
+import html2canvas from 'html2canvas';
 
 // --- ⚡ PERFORMANCE OPTIMIZED AMBIENT BACKGROUND ⚡ ---
 const AmbientBackground = ({ image }: { image: string }) => {
   if (!image) return <div className="fixed inset-0 bg-[#050505]" />;
-
-  // 🚀 TRICK: Background ke liye Low Resolution Image use karo.
-  // Blur hone ke baad HD aur Low Res me koi farak nahi dikhta, par speed 10x badh jati hai.
   const optimizedImage = image.replace('original', 'w500').replace('w780', 'w500');
 
   return (
     <div className="fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none bg-[#050505]">
-      
-      {/* 1. Static Blur Layer (GPU Friendly) */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -28,40 +24,28 @@ const AmbientBackground = ({ image }: { image: string }) => {
         className="absolute inset-0 w-full h-full"
       >
         <motion.div 
-           // ⚡ Optimized Animation: Sirf Opacity animate karo, Scale kam karo.
-           // `will-change-transform` browser ko batata hai ki GPU use karo.
-           animate={{ 
-             opacity: [0.4, 0.6, 0.4],
-             scale: [1, 1.1, 1] 
-           }}
+           animate={{ opacity: [0.4, 0.6, 0.4], scale: [1, 1.1, 1] }}
            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
            className="absolute inset-0 bg-cover bg-center will-change-transform"
            style={{ 
              backgroundImage: `url(${optimizedImage})`,
-             // Filter ko thoda lighten kiya hai taaki rendering fast ho
              filter: 'blur(60px) saturate(200%) brightness(0.6)' 
            }}
         />
       </motion.div>
-
-      {/* 2. Static Gradients (No Animation = No Lag) */}
       <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/50 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/40 via-transparent to-[#050505]/90" />
-      
-      {/* 3. Noise Texture (Static Image) */}
       <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] brightness-100 contrast-150 mix-blend-overlay"></div>
     </div>
   );
 };
 
-// --- SKELETON COMPONENT ---
 const MovieSkeleton = () => (
   <div className="min-h-screen bg-[#050505] animate-pulse">
       <div className="relative w-full h-[85vh] bg-gray-900/20">
           <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 flex flex-col items-center justify-end space-y-6">
               <div className="h-6 w-24 bg-gray-800 rounded-full"></div>
               <div className="h-12 md:h-20 w-3/4 max-w-3xl bg-gray-800 rounded-lg"></div>
-              <div className="h-4 w-full max-w-2xl bg-gray-800 rounded"></div>
           </div>
       </div>
   </div>
@@ -71,12 +55,14 @@ export default function MoviePage() {
   const { slug } = useParams();
   const router = useRouter();
   const downloadRef = useRef<HTMLDivElement>(null);
+  const ticketRef = useRef<HTMLDivElement>(null); // Ref for Golden Ticket
 
   // Data States
   const [data, setData] = useState<any>(null);
   const [tmdbData, setTmdbData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isSharing, setIsSharing] = useState(false); // Share loading state
 
   // Filter States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -121,27 +107,22 @@ export default function MoviePage() {
     fetchData();
   }, [movieUrl]);
 
-  // 2. FETCH TMDB (Fallback)
+  // 2. FETCH TMDB
   useEffect(() => {
     if (!data) return;
-    
     let apiUrl = '';
-    if (data.imdbId) {
-        apiUrl = `/api/tmdb-details?imdb_id=${data.imdbId}`;
-    } else if (data.title) {
+    if (data.imdbId) apiUrl = `/api/tmdb-details?imdb_id=${data.imdbId}`;
+    else if (data.title) {
         apiUrl = `/api/tmdb-details?query=${encodeURIComponent(data.title)}`;
         if (data.year) apiUrl += `&year=${data.year}`;
     }
-
     if (apiUrl) {
         fetch(apiUrl)
             .then(res => res.json())
             .then(res => { if (res.found) setTmdbData(res); })
             .catch(err => console.error("TMDB Error", err))
             .finally(() => setLoading(false));
-    } else {
-        setLoading(false);
-    }
+    } else setLoading(false);
   }, [data]);
 
   const finalTitle = tmdbData?.title || data?.title;
@@ -151,9 +132,46 @@ export default function MoviePage() {
   const finalRating = tmdbData?.rating;
   const trailerKey = tmdbData?.trailerKey;
 
-  const galleryImages = (data?.screenshots && data.screenshots.length > 0) 
-      ? data.screenshots 
-      : tmdbData?.images;
+  const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
+
+  // --- SHARE FUNCTION ---
+  const handleGoldenShare = async () => {
+    if (!ticketRef.current || isSharing) return;
+    setIsSharing(true);
+    
+    try {
+        // Generate Image from Hidden Div
+        const canvas = await html2canvas(ticketRef.current, {
+            useCORS: true, // Important for external images
+            scale: 2, // High Quality
+            backgroundColor: null,
+        });
+
+        const image = canvas.toDataURL("image/png");
+        const blob = await (await fetch(image)).blob();
+        const file = new File([blob], "netvlyx_ticket.png", { type: "image/png" });
+
+        // Native Share (Mobile)
+        if (navigator.share) {
+            await navigator.share({
+                title: `Watch ${finalTitle}`,
+                text: `Check out ${finalTitle} on SADABEFY!`,
+                files: [file],
+            });
+        } else {
+            // Desktop Fallback (Download)
+            const link = document.createElement("a");
+            link.href = image;
+            link.download = `SADABEFY_Ticket_${finalTitle.substring(0,10)}.png`;
+            link.click();
+        }
+    } catch (err) {
+        console.error("Share failed", err);
+        alert("Sharing failed on this device.");
+    } finally {
+        setIsSharing(false);
+    }
+  };
 
   // --- FILTER LOGIC ---
   const getFilteredData = () => {
@@ -177,7 +195,6 @@ export default function MoviePage() {
       validSections.forEach((sec: any) => {
           sec.links.forEach((link: any) => {
               const isBatch = (link.isZip === true) || /batch|zip|pack|complete|volume|collection/i.test(sec.title + " " + link.label);
-
               if (actionType === 'download') {
                   if (downloadType === 'bulk' && !isBatch) return;
                   if (downloadType === 'episode' && isBatch) return;
@@ -196,7 +213,6 @@ export default function MoviePage() {
               allLinks.push({ ...link, quality: q, size: sec.size || link.size, sectionTitle: sec.title });
           });
       });
-
       return { links: allLinks, qualities: Array.from(qualSet).sort((a,b) => ['4K','1080p','720p','480p','Standard'].indexOf(a) - ['4K','1080p','720p','480p','Standard'].indexOf(b)) };
   };
 
@@ -209,7 +225,6 @@ export default function MoviePage() {
   const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
 
   const handleLinkClick = (url: string) => {
-    if (!url) return;
     try {
         const safeTitle = finalTitle ? finalTitle.replace(/[^\x00-\x7F]/g, "") : "Unknown Title";
         const payload = { link: url, title: safeTitle, poster: finalPoster || "", quality: selectedQuality };
@@ -233,7 +248,6 @@ export default function MoviePage() {
       else router.back();
   };
 
-  // --- Animation Variants ---
   const sectionVariant: Variants = {
     hidden: { opacity: 0, y: 10 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
@@ -251,9 +265,36 @@ export default function MoviePage() {
 
   return (
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
-      
-      {/* 🌟 OPTIMIZED AMBIENT BACKGROUND 🌟 */}
       <AmbientBackground image={finalPoster} />
+
+      {/* --- HIDDEN GOLDEN TICKET GENERATOR (Off-screen) --- */}
+      <div className="absolute top-0 left-[-9999px]">
+         <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#0a0a0a] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 border-[8px] border-yellow-600/50 rounded-3xl">
+             {/* Background Glow */}
+             <div className="absolute inset-0 bg-gradient-to-br from-black via-black to-yellow-900/20"></div>
+             <img src={finalPoster} className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-125" alt="bg"/>
+             
+             {/* Content */}
+             <div className="relative z-10 flex flex-col items-center w-full text-center space-y-6">
+                <div className="flex items-center gap-2 text-yellow-500 font-bold uppercase tracking-[0.3em] text-sm border-b border-yellow-500/30 pb-2">
+                    <Star size={14} fill="currentColor"/> Premium Access
+                </div>
+                <img src={finalPoster} className="w-[280px] rounded-xl shadow-[0_0_40px_rgba(234,179,8,0.3)] border-2 border-white/10" alt="Poster"/>
+                <h1 className="text-4xl font-black text-white leading-tight drop-shadow-lg font-serif">{finalTitle}</h1>
+                <div className="flex gap-4">
+                    <span className="bg-white/10 px-3 py-1 rounded text-sm font-medium backdrop-blur-md">HD Quality</span>
+                    <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded text-sm font-bold flex items-center gap-1"><Star size={12} fill="currentColor"/> {finalRating}</span>
+                </div>
+             </div>
+
+             {/* Footer Branding */}
+             <div className="relative z-10 w-full text-center pt-8 border-t border-white/10">
+                 <p className="text-gray-400 text-sm mb-2">Streaming Now On</p>
+                 <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600">SADABEFY</h2>
+                 <p className="text-[10px] text-gray-500 mt-2 tracking-widest">www.sadabefy.com</p>
+             </div>
+         </div>
+      </div>
 
       {/* 1. HERO SECTION */}
       <div className="relative w-full h-[80vh] md:h-[90vh] z-10">
@@ -280,22 +321,22 @@ export default function MoviePage() {
                   {finalTitle}
               </h1>
 
-              <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md animate-fade-in delay-100">
-                  {finalOverview}
-              </p>
-
-              <div className="flex gap-4 relative z-50 animate-fade-in delay-200">
-                  <button 
-                    onClick={() => handleHeroAction('watch')}
-                    className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer active:scale-95"
-                  >
+              <div className="flex flex-wrap justify-center gap-4 relative z-50 animate-fade-in delay-200">
+                  <button onClick={() => handleHeroAction('watch')} className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer active:scale-95">
                       <Play className="fill-current" size={20}/> Watch Now
                   </button>
-                  <button 
-                    onClick={() => handleHeroAction('download')}
-                    className="bg-white/10 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-white/20 transition-all duration-300 hover:scale-105 cursor-pointer active:scale-95 hover:shadow-lg"
-                  >
+                  <button onClick={() => handleHeroAction('download')} className="bg-white/10 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-white/20 transition-all duration-300 hover:scale-105 cursor-pointer active:scale-95 hover:shadow-lg">
                       <Download size={20}/> Download
+                  </button>
+                  
+                  {/* ✨ NEW GOLDEN SHARE BUTTON ✨ */}
+                  <button 
+                    onClick={handleGoldenShare} 
+                    disabled={isSharing}
+                    className="bg-gradient-to-r from-yellow-600 to-amber-700 text-white px-6 py-3.5 rounded-full font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 cursor-pointer active:scale-95 shadow-lg border border-yellow-500/40 hover:brightness-110 disabled:opacity-70 disabled:cursor-wait"
+                  >
+                      {isSharing ? <Loader2 size={20} className="animate-spin"/> : <Share2 size={20}/>} 
+                      {isSharing ? 'Generating...' : 'Share Ticket'}
                   </button>
               </div>
           </div>
@@ -310,7 +351,6 @@ export default function MoviePage() {
       </div>
 
       <div className="relative z-20 max-w-6xl mx-auto px-4 md:px-8 space-y-16">
-          
           {trailerKey && (
               <div>
                   <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-red-600 pl-3">Official Trailer</h2>
@@ -344,13 +384,7 @@ export default function MoviePage() {
 
                   <AnimatePresence mode="wait">
                     {(selectedSeason || actionType) && (
-                       <motion.div 
-                         initial={{ opacity: 0, height: 0 }}
-                         animate={{ opacity: 1, height: 'auto' }}
-                         exit={{ opacity: 0, height: 0 }}
-                         transition={{ duration: 0.2 }}
-                         className="flex items-center justify-between mb-8 pb-4 border-b border-white/10"
-                       >
+                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }} className="flex items-center justify-between mb-8 pb-4 border-b border-white/10">
                           <button onClick={goBackStep} className="text-sm text-gray-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer hover:underline hover:scale-105 transform"><ArrowLeft size={16}/> Go Back</button>
                           <div className="text-xs font-mono text-gray-500 uppercase tracking-widest">{selectedSeason ? `S${selectedSeason}` : ''} {actionType ? `/ ${actionType}` : ''} {selectedQuality ? `/ ${selectedQuality}` : ''}</div>
                        </motion.div>
@@ -359,13 +393,7 @@ export default function MoviePage() {
 
                   <AnimatePresence mode="wait">
                     {availableSeasons.length > 0 && selectedSeason === null && (
-                         <motion.div 
-                            key="season-selector"
-                            variants={sectionVariant}
-                            initial="hidden"
-                            animate="visible"
-                            exit="exit"
-                         >
+                         <motion.div key="season-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit">
                             <h3 className="text-lg font-semibold text-gray-400 mb-4 flex items-center gap-2"><Tv size={18}/> Select Season</h3>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                                 {availableSeasons.map(s => (
@@ -376,14 +404,7 @@ export default function MoviePage() {
                     )}
 
                     {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
-                        <motion.div 
-                            key="action-selector"
-                            variants={sectionVariant}
-                            initial="hidden"
-                            animate="visible"
-                            exit="exit"
-                            className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto"
-                        >
+                        <motion.div key="action-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
                             <button onClick={() => setActionType('download')} className="p-8 bg-gradient-to-br from-blue-600/20 to-blue-900/20 border border-blue-500/30 rounded-2xl hover:border-blue-400 transition-all duration-300 text-center cursor-pointer group hover:shadow-blue-500/20 shadow-lg hover:scale-[1.02] active:scale-95">
                                 <h3 className="text-2xl font-bold text-white group-hover:scale-110 transition-transform duration-300">Download</h3>
                             </button>
@@ -394,27 +415,14 @@ export default function MoviePage() {
                     )}
 
                     {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
-                        <motion.div 
-                            key="type-selector"
-                            variants={sectionVariant}
-                            initial="hidden"
-                            animate="visible"
-                            exit="exit"
-                            className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto"
-                        >
+                        <motion.div key="type-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
                             <button onClick={() => setDownloadType('episode')} className="p-6 bg-white/5 rounded-xl font-bold text-xl hover:bg-white/15 border border-white/10 transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer hover:scale-[1.02] active:scale-95 shadow-md"><Tv size={24} className="text-purple-400"/> Episode Wise</button>
                             <button onClick={() => setDownloadType('bulk')} className="p-6 bg-white/5 rounded-xl font-bold text-xl hover:bg-white/15 border border-white/10 transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer hover:scale-[1.02] active:scale-95 shadow-md"><Archive size={24} className="text-orange-400"/> Bulk / Zip</button>
                         </motion.div>
                     )}
 
                     {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
-                        <motion.div 
-                            key="quality-selector"
-                            variants={sectionVariant}
-                            initial="hidden"
-                            animate="visible"
-                            exit="exit"
-                        >
+                        <motion.div key="quality-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit">
                             <h3 className="text-lg font-semibold text-gray-400 mb-4 text-center">Select Quality</h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-3xl mx-auto">
                                 {currentQualities.length > 0 ? currentQualities.map(q => (
@@ -425,14 +433,7 @@ export default function MoviePage() {
                     )}
 
                     {selectedQuality !== null && (
-                        <motion.div 
-                            key="links-list"
-                            variants={sectionVariant}
-                            initial="hidden"
-                            animate="visible"
-                            exit="exit"
-                            className="space-y-3 max-w-3xl mx-auto"
-                        >
+                        <motion.div key="links-list" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="space-y-3 max-w-3xl mx-auto">
                             <h3 className="text-green-400 font-bold mb-4 flex items-center gap-2"><CheckCircle size={20}/> Available Links</h3>
                             {displayLinks.length > 0 ? displayLinks.map((link: any, idx: number) => (
                                 <button key={idx} onClick={() => handleLinkClick(link.url)} className="w-full text-left p-4 bg-black/40 hover:bg-white/5 border border-white/10 rounded-xl flex items-center justify-between group transition-all duration-200 cursor-pointer hover:border-white/20 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99]">
@@ -450,10 +451,7 @@ export default function MoviePage() {
           </div>
       </div>
       
-      <button 
-        className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 backdrop-blur-sm border border-red-400/20 cursor-pointer" 
-        title="Report a Bug"
-      >
+      <button className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 backdrop-blur-sm border border-red-400/20 cursor-pointer" title="Report a Bug">
         <div className="w-6 h-6 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
         </div>
