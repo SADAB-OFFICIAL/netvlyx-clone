@@ -10,7 +10,7 @@ import { motion, AnimatePresence, Variants } from 'framer-motion';
 // @ts-ignore
 import html2canvas from 'html2canvas';
 
-// --- ⚡ PERFORMANCE OPTIMIZED AMBIENT BACKGROUND ⚡ ---
+// --- ⚡ PERFORMANCE OPTIMIZED AMBIENT BACKGROUND (Same as you liked) ⚡ ---
 const AmbientBackground = ({ image }: { image: string }) => {
   if (!image) return <div className="fixed inset-0 bg-[#050505]" />;
   const optimizedImage = image.replace('original', 'w500').replace('w780', 'w500');
@@ -40,6 +40,7 @@ const AmbientBackground = ({ image }: { image: string }) => {
   );
 };
 
+// --- SKELETON ---
 const MovieSkeleton = () => (
   <div className="min-h-screen bg-[#050505] animate-pulse">
       <div className="relative w-full h-[85vh] bg-gray-900/20">
@@ -55,14 +56,14 @@ export default function MoviePage() {
   const { slug } = useParams();
   const router = useRouter();
   const downloadRef = useRef<HTMLDivElement>(null);
-  const ticketRef = useRef<HTMLDivElement>(null); // Ref for Golden Ticket
+  const ticketRef = useRef<HTMLDivElement>(null);
 
   // Data States
   const [data, setData] = useState<any>(null);
   const [tmdbData, setTmdbData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isSharing, setIsSharing] = useState(false); // Share loading state
+  const [isSharing, setIsSharing] = useState(false); // For Loading Spinner
 
   // Filter States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -134,46 +135,57 @@ export default function MoviePage() {
 
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- SHARE FUNCTION ---
+  // --- 🛠️ FIXED SHARE FUNCTION 🛠️ ---
   const handleGoldenShare = async () => {
     if (!ticketRef.current || isSharing) return;
     setIsSharing(true);
     
     try {
-        // Generate Image from Hidden Div
+        // Step 1: Canvas generation with CORS allowed
         const canvas = await html2canvas(ticketRef.current, {
-            useCORS: true, // Important for external images
-            scale: 2, // High Quality
-            backgroundColor: null,
+            useCORS: true, // Fix for "Tainted Canvas"
+            allowTaint: true,
+            scale: 2, 
+            backgroundColor: '#000000', // Ensure black bg
         });
 
-        const image = canvas.toDataURL("image/png");
+        const image = canvas.toDataURL("image/jpeg", 0.9);
         const blob = await (await fetch(image)).blob();
-        const file = new File([blob], "netvlyx_ticket.png", { type: "image/png" });
+        const file = new File([blob], "netvlyx_ticket.jpg", { type: "image/jpeg" });
 
-        // Native Share (Mobile)
+        // Step 2: Try Sharing
         if (navigator.share) {
             await navigator.share({
-                title: `Watch ${finalTitle}`,
-                text: `Check out ${finalTitle} on SADABEFY!`,
+                title: finalTitle,
+                text: `Watch ${finalTitle} on SADABEFY!`,
                 files: [file],
             });
         } else {
-            // Desktop Fallback (Download)
+            // Step 3: Desktop Fallback (Download)
             const link = document.createElement("a");
             link.href = image;
-            link.download = `SADABEFY_Ticket_${finalTitle.substring(0,10)}.png`;
+            link.download = `SADABEFY_Ticket_${finalTitle.substring(0,10)}.jpg`;
             link.click();
         }
     } catch (err) {
         console.error("Share failed", err);
-        alert("Sharing failed on this device.");
+        // Fallback: If share fails, just download the image
+        try {
+            const canvas = await html2canvas(ticketRef.current, { useCORS: true, allowTaint: true });
+            const image = canvas.toDataURL("image/jpeg");
+            const link = document.createElement("a");
+            link.href = image;
+            link.download = `SADABEFY_Card.jpg`;
+            link.click();
+        } catch (e) {
+            alert("Could not generate ticket. Please try again.");
+        }
     } finally {
         setIsSharing(false);
     }
   };
 
-  // --- FILTER LOGIC ---
+  // --- FILTER LOGIC (Unchanged) ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
@@ -267,27 +279,25 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- HIDDEN GOLDEN TICKET GENERATOR (Off-screen) --- */}
-      <div className="absolute top-0 left-[-9999px]">
-         <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#0a0a0a] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 border-[8px] border-yellow-600/50 rounded-3xl">
-             {/* Background Glow */}
+      {/* --- HIDDEN GOLDEN TICKET GENERATOR (Off-screen but Rendered) --- */}
+      <div className="fixed top-0 left-[-9999px] z-[-1]">
+         <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#050505] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 border-[8px] border-yellow-600/50 rounded-3xl">
              <div className="absolute inset-0 bg-gradient-to-br from-black via-black to-yellow-900/20"></div>
-             <img src={finalPoster} className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-125" alt="bg"/>
+             {/* CrossOrigin added to images to fix share failure */}
+             {finalPoster && <img src={finalPoster} crossOrigin="anonymous" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-125" alt="bg"/>}
              
-             {/* Content */}
              <div className="relative z-10 flex flex-col items-center w-full text-center space-y-6">
                 <div className="flex items-center gap-2 text-yellow-500 font-bold uppercase tracking-[0.3em] text-sm border-b border-yellow-500/30 pb-2">
                     <Star size={14} fill="currentColor"/> Premium Access
                 </div>
-                <img src={finalPoster} className="w-[280px] rounded-xl shadow-[0_0_40px_rgba(234,179,8,0.3)] border-2 border-white/10" alt="Poster"/>
-                <h1 className="text-4xl font-black text-white leading-tight drop-shadow-lg font-serif">{finalTitle}</h1>
+                {finalPoster && <img src={finalPoster} crossOrigin="anonymous" className="w-[280px] rounded-xl shadow-[0_0_40px_rgba(234,179,8,0.3)] border-2 border-white/10" alt="Poster"/>}
+                <h1 className="text-3xl font-black text-white leading-tight drop-shadow-lg font-serif px-2">{finalTitle}</h1>
                 <div className="flex gap-4">
                     <span className="bg-white/10 px-3 py-1 rounded text-sm font-medium backdrop-blur-md">HD Quality</span>
                     <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded text-sm font-bold flex items-center gap-1"><Star size={12} fill="currentColor"/> {finalRating}</span>
                 </div>
              </div>
 
-             {/* Footer Branding */}
              <div className="relative z-10 w-full text-center pt-8 border-t border-white/10">
                  <p className="text-gray-400 text-sm mb-2">Streaming Now On</p>
                  <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600">SADABEFY</h2>
@@ -296,7 +306,7 @@ export default function MoviePage() {
          </div>
       </div>
 
-      {/* 1. HERO SECTION */}
+      {/* 1. HERO SECTION (Restored to Original Clean Look) */}
       <div className="relative w-full h-[80vh] md:h-[90vh] z-10">
           <div className="absolute inset-0 pointer-events-none">
               <div className="w-full h-full bg-cover bg-center opacity-40 mask-image-gradient" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
@@ -327,16 +337,6 @@ export default function MoviePage() {
                   </button>
                   <button onClick={() => handleHeroAction('download')} className="bg-white/10 backdrop-blur-md text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 border border-white/20 hover:bg-white/20 transition-all duration-300 hover:scale-105 cursor-pointer active:scale-95 hover:shadow-lg">
                       <Download size={20}/> Download
-                  </button>
-                  
-                  {/* ✨ NEW GOLDEN SHARE BUTTON ✨ */}
-                  <button 
-                    onClick={handleGoldenShare} 
-                    disabled={isSharing}
-                    className="bg-gradient-to-r from-yellow-600 to-amber-700 text-white px-6 py-3.5 rounded-full font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 cursor-pointer active:scale-95 shadow-lg border border-yellow-500/40 hover:brightness-110 disabled:opacity-70 disabled:cursor-wait"
-                  >
-                      {isSharing ? <Loader2 size={20} className="animate-spin"/> : <Share2 size={20}/>} 
-                      {isSharing ? 'Generating...' : 'Share Ticket'}
                   </button>
               </div>
           </div>
@@ -451,9 +451,16 @@ export default function MoviePage() {
           </div>
       </div>
       
-      <button className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 backdrop-blur-sm border border-red-400/20 cursor-pointer" title="Report a Bug">
+      {/* 🚀 REPLACED BUG BUTTON WITH SHARE TICKET BUTTON (Floating Bottom Right) 🚀 */}
+      <button 
+        onClick={handleGoldenShare} 
+        disabled={isSharing}
+        className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-yellow-600 to-amber-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 backdrop-blur-sm border border-yellow-500/40 cursor-pointer hover:brightness-110 active:scale-95 disabled:opacity-70 disabled:cursor-wait group" 
+        title="Share Golden Ticket"
+      >
         <div className="w-6 h-6 flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
+            {/* Spinning Loader or Share Icon */}
+            {isSharing ? <Loader2 className="animate-spin" size={24}/> : <Share2 className="w-6 h-6 group-hover:text-yellow-100" />}
         </div>
       </button>
 
