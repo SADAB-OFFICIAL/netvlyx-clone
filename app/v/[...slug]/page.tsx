@@ -9,16 +9,18 @@ import {
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import Link from 'next/link';
 
-// --- 🌟 ULTRA-VISIBLE AMBIENT BACKGROUND 🌟 ---
+// --- ⚡ PERFORMANCE OPTIMIZED AMBIENT BACKGROUND ⚡ ---
 const AmbientBackground = ({ image }: { image: string }) => {
-  const bgImage = image; 
+  if (!image) return <div className="fixed inset-0 bg-[#050505]" />;
 
-  if (!bgImage) return <div className="fixed inset-0 bg-[#050505]" />;
+  // 🚀 TRICK: Background ke liye Low Resolution Image use karo.
+  // Blur hone ke baad HD aur Low Res me koi farak nahi dikhta, par speed 10x badh jati hai.
+  const optimizedImage = image.replace('original', 'w500').replace('w780', 'w500');
 
   return (
-    <div className="fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none">
+    <div className="fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none bg-[#050505]">
       
-      {/* 1. Main Color Layer (Bright & Breathing) */}
+      {/* 1. Static Blur Layer (GPU Friendly) */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -26,28 +28,28 @@ const AmbientBackground = ({ image }: { image: string }) => {
         className="absolute inset-0 w-full h-full"
       >
         <motion.div 
+           // ⚡ Optimized Animation: Sirf Opacity animate karo, Scale kam karo.
+           // `will-change-transform` browser ko batata hai ki GPU use karo.
            animate={{ 
-             scale: [1, 1.25, 1], 
-             opacity: [0.5, 0.8, 0.5] // Opacity badha di hai taaki clear dikhe
+             opacity: [0.4, 0.6, 0.4],
+             scale: [1, 1.1, 1] 
            }}
-           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-           className="absolute inset-0 bg-cover bg-center"
+           transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+           className="absolute inset-0 bg-cover bg-center will-change-transform"
            style={{ 
-             backgroundImage: `url(${bgImage})`,
-             filter: 'blur(80px) saturate(250%) contrast(110%)' // High Saturation for vivid colors
+             backgroundImage: `url(${optimizedImage})`,
+             // Filter ko thoda lighten kiya hai taaki rendering fast ho
+             filter: 'blur(60px) saturate(200%) brightness(0.6)' 
            }}
         />
       </motion.div>
 
-      {/* 2. Texture Overlay (Optional glass noise) */}
-      <div className="absolute inset-0 bg-black/10 mix-blend-overlay" />
-
-      {/* 3. Gradients (Content Readable banane ke liye) */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/20 to-transparent" />
+      {/* 2. Static Gradients (No Animation = No Lag) */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/50 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/40 via-transparent to-[#050505]/90" />
       
-      {/* Footer Blend */}
-      <div className="absolute bottom-0 left-0 w-full h-1/3 bg-gradient-to-t from-[#050505] to-transparent" />
+      {/* 3. Noise Texture (Static Image) */}
+      <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] brightness-100 contrast-150 mix-blend-overlay"></div>
     </div>
   );
 };
@@ -60,10 +62,6 @@ const MovieSkeleton = () => (
               <div className="h-6 w-24 bg-gray-800 rounded-full"></div>
               <div className="h-12 md:h-20 w-3/4 max-w-3xl bg-gray-800 rounded-lg"></div>
               <div className="h-4 w-full max-w-2xl bg-gray-800 rounded"></div>
-              <div className="flex gap-4 pt-4">
-                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div>
-                  <div className="h-14 w-40 bg-gray-800 rounded-full"></div>
-              </div>
           </div>
       </div>
   </div>
@@ -153,7 +151,6 @@ export default function MoviePage() {
   const finalRating = tmdbData?.rating;
   const trailerKey = tmdbData?.trailerKey;
 
-  // 📸 SCREENSHOT LOGIC
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) 
       ? data.screenshots 
       : tmdbData?.images;
@@ -253,17 +250,16 @@ export default function MoviePage() {
   );
 
   return (
-    // ✨ MAIN BG TRANSPARENT SO AMBIENT SHOWS ✨
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       
-      {/* 🌟 AMBIENT BACKGROUND LAYER 🌟 */}
+      {/* 🌟 OPTIMIZED AMBIENT BACKGROUND 🌟 */}
       <AmbientBackground image={finalPoster} />
 
       {/* 1. HERO SECTION */}
       <div className="relative w-full h-[80vh] md:h-[90vh] z-10">
           <div className="absolute inset-0 pointer-events-none">
-              <div className="w-full h-full bg-cover bg-center opacity-30 mask-image-gradient" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent opacity-90"></div>
+              <div className="w-full h-full bg-cover bg-center opacity-40 mask-image-gradient" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050505]/80 via-transparent to-transparent"></div>
           </div>
 
           <div className="absolute top-6 left-6 z-50">
@@ -315,7 +311,6 @@ export default function MoviePage() {
 
       <div className="relative z-20 max-w-6xl mx-auto px-4 md:px-8 space-y-16">
           
-          {/* 3. TRAILER */}
           {trailerKey && (
               <div>
                   <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-red-600 pl-3">Official Trailer</h2>
@@ -325,7 +320,6 @@ export default function MoviePage() {
               </div>
           )}
 
-          {/* 4. GALLERY */}
           {galleryImages && galleryImages.length > 0 && (
               <div>
                   <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 border-l-4 border-blue-600 pl-3">Gallery</h2>
@@ -343,20 +337,11 @@ export default function MoviePage() {
               </div>
           )}
 
-          {/* =====================================================
-             5. DOWNLOAD SECTION (Glassmorphism & Fast Animation) 
-             =====================================================
-          */}
           <div id="download-section" ref={downloadRef} className="pt-10 pb-20">
-              {/* Glass Card Container (Semi-Transparent for Ambient) */}
               <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden transition-all duration-500 hover:border-white/20 group">
-                  
-                  {/* Inner Glow Blob */}
                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none animate-pulse"></div>
-                  
                   <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center text-white drop-shadow-md">Download & Watch Options</h2>
 
-                  {/* HEADER (With fast motion) */}
                   <AnimatePresence mode="wait">
                     {(selectedSeason || actionType) && (
                        <motion.div 
@@ -373,7 +358,6 @@ export default function MoviePage() {
                   </AnimatePresence>
 
                   <AnimatePresence mode="wait">
-                    {/* SEASON SELECTOR */}
                     {availableSeasons.length > 0 && selectedSeason === null && (
                          <motion.div 
                             key="season-selector"
@@ -391,7 +375,6 @@ export default function MoviePage() {
                         </motion.div>
                     )}
 
-                    {/* ACTION SELECTOR */}
                     {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
                         <motion.div 
                             key="action-selector"
@@ -410,7 +393,6 @@ export default function MoviePage() {
                         </motion.div>
                     )}
 
-                    {/* TYPE SELECTOR */}
                     {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                         <motion.div 
                             key="type-selector"
@@ -425,7 +407,6 @@ export default function MoviePage() {
                         </motion.div>
                     )}
 
-                    {/* QUALITY SELECTOR */}
                     {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
                         <motion.div 
                             key="quality-selector"
@@ -443,7 +424,6 @@ export default function MoviePage() {
                         </motion.div>
                     )}
 
-                    {/* LINKS LIST */}
                     {selectedQuality !== null && (
                         <motion.div 
                             key="links-list"
@@ -470,7 +450,6 @@ export default function MoviePage() {
           </div>
       </div>
       
-      {/* 🚀 BUG REPORT FLOATING BUTTON (Added as requested from updated code) */}
       <button 
         className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 backdrop-blur-sm border border-red-400/20 cursor-pointer" 
         title="Report a Bug"
