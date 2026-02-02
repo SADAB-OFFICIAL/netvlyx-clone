@@ -66,7 +66,7 @@ export default function MoviePage() {
   
   // Share States
   const [isSharing, setIsSharing] = useState(false);
-  const [base64Poster, setBase64Poster] = useState<string | null>(null); // CLIENT SIDE PROXY IMAGE
+  const [base64Poster, setBase64Poster] = useState<string | null>(null);
 
   // Filter States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -133,86 +133,73 @@ export default function MoviePage() {
   const finalOverview = tmdbData?.overview || data?.plot;
   const finalPoster = tmdbData?.poster || data?.poster;
   const finalBackdrop = tmdbData?.backdrop || data?.poster;
-  const finalRating = tmdbData?.rating;
+  const finalRating = tmdbData?.rating || "N/A"; // Fallback added
   const trailerKey = tmdbData?.trailerKey;
 
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- 🛠️ BRAHMASTRA SHARE FUNCTION (Client Proxy + Safe CSS) 🛠️ ---
+  // --- 🔄 AUTO PRELOAD IMAGE (FIX FOR MISSING POSTER) 🔄 ---
+  useEffect(() => {
+    if (finalPoster && !base64Poster) {
+      const convertToBase64 = async () => {
+        try {
+          const response = await fetch(finalPoster);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+             setBase64Poster(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        } catch (err) {
+          console.error("Poster preload failed", err);
+          setBase64Poster(finalPoster); // Fallback to URL
+        }
+      };
+      convertToBase64();
+    }
+  }, [finalPoster]);
+
+  // --- SHARE FUNCTION ---
   const handleGoldenShare = async () => {
-    if (isSharing) return;
+    if (isSharing || !ticketRef.current) return;
     setIsSharing(true);
 
     try {
-        // Step 1: "Apna Proxy" Logic (Convert Image to Base64)
-        // Isse CORS ka masla khatam ho jayega
-        let posterToUse = "";
-        
-        if (finalPoster) {
-            try {
-                // "no-cors" request try karte hain pehle
-                const response = await fetch(finalPoster); 
-                const blob = await response.blob();
-                
-                await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        posterToUse = reader.result as string;
-                        setBase64Poster(posterToUse); // State update
-                        resolve(true);
-                    };
-                    reader.readAsDataURL(blob);
-                });
-            } catch (imgErr) {
-                console.log("Proxy Fetch Failed, using direct link", imgErr);
-                posterToUse = finalPoster; // Fallback
-            }
+        // Short delay to ensure rendering is perfect
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const canvas = await html2canvas(ticketRef.current, {
+            useCORS: true, 
+            scale: 2, 
+            backgroundColor: '#050505', 
+            logging: false,
+            allowTaint: false,
+        });
+
+        const image = canvas.toDataURL("image/jpeg", 0.9);
+        const blob = await (await fetch(image)).blob();
+        const file = new File([blob], `SADABEFY_${finalTitle || 'Movie'}.jpg`, { type: "image/jpeg" });
+
+        if (navigator.share) {
+            await navigator.share({
+                title: finalTitle,
+                text: `Watch ${finalTitle} on SADABEFY!`,
+                files: [file],
+            });
+        } else {
+            const link = document.createElement("a");
+            link.href = image;
+            link.download = `SADABEFY_${finalTitle || 'Movie'}.jpg`;
+            link.click();
         }
-
-        // Step 2: Thoda wait karo taaki React state update ho jaye aur image render ho
-        setTimeout(async () => {
-            if (!ticketRef.current) return;
-
-            try {
-                // Step 3: Capture (Ab colors bhi safe hain aur image bhi local hai)
-                const canvas = await html2canvas(ticketRef.current, {
-                    useCORS: true, 
-                    scale: 2, 
-                    backgroundColor: '#050505', // Safe Hex Color (No oklab)
-                    logging: false,
-                });
-
-                const image = canvas.toDataURL("image/jpeg", 0.9);
-                const blob = await (await fetch(image)).blob();
-                const file = new File([blob], `SADABEFY_${finalTitle || 'Movie'}.jpg`, { type: "image/jpeg" });
-
-                if (navigator.share) {
-                    await navigator.share({
-                        title: finalTitle,
-                        text: `Watch ${finalTitle} on SADABEFY!`,
-                        files: [file],
-                    });
-                } else {
-                    const link = document.createElement("a");
-                    link.href = image;
-                    link.download = `SADABEFY_${finalTitle || 'Movie'}.jpg`;
-                    link.click();
-                }
-            } catch (err: any) {
-                alert("Share Failed: " + (err.message || "Unknown Error"));
-            } finally {
-                setIsSharing(false);
-                setBase64Poster(null); // Cleanup
-            }
-        }, 800); // 800ms delay for safe render
-
-    } catch (e) {
+    } catch (err: any) {
+        alert("Share Failed: " + (err.message || "Unknown Error"));
+    } finally {
         setIsSharing(false);
-        alert("Something went wrong.");
     }
   };
 
-  // --- FILTER LOGIC ---
+  // --- FILTER LOGIC (UNCHANGED) ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
@@ -306,23 +293,20 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- HIDDEN TICKET (SAFE MODE) --- */}
-      {/* 1. Maine Tailwind hata diya hai yahan se taaki 'oklab' error na aaye.
-          2. Inline Styles use kiye hain (Hex colors).
-          3. Image 'base64Poster' use karegi agar available hai (Proxy Bypass).
-      */}
-      <div className="fixed top-0 left-[-9999px] z-[-1]" style={{ width: '400px', height: '700px' }}>
+      {/* --- HIDDEN TICKET (ALWAYS RENDERED WITH BASE64) --- */}
+      {/* Opacity 0 makes it invisible but rendered. zIndex ensures it doesn't block clicks. */}
+      <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none opacity-0" style={{ zIndex: -50 }}>
          <div ref={ticketRef} className="w-[400px] h-[700px] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8" 
               style={{ 
                   backgroundColor: '#050505', 
-                  border: '8px solid #ca8a04', // Gold Border
+                  border: '8px solid #ca8a04',
                   borderRadius: '24px'
               }}>
              
-             {/* Safe Background */}
+             {/* Background Gradient */}
              <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)' }}></div>
              
-             {/* Background Image (Proxy Bypass) */}
+             {/* BG Image using Preloaded Base64 */}
              {(base64Poster || finalPoster) && (
                <img 
                  src={base64Poster || finalPoster} 
@@ -342,7 +326,7 @@ export default function MoviePage() {
                     <Star size={14} fill="#eab308"/> Premium Access
                 </div>
                 
-                {/* Main Poster (Proxy Bypass) */}
+                {/* Main Poster using Preloaded Base64 */}
                 {(base64Poster || finalPoster) && (
                   <img 
                     src={base64Poster || finalPoster} 
@@ -356,11 +340,11 @@ export default function MoviePage() {
                   />
                 )}
                 
-                {/* Text (Standard Color) */}
                 <h1 style={{ fontSize: '30px', fontWeight: '900', color: '#ffffff', fontFamily: 'serif', lineHeight: '1.1' }}>{finalTitle}</h1>
                 
-                <div style={{ display: 'flex', gap: '16px' }}>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '4px', fontSize: '14px', color: '#ffffff' }}>HD Quality</span>
+                    {/* Explicit Check for Rating */}
                     <span style={{ background: 'rgba(234, 179, 8, 0.2)', color: '#facc15', padding: '4px 12px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                          <Star size={12} fill="#facc15"/> {finalRating}
                     </span>
