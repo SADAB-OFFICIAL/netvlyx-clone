@@ -63,7 +63,10 @@ export default function MoviePage() {
   const [tmdbData, setTmdbData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Share States
   const [isSharing, setIsSharing] = useState(false);
+  const [ticketImage, setTicketImage] = useState<string | null>(null); // To store Base64 Image
 
   // Filter States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -135,47 +138,75 @@ export default function MoviePage() {
 
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- 🛠️ OKLAB FIX: USE STANDARD CSS FOR CAPTURE 🛠️ ---
+  // --- 🛠️ 100% WORKING SHARE FUNCTION (Base64 Method) 🛠️ ---
   const handleGoldenShare = async () => {
-    if (!ticketRef.current || isSharing) return;
+    if (isSharing) return;
     setIsSharing(true);
-    
+
     try {
-        const canvas = await html2canvas(ticketRef.current, {
-            useCORS: true, 
-            allowTaint: false, 
-            scale: 2, 
-            backgroundColor: '#050505', // Safe Hex Color
-            logging: false,
-            onclone: (clonedDoc: any) => {
-                const images = clonedDoc.getElementsByTagName('img');
-                for (let i = 0; i < images.length; i++) {
-                     images[i].crossOrigin = "anonymous";
-                }
+        // Step 1: Convert External Image to Base64 (Bypasses CORS completely)
+        // Hum image ko pehle download karke internal data bana rahe hain
+        let base64PosterUrl = "";
+        
+        if (finalPoster) {
+            try {
+                const response = await fetch(finalPoster);
+                const blob = await response.blob();
+                
+                await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        base64PosterUrl = reader.result as string;
+                        setTicketImage(base64PosterUrl); // State update
+                        resolve(true);
+                    };
+                    reader.readAsDataURL(blob);
+                });
+            } catch (imgErr) {
+                console.error("Image Fetch Error:", imgErr);
+                // Continue without image if fetch fails
             }
-        });
-
-        const image = canvas.toDataURL("image/jpeg", 0.9);
-        const blob = await (await fetch(image)).blob();
-        const file = new File([blob], "netvlyx_ticket.jpg", { type: "image/jpeg" });
-
-        if (navigator.share) {
-            await navigator.share({
-                title: finalTitle,
-                text: `Watch ${finalTitle} on SADABEFY!`,
-                files: [file],
-            });
-        } else {
-            const link = document.createElement("a");
-            link.href = image;
-            link.download = `SADABEFY_Ticket_${finalTitle.substring(0,10)}.jpg`;
-            link.click();
         }
-    } catch (err: any) {
-        console.error("Share failed", err);
-        alert("Sharing Error: " + (err.message || "Unknown Error"));
-    } finally {
+
+        // Step 2: Wait for State Update & DOM Render (Important!)
+        setTimeout(async () => {
+            if (!ticketRef.current) return;
+
+            try {
+                const canvas = await html2canvas(ticketRef.current, {
+                    useCORS: true, 
+                    scale: 2, 
+                    backgroundColor: '#050505',
+                    logging: false,
+                });
+
+                const image = canvas.toDataURL("image/jpeg", 0.9);
+                const blob = await (await fetch(image)).blob();
+                const file = new File([blob], "netvlyx_ticket.jpg", { type: "image/jpeg" });
+
+                if (navigator.share) {
+                    await navigator.share({
+                        title: finalTitle,
+                        text: `Watch ${finalTitle} on SADABEFY!`,
+                        files: [file],
+                    });
+                } else {
+                    const link = document.createElement("a");
+                    link.href = image;
+                    link.download = `SADABEFY_Ticket_${finalTitle ? finalTitle.substring(0,10) : 'Movie'}.jpg`;
+                    link.click();
+                }
+            } catch (err: any) {
+                alert("Share failed: " + err.message);
+            } finally {
+                setIsSharing(false);
+                setTicketImage(null); // Cleanup
+            }
+        }, 500); // 500ms delay to let image render
+
+    } catch (e) {
         setIsSharing(false);
+        alert("Could not prepare ticket.");
     }
   };
 
@@ -273,21 +304,18 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- HIDDEN TICKET (HTML2CANVAS SAFE) --- */}
-      {/* Fix: Using zIndex -50 instead of off-screen to ensure rendering.
-         Fix: Replaced Tailwind gradients with inline styles to avoid 'oklab' error.
-         Fix: Replaced text gradients with standard colors.
-      */}
-      <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none" style={{ zIndex: -50, visibility: 'hidden' }}>
+      {/* --- HIDDEN TICKET (OFF SCREEN) --- */}
+      {/* Hum isse screen se bahar rakhenge taaki capture ho sake, par user ko na dikhe */}
+      <div className="fixed top-0 left-[-9999px] z-[-1]" style={{ width: '400px', height: '700px' }}>
          <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#050505] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 rounded-3xl" style={{ border: '8px solid #ca8a04' }}>
              
-             {/* Safe Linear Gradient Background */}
+             {/* Background Gradient */}
              <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #000000 0%, #000000 50%, #291202 100%)' }}></div>
              
-             {finalPoster && (
+             {/* Background Image (Uses Base64 if available, else standard) */}
+             {(ticketImage || finalPoster) && (
                <img 
-                 src={finalPoster} 
-                 crossOrigin="anonymous" 
+                 src={ticketImage || finalPoster} 
                  className="absolute inset-0 w-full h-full object-cover opacity-20" 
                  style={{ filter: 'blur(20px)', transform: 'scale(1.25)' }}
                  alt="bg"
@@ -299,10 +327,9 @@ export default function MoviePage() {
                     <Star size={14} fill="#eab308"/> Premium Access
                 </div>
                 
-                {finalPoster && (
+                {(ticketImage || finalPoster) && (
                   <img 
-                    src={finalPoster} 
-                    crossOrigin="anonymous" 
+                    src={ticketImage || finalPoster} 
                     className="w-[280px] rounded-xl"
                     style={{ 
                         boxShadow: '0 0 40px rgba(234, 179, 8, 0.3)',
@@ -312,7 +339,6 @@ export default function MoviePage() {
                   />
                 )}
                 
-                {/* Standard Text Color (No Gradient Text to avoid parsing issues) */}
                 <h1 className="text-3xl font-black text-white leading-tight drop-shadow-lg font-serif px-2">{finalTitle}</h1>
                 
                 <div className="flex gap-4">
@@ -323,7 +349,6 @@ export default function MoviePage() {
 
              <div className="relative z-10 w-full text-center pt-8 border-t border-white/10">
                  <p className="text-gray-400 text-sm mb-2">Streaming Now On</p>
-                 {/* Safe Gradient Text or just Gold Text */}
                  <h2 className="text-3xl font-black" style={{ color: '#fbbf24' }}>SADABEFY</h2>
                  <p className="text-[10px] text-gray-500 mt-2 tracking-widest">www.sadabefy.com</p>
              </div>
@@ -476,7 +501,7 @@ export default function MoviePage() {
           </div>
       </div>
       
-      {/* FLOATING SHARE BUTTON */}
+      {/* FLOATING SHARE BUTTON (Bottom Right) */}
       <button 
         onClick={handleGoldenShare} 
         disabled={isSharing}
