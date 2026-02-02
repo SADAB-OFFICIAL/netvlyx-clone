@@ -10,7 +10,7 @@ import { motion, AnimatePresence, Variants } from 'framer-motion';
 // @ts-ignore
 import html2canvas from 'html2canvas';
 
-// --- ⚡ PERFORMANCE OPTIMIZED AMBIENT BACKGROUND ⚡ ---
+// --- AMBIENT BACKGROUND ---
 const AmbientBackground = ({ image }: { image: string }) => {
   if (!image) return <div className="fixed inset-0 bg-[#050505]" />;
   const optimizedImage = image.replace('original', 'w500').replace('w780', 'w500');
@@ -40,7 +40,7 @@ const AmbientBackground = ({ image }: { image: string }) => {
   );
 };
 
-// --- SKELETON COMPONENT ---
+// --- SKELETON ---
 const MovieSkeleton = () => (
   <div className="min-h-screen bg-[#050505] animate-pulse">
       <div className="relative w-full h-[85vh] bg-gray-900/20">
@@ -56,14 +56,14 @@ export default function MoviePage() {
   const { slug } = useParams();
   const router = useRouter();
   const downloadRef = useRef<HTMLDivElement>(null);
-  const ticketRef = useRef<HTMLDivElement>(null); 
+  const ticketRef = useRef<HTMLDivElement>(null);
 
   // Data States
   const [data, setData] = useState<any>(null);
   const [tmdbData, setTmdbData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isSharing, setIsSharing] = useState(false); 
+  const [isSharing, setIsSharing] = useState(false);
 
   // Filter States
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -135,18 +135,22 @@ export default function MoviePage() {
 
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- SHARE FUNCTION ---
+  // --- 🛠️ ROBUST SHARE FUNCTION 🛠️ ---
   const handleGoldenShare = async () => {
     if (!ticketRef.current || isSharing) return;
     setIsSharing(true);
     
     try {
+        // Force the element to be momentarily visible for capture if needed, 
+        // though z-index -50 trick usually works.
+        
         const canvas = await html2canvas(ticketRef.current, {
             useCORS: true, 
-            allowTaint: true,
+            allowTaint: false, // Strict taint check (prevents security errors later)
             scale: 2, 
             backgroundColor: '#050505',
             logging: false,
+            // CORS fix for images inside canvas
             onclone: (clonedDoc: any) => {
                 const images = clonedDoc.getElementsByTagName('img');
                 for (let i = 0; i < images.length; i++) {
@@ -155,7 +159,9 @@ export default function MoviePage() {
             }
         });
 
+        // This line is where it usually fails if canvas is tainted
         const image = canvas.toDataURL("image/jpeg", 0.9);
+        
         const blob = await (await fetch(image)).blob();
         const file = new File([blob], "netvlyx_ticket.jpg", { type: "image/jpeg" });
 
@@ -173,17 +179,8 @@ export default function MoviePage() {
         }
     } catch (err: any) {
         console.error("Share failed", err);
-        // Fallback: simple download
-        try {
-            const canvas = await html2canvas(ticketRef.current, { useCORS: true, allowTaint: true });
-            const image = canvas.toDataURL("image/jpeg");
-            const link = document.createElement("a");
-            link.href = image;
-            link.download = `SADABEFY_Card.jpg`;
-            link.click();
-        } catch (e) {
-            alert("Could not generate ticket. Please try again.");
-        }
+        // Show the ACTUAL error message to help debug
+        alert("Sharing Error: " + (err.message || "Security/Network Error"));
     } finally {
         setIsSharing(false);
     }
@@ -283,13 +280,16 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- HIDDEN TICKET --- */}
-      <div className="fixed top-0 left-[-9999px] z-[-1]">
+      {/* --- HIDDEN TICKET (RENDERED BEHIND EVERYTHING) --- */}
+      {/* z-index -50 makes it sit behind background, but it IS rendered, unlike left: -9999px */}
+      <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none" style={{ zIndex: -50 }}>
          <div ref={ticketRef} className="w-[400px] h-[700px] bg-[#050505] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8 border-[8px] border-yellow-600/50 rounded-3xl">
              <div className="absolute inset-0 bg-gradient-to-br from-black via-black to-yellow-900/20"></div>
+             
+             {/* Using standard crossorigin */}
              {finalPoster && (
                <img 
-                 src={`${finalPoster}?random=${new Date().getTime()}`} 
+                 src={finalPoster} 
                  crossOrigin="anonymous" 
                  className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-125" 
                  alt="bg"
@@ -303,7 +303,7 @@ export default function MoviePage() {
                 
                 {finalPoster && (
                   <img 
-                    src={`${finalPoster}?random=${new Date().getTime()}`} 
+                    src={finalPoster} 
                     crossOrigin="anonymous" 
                     className="w-[280px] rounded-xl shadow-[0_0_40px_rgba(234,179,8,0.3)] border-2 border-white/10" 
                     alt="Poster"
@@ -471,7 +471,7 @@ export default function MoviePage() {
           </div>
       </div>
       
-      {/* FLOATING SHARE BUTTON (Replaces Bug Button) */}
+      {/* FLOATING SHARE BUTTON (Bottom Right) */}
       <button 
         onClick={handleGoldenShare} 
         disabled={isSharing}
