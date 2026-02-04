@@ -137,7 +137,7 @@ export default function MoviePage() {
   const finalRating = tmdbData?.rating || "N/A"; 
   const trailerKey = tmdbData?.trailerKey;
 
-  // Cast Data Extraction
+  // Cast Data Extraction (Fixed)
   const castList = tmdbData?.credits?.cast?.slice(0, 10) || tmdbData?.cast?.slice(0, 10) || [];
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
@@ -326,17 +326,23 @@ export default function MoviePage() {
          </div>
       </div>
 
-      {/* HERO SECTION */}
+      {/* 1. HERO SECTION (With Fade Fix) */}
       <div className="relative w-full h-[80vh] md:h-[90vh] z-10">
           <div className="absolute inset-0 pointer-events-none">
               <div className="w-full h-full bg-cover bg-center opacity-40 mask-image-gradient" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505]/80 via-transparent to-transparent"></div>
+              
+              {/* ✨ IMPROVED FADE GRADIENT (Hard Edge Fix) ✨ */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent"></div>
+              {/* Extra layer at very bottom to blend perfectly */}
+              <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#050505] to-transparent"></div>
           </div>
+
           <div className="absolute top-6 left-6 z-50">
              <button onClick={() => router.back()} className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all cursor-pointer hover:scale-105 active:scale-95 duration-200 hover:bg-white/10">
                  <ArrowLeft size={20}/> Back
              </button>
           </div>
+
           <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto">
               {finalRating && (
                   <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full animate-fade-in-up">
@@ -344,12 +350,15 @@ export default function MoviePage() {
                       <span className="text-yellow-400 font-bold text-sm">{finalRating} IMDb</span>
                   </div>
               )}
+
               <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 animate-slide-in">
                   {finalTitle}
               </h1>
+
               <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md animate-fade-in delay-100">
                   {finalOverview}
               </p>
+
               <div className="flex gap-4 relative z-50 animate-fade-in delay-200">
                   <button onClick={() => handleHeroAction('watch')} className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer active:scale-95">
                       <Play className="fill-current" size={20}/> Watch Now
@@ -361,7 +370,7 @@ export default function MoviePage() {
           </div>
       </div>
 
-      {/* POSTER */}
+      {/* 2. POSTER (Floating) */}
       <div className="relative z-20 -mt-10 mb-16 flex justify-center px-4">
           <div className="relative group">
               <div className="absolute inset-0 bg-cover bg-center blur-3xl opacity-30 scale-110 rounded-full transition-opacity duration-500 group-hover:opacity-50 pointer-events-none" style={{ backgroundImage: `url(${finalPoster})` }}></div>
@@ -470,7 +479,7 @@ export default function MoviePage() {
               </div>
           </div>
           
-          {/* --- 🎭 CAST SECTION (ADDED HERE) 🎭 --- */}
+          {/* --- 🎭 CAST SECTION (FIXED IMAGES) 🎭 --- */}
           {castList.length > 0 && (
              <div className="pb-24">
                  <h2 className="text-2xl font-bold mb-8 flex items-center gap-2 border-l-4 border-purple-500 pl-3">Top Cast</h2>
@@ -478,6 +487,7 @@ export default function MoviePage() {
                     {castList.map((actor: any, idx: number) => (
                        <div key={idx} className="group flex flex-col items-center gap-3">
                           <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-purple-500/50 shadow-lg transition-all duration-300 group-hover:scale-110 relative bg-white/5">
+                             {/* Corrected Image Loading & Fallback */}
                              {actor.profile_path ? (
                                <img 
                                  src={`https://image.tmdb.org/t/p/w200${actor.profile_path}`} 
