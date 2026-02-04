@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, Download, CheckCircle, 
-  Archive, Tv, Star, AlertCircle, Share2, Loader2 
+  Archive, Tv, Star, AlertCircle, Share2, Loader2, User 
 } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 // @ts-ignore
@@ -137,9 +137,11 @@ export default function MoviePage() {
   const finalRating = tmdbData?.rating || "N/A"; 
   const trailerKey = tmdbData?.trailerKey;
 
+  // Cast Data Extraction
+  const castList = tmdbData?.credits?.cast?.slice(0, 10) || tmdbData?.cast?.slice(0, 10) || [];
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
 
-  // --- 🔄 AUTO PRELOAD IMAGE (FIX FOR MISSING POSTER) 🔄 ---
+  // --- 🔄 AUTO PRELOAD IMAGE 🔄 ---
   useEffect(() => {
     if (finalPoster && !base64Poster) {
       const convertToBase64 = async () => {
@@ -153,7 +155,7 @@ export default function MoviePage() {
           reader.readAsDataURL(blob);
         } catch (err) {
           console.error("Poster preload failed", err);
-          setBase64Poster(finalPoster); // Fallback to URL
+          setBase64Poster(finalPoster); 
         }
       };
       convertToBase64();
@@ -293,49 +295,22 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- HIDDEN TICKET (ALWAYS RENDERED WITH BASE64) --- */}
+      {/* --- HIDDEN TICKET --- */}
       <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none opacity-0" style={{ zIndex: -50 }}>
          <div ref={ticketRef} className="w-[400px] h-[700px] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8" 
-              style={{ 
-                  backgroundColor: '#050505', 
-                  border: '8px solid #ca8a04',
-                  borderRadius: '24px'
-              }}>
+              style={{ backgroundColor: '#050505', border: '8px solid #ca8a04', borderRadius: '24px' }}>
              <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)' }}></div>
              {(base64Poster || finalPoster) && (
-               <img 
-                 src={base64Poster || finalPoster} 
-                 className="absolute inset-0 w-full h-full object-cover opacity-20" 
-                 style={{ filter: 'blur(20px)', transform: 'scale(1.25)' }}
-                 alt="bg"
-               />
+               <img src={base64Poster || finalPoster} className="absolute inset-0 w-full h-full object-cover opacity-20" style={{ filter: 'blur(20px)', transform: 'scale(1.25)' }} alt="bg"/>
              )}
-             
              <div className="relative z-10 flex flex-col items-center w-full text-center space-y-6">
-                <div style={{ 
-                    display: 'flex', alignItems: 'center', gap: '8px', 
-                    color: '#eab308', fontWeight: 'bold', textTransform: 'uppercase', 
-                    letterSpacing: '0.3em', fontSize: '14px', 
-                    borderBottom: '1px solid rgba(234, 179, 8, 0.3)', paddingBottom: '8px' 
-                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#eab308', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.3em', fontSize: '14px', borderBottom: '1px solid rgba(234, 179, 8, 0.3)', paddingBottom: '8px' }}>
                     <Star size={14} fill="#eab308"/> Premium Access
                 </div>
-                
                 {(base64Poster || finalPoster) && (
-                  <img 
-                    src={base64Poster || finalPoster} 
-                    className="w-[280px]"
-                    style={{ 
-                        borderRadius: '12px',
-                        boxShadow: '0 0 40px rgba(234, 179, 8, 0.3)',
-                        border: '2px solid rgba(255,255,255,0.1)'
-                    }} 
-                    alt="Poster"
-                  />
+                  <img src={base64Poster || finalPoster} className="w-[280px]" style={{ borderRadius: '12px', boxShadow: '0 0 40px rgba(234, 179, 8, 0.3)', border: '2px solid rgba(255,255,255,0.1)' }} alt="Poster"/>
                 )}
-                
                 <h1 style={{ fontSize: '30px', fontWeight: '900', color: '#ffffff', fontFamily: 'serif', lineHeight: '1.1' }}>{finalTitle}</h1>
-                
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '4px', fontSize: '14px', color: '#ffffff' }}>HD Quality</span>
                     <span style={{ background: 'rgba(234, 179, 8, 0.2)', color: '#facc15', padding: '4px 12px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -343,7 +318,6 @@ export default function MoviePage() {
                     </span>
                 </div>
              </div>
-
              <div className="relative z-10 w-full text-center pt-8" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                  <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '8px' }}>Streaming Now On</p>
                  <h2 style={{ fontSize: '30px', fontWeight: '900', color: '#fbbf24' }}>SADABEFY</h2>
@@ -358,13 +332,11 @@ export default function MoviePage() {
               <div className="w-full h-full bg-cover bg-center opacity-40 mask-image-gradient" style={{ backgroundImage: `url(${finalBackdrop})` }}></div>
               <div className="absolute inset-0 bg-gradient-to-t from-[#050505]/80 via-transparent to-transparent"></div>
           </div>
-
           <div className="absolute top-6 left-6 z-50">
              <button onClick={() => router.back()} className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 transition-all cursor-pointer hover:scale-105 active:scale-95 duration-200 hover:bg-white/10">
                  <ArrowLeft size={20}/> Back
              </button>
           </div>
-
           <div className="relative z-10 flex flex-col items-center justify-end h-full pb-16 px-4 text-center max-w-4xl mx-auto">
               {finalRating && (
                   <div className="mb-4 flex items-center gap-2 bg-yellow-500/20 backdrop-blur-md border border-yellow-500/30 px-3 py-1 rounded-full animate-fade-in-up">
@@ -372,16 +344,12 @@ export default function MoviePage() {
                       <span className="text-yellow-400 font-bold text-sm">{finalRating} IMDb</span>
                   </div>
               )}
-
               <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 animate-slide-in">
                   {finalTitle}
               </h1>
-
-              {/* ✅ ADDED DESCRIPTION BACK HERE ✅ */}
               <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md animate-fade-in delay-100">
                   {finalOverview}
               </p>
-
               <div className="flex gap-4 relative z-50 animate-fade-in delay-200">
                   <button onClick={() => handleHeroAction('watch')} className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer active:scale-95">
                       <Play className="fill-current" size={20}/> Watch Now
@@ -429,7 +397,7 @@ export default function MoviePage() {
               </div>
           )}
 
-          <div id="download-section" ref={downloadRef} className="pt-10 pb-20">
+          <div id="download-section" ref={downloadRef} className="pt-10">
               <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden transition-all duration-500 hover:border-white/20 group">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none animate-pulse"></div>
                   <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center text-white drop-shadow-md">Download & Watch Options</h2>
@@ -501,9 +469,38 @@ export default function MoviePage() {
                   </AnimatePresence>
               </div>
           </div>
+          
+          {/* --- 🎭 CAST SECTION (ADDED HERE) 🎭 --- */}
+          {castList.length > 0 && (
+             <div className="pb-24">
+                 <h2 className="text-2xl font-bold mb-8 flex items-center gap-2 border-l-4 border-purple-500 pl-3">Top Cast</h2>
+                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                    {castList.map((actor: any, idx: number) => (
+                       <div key={idx} className="group flex flex-col items-center gap-3">
+                          <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-purple-500/50 shadow-lg transition-all duration-300 group-hover:scale-110 relative bg-white/5">
+                             {actor.profile_path ? (
+                               <img 
+                                 src={`https://image.tmdb.org/t/p/w200${actor.profile_path}`} 
+                                 className="w-full h-full object-cover" 
+                                 alt={actor.name} 
+                                 loading="lazy"
+                               />
+                             ) : (
+                               <div className="w-full h-full flex items-center justify-center text-gray-500"><User size={40}/></div>
+                             )}
+                          </div>
+                          <div className="text-center">
+                             <p className="text-white font-semibold text-sm group-hover:text-purple-400 transition-colors">{actor.name}</p>
+                             <p className="text-gray-500 text-xs">{actor.character}</p>
+                          </div>
+                       </div>
+                    ))}
+                 </div>
+             </div>
+          )}
+
       </div>
       
-      {/* FLOATING SHARE BUTTON */}
       <button 
         onClick={handleGoldenShare} 
         disabled={isSharing}
