@@ -47,6 +47,7 @@ const MovieSkeleton = () => (
           <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 flex flex-col items-center justify-end space-y-6">
               <div className="h-6 w-24 bg-gray-800 rounded-full"></div>
               <div className="h-12 md:h-20 w-3/4 max-w-3xl bg-gray-800 rounded-lg"></div>
+              <div className="h-4 w-full max-w-2xl bg-gray-800 rounded"></div>
           </div>
       </div>
   </div>
@@ -133,7 +134,7 @@ export default function MoviePage() {
   const finalOverview = tmdbData?.overview || data?.plot;
   const finalPoster = tmdbData?.poster || data?.poster;
   const finalBackdrop = tmdbData?.backdrop || data?.poster;
-  const finalRating = tmdbData?.rating || "N/A"; // Fallback added
+  const finalRating = tmdbData?.rating || "N/A"; 
   const trailerKey = tmdbData?.trailerKey;
 
   const galleryImages = (data?.screenshots && data.screenshots.length > 0) ? data.screenshots : tmdbData?.images;
@@ -165,7 +166,6 @@ export default function MoviePage() {
     setIsSharing(true);
 
     try {
-        // Short delay to ensure rendering is perfect
         await new Promise(resolve => setTimeout(resolve, 100));
 
         const canvas = await html2canvas(ticketRef.current, {
@@ -199,7 +199,7 @@ export default function MoviePage() {
     }
   };
 
-  // --- FILTER LOGIC (UNCHANGED) ---
+  // --- FILTER LOGIC ---
   const getFilteredData = () => {
       if (!data?.downloadSections) return { links: [], qualities: [] };
 
@@ -294,7 +294,6 @@ export default function MoviePage() {
       <AmbientBackground image={finalPoster} />
 
       {/* --- HIDDEN TICKET (ALWAYS RENDERED WITH BASE64) --- */}
-      {/* Opacity 0 makes it invisible but rendered. zIndex ensures it doesn't block clicks. */}
       <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none opacity-0" style={{ zIndex: -50 }}>
          <div ref={ticketRef} className="w-[400px] h-[700px] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8" 
               style={{ 
@@ -302,11 +301,7 @@ export default function MoviePage() {
                   border: '8px solid #ca8a04',
                   borderRadius: '24px'
               }}>
-             
-             {/* Background Gradient */}
              <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)' }}></div>
-             
-             {/* BG Image using Preloaded Base64 */}
              {(base64Poster || finalPoster) && (
                <img 
                  src={base64Poster || finalPoster} 
@@ -326,7 +321,6 @@ export default function MoviePage() {
                     <Star size={14} fill="#eab308"/> Premium Access
                 </div>
                 
-                {/* Main Poster using Preloaded Base64 */}
                 {(base64Poster || finalPoster) && (
                   <img 
                     src={base64Poster || finalPoster} 
@@ -344,7 +338,6 @@ export default function MoviePage() {
                 
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '4px', fontSize: '14px', color: '#ffffff' }}>HD Quality</span>
-                    {/* Explicit Check for Rating */}
                     <span style={{ background: 'rgba(234, 179, 8, 0.2)', color: '#facc15', padding: '4px 12px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                          <Star size={12} fill="#facc15"/> {finalRating}
                     </span>
@@ -383,6 +376,11 @@ export default function MoviePage() {
               <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-4 leading-tight drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 animate-slide-in">
                   {finalTitle}
               </h1>
+
+              {/* ✅ ADDED DESCRIPTION BACK HERE ✅ */}
+              <p className="text-gray-300 text-sm md:text-lg mb-8 line-clamp-3 md:line-clamp-4 max-w-2xl drop-shadow-md animate-fade-in delay-100">
+                  {finalOverview}
+              </p>
 
               <div className="flex gap-4 relative z-50 animate-fade-in delay-200">
                   <button onClick={() => handleHeroAction('watch')} className="bg-white text-black px-8 py-3.5 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] cursor-pointer active:scale-95">
