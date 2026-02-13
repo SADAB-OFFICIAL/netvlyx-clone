@@ -6,7 +6,7 @@ import {
   Play, Info, Search, MonitorPlay, 
   ChevronRight, Star, X, Mail, Loader2 
 } from 'lucide-react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, Variants } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 
 // --- 📱 HAPTIC FEEDBACK ENGINE 📱 ---
 const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
@@ -19,37 +19,6 @@ const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
   }
 };
 
-// --- SKELETONS ---
-const HeroSkeleton = () => (
-  <div className="w-full h-[85vh] md:h-[90vh] bg-[#050505] animate-pulse flex items-center justify-center">
-      <div className="w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col-reverse md:flex-row items-center gap-12 mt-10">
-          <div className="w-full md:w-1/2 space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
-              <div className="h-6 w-32 bg-gray-800 rounded-full"></div>
-              <div className="h-16 md:h-24 w-full md:w-3/4 bg-gray-800 rounded-2xl"></div>
-              <div className="h-20 w-full md:w-3/4 bg-gray-800 rounded-xl"></div>
-              <div className="flex w-full md:w-auto gap-4"><div className="h-14 w-full md:w-40 bg-gray-800 rounded-full"></div></div>
-          </div>
-          <div className="w-[180px] h-[270px] md:w-[350px] md:h-[520px] bg-gray-800 rounded-[2rem] md:rounded-[3rem]"></div>
-      </div>
-  </div>
-);
-
-const SectionSkeleton = () => (
-  <div className="px-4 md:px-12 mb-12 space-y-4">
-      <div className="h-6 w-32 md:w-48 bg-gray-800 rounded animate-pulse"></div>
-      <div className="flex gap-4 overflow-hidden">
-          {[1,2,3,4,5].map(i=><div key={i} className="min-w-[140px] md:min-w-[180px] h-[210px] md:h-[270px] bg-gray-800 rounded-2xl animate-pulse"/>)}
-      </div>
-  </div>
-);
-
-const NavbarSkeleton = () => (
-  <div className="h-20 w-full bg-black animate-pulse"/>
-);
-
-// =====================================================================
-// 💧 GOLD LIQUID NAVBAR (Mobile Optimized)
-// =====================================================================
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [query, setQuery] = useState('');
@@ -63,7 +32,8 @@ const Navbar = () => {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
+    if (query.trim() !== '') {
+        triggerHaptic('light');
         router.push(`/search?q=${encodeURIComponent(query)}`);
     }
   };
@@ -87,14 +57,14 @@ const Navbar = () => {
                 <div className="absolute inset-0 bg-yellow-500 blur-[10px] opacity-20 group-hover:opacity-50 transition-opacity rounded-full"></div>
                 <MonitorPlay size={scrolled ? 24 : 28} className="text-yellow-500 relative z-10 transition-all duration-300 group-hover:scale-110 drop-shadow-md" />
             </div>
-            <span className={`font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600 font-sans drop-shadow-sm transition-all duration-300 ${scrolled ? 'text-base md:text-xl hidden sm:block' : 'text-lg md:text-2xl'}`}>
+            <span className={`font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600 font-sans drop-shadow-sm transition-all duration-300 ${scrolled ? 'text-sm md:text-xl' : 'text-base md:text-2xl'}`}>
               SADABEFY
             </span>
         </div>
 
-        <form onSubmit={handleSearchSubmit} className="relative group/search ml-2 md:ml-4 flex-1 md:flex-none flex justify-end max-w-[200px] sm:max-w-[300px]">
-          <div className={`flex items-center rounded-full transition-all duration-500 border border-white/5 w-full ${scrolled ? 'bg-black/40 hover:bg-black/60 py-1.5 md:py-2 px-3' : 'bg-black/50 hover:bg-black/70 py-2 md:py-2.5 px-4 backdrop-blur-md'}`}>
-             <Search className="text-gray-400 group-focus-within/search:text-yellow-500 transition-colors mr-1.5 md:mr-2 shrink-0" size={scrolled ? 16 : 18} />
+        <form onSubmit={handleSearchSubmit} className="relative ml-2 md:ml-4 flex-1 md:flex-none flex justify-end max-w-[180px] sm:max-w-[300px]">
+          <div className={`flex items-center rounded-full transition-all duration-500 border border-white/5 w-full ${scrolled ? 'bg-black/40 focus-within:bg-black/60 py-1.5 md:py-2 px-3' : 'bg-black/50 focus-within:bg-black/70 py-2 md:py-2.5 px-4 backdrop-blur-md'}`}>
+             <button type="submit" className="outline-none cursor-pointer"><Search className="text-gray-400 hover:text-yellow-500 transition-colors mr-1.5 md:mr-2 shrink-0" size={scrolled ? 16 : 18} /></button>
              <input 
                 type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search..."
                 className="bg-transparent border-none outline-none text-white text-xs md:text-sm placeholder-gray-400/80 w-full font-medium"
@@ -116,17 +86,17 @@ const Navbar = () => {
               <span className="text-yellow-500 text-[10px] md:text-xs font-bold">S</span>
             </div>
         </div>
-
       </div>
     </motion.nav>
   );
 };
 
 // =====================================================================
-// 🎬 HERO SLIDER (Fixed Button Overlap on Mobile)
+// 🎬 3D PARALLAX HERO SLIDER
 // =====================================================================
 const HeroSlider = ({ data }: { data: any[] }) => {
     const [current, setCurrent] = useState(0);
+    const [isNavigating, setIsNavigating] = useState(false); // 🌟 Loading State for Hero Button
     const router = useRouter();
 
     const x = useMotionValue(0);
@@ -137,23 +107,28 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     const rotateX = useTransform(mouseYSpring, [-300, 300], [12, -12]);
     const rotateY = useTransform(mouseXSpring, [-300, 300], [-12, 12]);
 
-    const AUTO_PLAY_DURATION = 8000;
+    const AUTO_PLAY_DURATION = 8000; 
 
     useEffect(() => {
+        if (isNavigating) return; // Stop auto-play if navigating
         const timer = setInterval(() => setCurrent(p => (p + 1) % (data.length || 1)), AUTO_PLAY_DURATION);
         return () => clearInterval(timer);
-    }, [data, current]);
+    }, [data, current, isNavigating]); 
 
     if (!data || data.length === 0) return null;
     const movie = data[current];
 
     const handlePlayClick = () => {
+        triggerHaptic('medium');
+        setIsNavigating(true); // 🌟 Trigger Loading Animation
         if (movie.link) {
             const encoded = btoa(movie.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
             router.push(`/v/${encoded}`);
         } else {
             router.push(`/search?q=${encodeURIComponent(movie.title)}`);
         }
+        // Fallback to reset loading state if back button is pressed later
+        setTimeout(() => setIsNavigating(false), 3000);
     };
 
     const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -164,18 +139,12 @@ const HeroSlider = ({ data }: { data: any[] }) => {
         y.set(e.clientY - centerY);
     };
 
-    const handleMouseLeave = () => {
-        x.set(0); y.set(0); 
-    };
-  
-    // Haptic interaction setup
+    const handleMouseLeave = () => { x.set(0); y.set(0); };
     const springTap: any = { scale: 0.93, transition: { type: "spring", stiffness: 400, damping: 17 } };
-
+  
     return (
-      // ⚡ FIX: Used min-h-[100svh] for mobile safe height, and added pb-12 padding so content can breathe.
-      <div className="relative min-h-[100svh] lg:min-h-0 lg:h-[95vh] w-full overflow-hidden flex items-center bg-[#050505] pt-24 pb-12 lg:pt-0 lg:pb-0">
+      <div className="relative min-h-[100svh] md:h-[95vh] w-full overflow-hidden flex items-center bg-[#050505] pt-24 pb-12 md:pt-0 md:pb-0">
          
-         {/* AURA */}
          <AnimatePresence mode="wait">
             <motion.div
                 key={current}
@@ -187,10 +156,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
             >
                 <div 
                     className="absolute inset-0 bg-cover bg-center"
-                    style={{ 
-                        backgroundImage: `url(${movie.poster})`,
-                        filter: 'blur(60px) saturate(200%) brightness(0.5)' 
-                    }}
+                    style={{ backgroundImage: `url(${movie.poster})`, filter: 'blur(60px) saturate(200%) brightness(0.5)' }}
                 />
             </motion.div>
          </AnimatePresence>
@@ -198,12 +164,11 @@ const HeroSlider = ({ data }: { data: any[] }) => {
          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent z-0 pointer-events-none h-full"></div>
          <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-transparent to-transparent hidden md:block z-0 pointer-events-none"></div>
   
-         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col-reverse lg:flex-row items-center justify-center lg:justify-between px-6 lg:px-12 gap-6 lg:gap-16">
+         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col-reverse md:flex-row items-center justify-center md:justify-between px-6 md:px-12 gap-6 md:gap-16">
              
-             {/* LEFT: Cinematic Info */}
-             <div className="w-full lg:w-[55%] flex flex-col items-center lg:items-start text-center lg:text-left gap-4 lg:gap-6 mt-2 lg:mt-0">
+             <div className="w-full md:w-[55%] flex flex-col items-center md:items-start text-center md:text-left gap-4 md:gap-6 mt-2 md:mt-0">
                  
-                 <div className="flex flex-wrap justify-center lg:justify-start items-center gap-2 lg:gap-3">
+                 <div className="flex flex-wrap justify-center md:justify-start items-center gap-2 md:gap-3">
                      <span className="bg-yellow-500/10 text-yellow-400 px-3 py-1.5 text-[10px] md:text-xs font-bold rounded-full border border-yellow-500/20 flex items-center gap-1.5 backdrop-blur-md">
                        <Star size={12} fill="currentColor" /> {movie.rating || "Top"} Rated
                      </span>
@@ -217,9 +182,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                  <AnimatePresence mode="wait">
                     <motion.h1 
                         key={movie.title}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.1 }}
+                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
                         className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[1.1] tracking-tight drop-shadow-2xl"
                     >
                         {movie.title}
@@ -229,115 +192,87 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                  <AnimatePresence mode="wait">
                     <motion.p 
                         key={movie.desc}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5, delay: 0.2 }}
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.2 }}
                         className="text-gray-300 text-xs sm:text-sm md:text-lg line-clamp-2 md:line-clamp-3 max-w-xl drop-shadow-lg leading-relaxed font-medium"
                     >
                         {movie.desc}
                     </motion.p>
                  </AnimatePresence>
 
-                 {/* Buttons */}
                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="flex flex-col sm:flex-row w-full md:w-auto gap-3 md:gap-4 pt-2 md:pt-4 z-50"
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
+                    className="flex flex-row w-full md:w-auto justify-center md:justify-start gap-3 md:gap-4 pt-2 md:pt-4 z-50"
                  >
-                    <button onClick={handlePlayClick} className="w-full sm:w-auto justify-center bg-white text-black px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 hover:bg-yellow-400 transition-all hover:scale-105 active:scale-95 text-sm md:text-base shadow-[0_0_30px_rgba(255,255,255,0.3)]">
-                        <Play fill="black" size={18} /> Watch Now
-                    </button>
-                    <button className="w-full sm:w-auto justify-center bg-white/10 backdrop-blur-2xl text-white px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 hover:bg-white/20 transition-all border border-white/20 active:scale-95 text-sm md:text-base">
+                    {/* 🌟 Dynamic Loading Button 🌟 */}
+                    <motion.button 
+                        whileTap={springTap} 
+                        onClick={handlePlayClick} 
+                        disabled={isNavigating}
+                        className={`w-1/2 sm:w-auto justify-center px-6 md:px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 transition-all shadow-[0_0_30px_rgba(255,255,255,0.3)] text-sm md:text-base ${isNavigating ? 'bg-yellow-400 text-black scale-95 opacity-90' : 'bg-white text-black hover:bg-yellow-400 cursor-pointer'}`}
+                    >
+                        {isNavigating ? <Loader2 className="animate-spin text-black" size={18} /> : <Play fill="black" size={18} />} 
+                        {isNavigating ? 'Opening...' : 'Watch'}
+                    </motion.button>
+
+                    <motion.button whileTap={springTap} onClick={() => triggerHaptic('light')} className="w-1/2 sm:w-auto justify-center bg-white/10 backdrop-blur-2xl text-white px-6 md:px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 hover:bg-white/20 transition-all border border-white/20 text-sm md:text-base cursor-pointer">
                         <Info size={18} /> Details
-                    </button>
+                    </motion.button>
                  </motion.div>
 
-                 {/* 🌟 FIX: MOBILE PROGRESS DOTS (Rendered inside the flow to avoid overlaps) 🌟 */}
                  <motion.div 
                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-                     className="lg:hidden flex gap-2 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10 mt-3"
+                     className="md:hidden flex gap-2 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10 mt-6"
                  >
                      {data.map((_, idx) => (
-                        <div 
-                           key={idx} 
-                           onClick={() => setCurrent(idx)}
-                           className="h-1.5 rounded-full overflow-hidden cursor-pointer bg-white/20 relative"
-                           style={{ width: idx === current ? '32px' : '6px', transition: 'width 0.5s ease-in-out' }}
-                        >
-                            {idx === current && (
-                                <motion.div 
-                                    initial={{ width: "0%" }}
-                                    animate={{ width: "100%" }}
-                                    transition={{ duration: AUTO_PLAY_DURATION / 1000, ease: "linear" }}
-                                    key={`progress-mob-${current}`}
-                                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-400 to-amber-500 shadow-[0_0_10px_rgba(250,204,21,0.8)]"
-                                />
-                            )}
+                        <div key={idx} onClick={() => setCurrent(idx)} className="h-1.5 rounded-full overflow-hidden cursor-pointer bg-white/20 relative" style={{ width: idx === current ? '32px' : '6px', transition: 'width 0.5s ease-in-out' }}>
+                            {idx === current && <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: AUTO_PLAY_DURATION / 1000, ease: "linear" }} key={`progress-mob-${current}`} className="absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-400 to-amber-500 shadow-[0_0_10px_rgba(250,204,21,0.8)]" />}
                             {idx < current && <div className="absolute top-0 left-0 h-full w-full bg-white/60" />}
                         </div>
                     ))}
                  </motion.div>
              </div>
 
-             {/* RIGHT: 3D PARALLAX POSTER */}
-             <div className="w-full lg:w-[45%] flex justify-center lg:justify-end perspective-[2000px] z-50 mt-2 lg:mt-0">
+             <div className="w-full md:w-[45%] flex justify-center md:justify-end perspective-[2000px] z-50 mt-4 md:mt-0">
                  <motion.div
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={handleMouseLeave}
-                    onClick={handlePlayClick}
-                    animate={{ y: [0, -12, 0] }}
-                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                    onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} onClick={handlePlayClick}
+                    animate={{ y: [0, -12, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
                     style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                    className="relative w-[160px] sm:w-[200px] md:w-[280px] lg:w-[360px] aspect-[2/3] cursor-pointer group"
+                    className="relative w-[180px] sm:w-[220px] md:w-[320px] lg:w-[360px] aspect-[2/3] cursor-pointer group"
                  >
                     <div className="absolute -inset-4 bg-yellow-500/20 blur-[40px] md:blur-[60px] rounded-full opacity-50 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-700 z-0 pointer-events-none"></div>
 
                     <AnimatePresence mode="wait">
-                       <motion.div
-                         key={movie.poster}
-                         initial={{ opacity: 0, scale: 0.9 }}
-                         animate={{ opacity: 1, scale: 1 }}
-                         exit={{ opacity: 0 }}
-                         transition={{ duration: 0.6 }}
-                         style={{ transform: "translateZ(30px)" }}
-                         className="absolute inset-0 rounded-2xl md:rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-gray-900 z-10"
-                       >
+                       <motion.div key={movie.poster} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }} style={{ transform: "translateZ(30px)" }} className="absolute inset-0 rounded-2xl md:rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-gray-900 z-10">
                            <img src={movie.poster} className="w-full h-full object-cover transition-transform duration-700 md:group-hover:scale-105" alt="Poster" />
                            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 opacity-0 md:group-hover:opacity-100 transition-opacity duration-700"></div>
+                           
+                           {/* 🌟 3D Card Loading Overlay 🌟 */}
+                           <AnimatePresence>
+                               {isNavigating && (
+                                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50 backdrop-blur-sm z-30 flex items-center justify-center">
+                                       <Loader2 className="text-yellow-500 animate-spin w-12 h-12" />
+                                   </motion.div>
+                               )}
+                           </AnimatePresence>
                        </motion.div>
                     </AnimatePresence>
 
-                    <motion.div
-                       style={{ transform: "translateZ(80px)" }} 
-                       className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
-                    >
-                       <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 md:scale-50 md:group-hover:scale-100 transition-all duration-500 shadow-[0_20px_40px_rgba(0,0,0,0.5)]">
-                          <Play size={24} className="text-white fill-white ml-1.5 md:ml-2 md:w-8 md:h-8" />
-                       </div>
-                    </motion.div>
+                    {/* 3D Play Button (Hides when loading) */}
+                    {!isNavigating && (
+                        <motion.div style={{ transform: "translateZ(80px)" }} className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                            <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 md:scale-50 md:group-hover:scale-100 transition-all duration-500 shadow-[0_20px_40px_rgba(0,0,0,0.5)]">
+                                <Play size={24} className="text-white fill-white ml-1.5 md:ml-2 md:w-8 md:h-8" />
+                            </div>
+                        </motion.div>
+                    )}
                  </motion.div>
              </div>
          </div>
 
-         {/* 🌟 DESKTOP PROGRESS DOTS (Hidden on mobile, safe to keep absolute) 🌟 */}
-         <div className="hidden lg:flex absolute bottom-10 left-1/2 -translate-x-1/2 gap-3 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10">
+         <div className="hidden md:flex absolute bottom-10 left-1/2 -translate-x-1/2 gap-3 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10">
              {data.map((_, idx) => (
-                <div 
-                   key={idx} 
-                   onClick={() => setCurrent(idx)}
-                   className="h-2 rounded-full overflow-hidden cursor-pointer bg-white/20 relative"
-                   style={{ width: idx === current ? '40px' : '8px', transition: 'width 0.5s ease-in-out' }}
-                >
-                    {idx === current && (
-                        <motion.div 
-                            initial={{ width: "0%" }}
-                            animate={{ width: "100%" }}
-                            transition={{ duration: AUTO_PLAY_DURATION / 1000, ease: "linear" }}
-                            key={`progress-desk-${current}`}
-                            className="absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-400 to-amber-500 shadow-[0_0_10px_rgba(250,204,21,0.8)]"
-                        />
-                    )}
+                <div key={idx} onClick={() => setCurrent(idx)} className="h-2 rounded-full overflow-hidden cursor-pointer bg-white/20 relative" style={{ width: idx === current ? '40px' : '8px', transition: 'width 0.5s ease-in-out' }}>
+                    {idx === current && <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: AUTO_PLAY_DURATION / 1000, ease: "linear" }} key={`progress-desk-${current}`} className="absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-400 to-amber-500 shadow-[0_0_10px_rgba(250,204,21,0.8)]" />}
                     {idx < current && <div className="absolute top-0 left-0 h-full w-full bg-white/60" />}
                 </div>
             ))}
@@ -346,10 +281,13 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     );
 };
 
-// --- MOVIE SECTION ---
+// =====================================================================
+// 🎬 MOVIE SECTION (With Click Loading Animation)
+// =====================================================================
 const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
+    const [clickedItem, setClickedItem] = useState<string | null>(null); // 🌟 Track which card is clicked
   
     const scroll = (direction: 'left' | 'right') => {
       if (rowRef.current) {
@@ -360,10 +298,19 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
     };
 
     const handleItemClick = (item: any) => {
+        if (clickedItem) return; // Prevent double clicks
+        triggerHaptic('medium');
+        setClickedItem(item.title); // 🌟 Trigger Loading Animation for specific card
+
         if (item.link) {
             const encoded = btoa(item.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
             router.push(`/v/${encoded}`);
-        } else { router.push(`/search?q=${encodeURIComponent(item.title)}`); }
+        } else { 
+            router.push(`/search?q=${encodeURIComponent(item.title)}`); 
+        }
+        
+        // Reset state after 3 seconds in case navigation is cancelled or back button is pressed
+        setTimeout(() => setClickedItem(null), 3000);
     };
 
     const getCleanTitle = (text: string) => {
@@ -380,25 +327,53 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
                 {title} 
                 <ChevronRight size={20} className="hidden md:block opacity-0 group-hover/section:opacity-100 transition-opacity -translate-x-2 group-hover/section:translate-x-0" />
             </h2>
-            {slug && <button onClick={() => router.push(`/category/${slug}`)} className="text-[10px] md:text-sm font-semibold text-gray-400 hover:text-white border border-gray-700 hover:border-white/50 bg-white/5 backdrop-blur-md px-3 md:px-5 py-1 md:py-1.5 rounded-full transition-all hover:bg-white/10 active:scale-95 whitespace-nowrap">View All</button>}
+            {slug && <button onClick={() => { triggerHaptic('light'); router.push(`/category/${slug}`); }} className="text-[10px] md:text-sm font-semibold text-gray-400 hover:text-white border border-gray-700 hover:border-white/50 bg-white/5 backdrop-blur-md px-3 md:px-5 py-1 md:py-1.5 rounded-full transition-all hover:bg-white/10 active:scale-95 whitespace-nowrap cursor-pointer">View All</button>}
         </div>
         <div className="relative group">
             <ChevronRight className="hidden md:flex absolute left-0 top-0 bottom-0 z-20 m-auto h-full w-14 bg-gradient-to-r from-[#0a0a0a] to-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all rotate-180 text-white items-center justify-start pl-2" onClick={() => scroll('left')} />
             
             <div ref={rowRef} className="flex gap-3 md:gap-5 overflow-x-auto scrollbar-hide scroll-smooth pb-6 px-1 snap-x snap-mandatory">
-              {items.map((item, idx) => (
-                <div key={idx} className="flex flex-col gap-2 md:gap-3 min-w-[130px] md:min-w-[180px] group/item cursor-pointer snap-start" onClick={() => handleItemClick(item)}>
-                    <div className="relative w-full h-[195px] md:h-[270px] rounded-xl md:rounded-2xl overflow-hidden transition-all duration-300 md:group-hover/item:scale-[1.03] md:group-hover/item:shadow-[0_15px_30px_rgba(0,0,0,0.6)] md:group-hover/item:border-white/20 border border-transparent bg-gray-900 z-10">
-                        <img src={item.image || item.poster} alt={item.title} className="w-full h-full object-cover opacity-90 md:group-hover/item:opacity-100 transition-opacity" loading="lazy"/>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 md:group-hover/item:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center backdrop-blur-[2px]">
-                            <div className="bg-white/20 backdrop-blur-md border border-white/40 text-white w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:bg-yellow-500 hover:border-yellow-400 hover:text-black transition-all scale-0 md:group-hover/item:scale-100 duration-300 shadow-xl">
-                               <Play size={18} className="ml-1 fill-current md:w-5 md:h-5" />
-                            </div>
-                        </div>
-                    </div>
-                    <h3 className="text-gray-300 font-semibold text-xs md:text-base truncate px-1 md:group-hover/item:text-yellow-400 transition-colors drop-shadow-md">{getCleanTitle(item.title)}</h3>
-                </div>
-              ))}
+              {items.map((item, idx) => {
+                const isClicked = clickedItem === item.title; // Check if this specific card was clicked
+
+                return (
+                  <div key={idx} className="flex flex-col gap-2 md:gap-3 min-w-[130px] md:min-w-[180px] group/item cursor-pointer snap-start" onClick={() => handleItemClick(item)}>
+                      
+                      {/* 🌟 Dynamic Scale based on Click State 🌟 */}
+                      <div className={`relative w-full h-[195px] md:h-[270px] rounded-xl md:rounded-2xl overflow-hidden transition-all duration-300 border border-transparent bg-gray-900 z-10 ${isClicked ? 'scale-95 shadow-[0_0_30px_rgba(234,179,8,0.4)] border-yellow-500/50' : 'md:group-hover/item:scale-[1.03] md:group-hover/item:shadow-[0_15px_30px_rgba(0,0,0,0.6)] md:group-hover/item:border-white/20'}`}>
+                          <img src={item.image || item.poster} alt={item.title} className="w-full h-full object-cover opacity-90 md:group-hover/item:opacity-100 transition-opacity" loading="lazy"/>
+                          
+                          {/* Default Hover Glass (Hides if clicked) */}
+                          {!isClicked && (
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 md:group-hover/item:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center backdrop-blur-[2px]">
+                                  <div className="bg-white/20 backdrop-blur-md border border-white/40 text-white w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:bg-yellow-500 hover:border-yellow-400 hover:text-black transition-all scale-0 md:group-hover/item:scale-100 duration-300 shadow-xl">
+                                     <Play size={18} className="ml-1 fill-current md:w-5 md:h-5" />
+                                  </div>
+                              </div>
+                          )}
+
+                          {/* 🌟 CLICKED LOADING OVERLAY 🌟 */}
+                          <AnimatePresence>
+                              {isClicked && (
+                                  <motion.div 
+                                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                      className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center"
+                                  >
+                                      {/* Glowing Spinner Ring */}
+                                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-yellow-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.6)] border border-yellow-500/50">
+                                          <Loader2 className="w-6 h-6 md:w-8 md:h-8 text-yellow-500 animate-spin" />
+                                      </div>
+                                  </motion.div>
+                              )}
+                          </AnimatePresence>
+                      </div>
+
+                      <h3 className={`font-semibold text-xs md:text-base truncate px-1 transition-colors drop-shadow-md ${isClicked ? 'text-yellow-500' : 'text-gray-300 md:group-hover/item:text-yellow-400'}`}>
+                          {getCleanTitle(item.title)}
+                      </h3>
+                  </div>
+                );
+              })}
             </div>
 
             <ChevronRight className="hidden md:flex absolute right-0 top-0 bottom-0 z-20 m-auto h-full w-14 bg-gradient-to-l from-[#0a0a0a] to-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all text-white items-center justify-end pr-2" onClick={() => scroll('right')} />
@@ -426,11 +401,12 @@ function HomePageContent() {
     fetchData();
   }, []);
 
-  if (error) return <div className="h-screen flex flex-col items-center justify-center bg-[#050505] text-white"><X size={48} className="text-red-500 mb-4"/><h1 className="text-2xl font-bold">Network Error</h1><button onClick={()=>window.location.reload()} className="mt-4 px-8 py-3 bg-white text-black rounded-full font-bold active:scale-95 transition-transform">Retry Connection</button></div>;
+  if (error) return <div className="h-screen flex flex-col items-center justify-center bg-[#050505] text-white"><X size={48} className="text-red-500 mb-4"/><h1 className="text-2xl font-bold">Network Error</h1><button onClick={()=>window.location.reload()} className="mt-4 px-8 py-3 bg-white text-black rounded-full font-bold active:scale-95 transition-transform cursor-pointer">Retry Connection</button></div>;
   if (loading) return <div className="min-h-screen bg-[#050505]"><NavbarSkeleton /><HeroSkeleton /><SectionSkeleton /></div>;
 
   return (
     <div className="min-h-screen relative bg-[#050505] text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
+      {/* <TwinklingStars /> */}
       <div className="relative z-10 bg-transparent">
           <Navbar />
           
