@@ -19,6 +19,39 @@ const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
   }
 };
 
+// =====================================================================
+// 🦴 SKELETON LOADERS (FIXED: Added Back for Vercel Build)
+// =====================================================================
+const HeroSkeleton = () => (
+  <div className="w-full min-h-[100svh] md:h-[95vh] bg-[#050505] animate-pulse flex items-center justify-center pt-20">
+      <div className="w-full max-w-7xl mx-auto px-6 flex flex-col-reverse md:flex-row items-center gap-8 md:gap-12">
+          <div className="w-full md:w-1/2 space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
+              <div className="h-6 w-32 bg-gray-800 rounded-full"></div>
+              <div className="h-16 md:h-24 w-full md:w-3/4 bg-gray-800 rounded-2xl"></div>
+              <div className="h-20 w-full md:w-3/4 bg-gray-800 rounded-xl"></div>
+              <div className="flex w-full md:w-auto gap-4"><div className="h-14 w-full md:w-40 bg-gray-800 rounded-full"></div></div>
+          </div>
+          <div className="w-[180px] h-[270px] md:w-[350px] md:h-[520px] bg-gray-800 rounded-[2rem] md:rounded-[3rem]"></div>
+      </div>
+  </div>
+);
+
+const SectionSkeleton = () => (
+  <div className="px-4 md:px-12 mb-12 space-y-4">
+      <div className="h-6 w-32 md:w-48 bg-gray-800 rounded animate-pulse"></div>
+      <div className="flex gap-4 overflow-hidden">
+          {[1,2,3,4,5].map(i=><div key={i} className="min-w-[130px] md:min-w-[180px] h-[210px] md:h-[270px] bg-gray-800 rounded-2xl animate-pulse"/>)}
+      </div>
+  </div>
+);
+
+const NavbarSkeleton = () => (
+  <div className="h-20 w-full bg-black animate-pulse"/>
+);
+
+// =====================================================================
+// 💧 GOLD LIQUID NAVBAR
+// =====================================================================
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [query, setQuery] = useState('');
@@ -96,7 +129,7 @@ const Navbar = () => {
 // =====================================================================
 const HeroSlider = ({ data }: { data: any[] }) => {
     const [current, setCurrent] = useState(0);
-    const [isNavigating, setIsNavigating] = useState(false); // 🌟 Loading State for Hero Button
+    const [isNavigating, setIsNavigating] = useState(false); 
     const router = useRouter();
 
     const x = useMotionValue(0);
@@ -110,7 +143,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     const AUTO_PLAY_DURATION = 8000; 
 
     useEffect(() => {
-        if (isNavigating) return; // Stop auto-play if navigating
+        if (isNavigating) return; 
         const timer = setInterval(() => setCurrent(p => (p + 1) % (data.length || 1)), AUTO_PLAY_DURATION);
         return () => clearInterval(timer);
     }, [data, current, isNavigating]); 
@@ -120,14 +153,13 @@ const HeroSlider = ({ data }: { data: any[] }) => {
 
     const handlePlayClick = () => {
         triggerHaptic('medium');
-        setIsNavigating(true); // 🌟 Trigger Loading Animation
+        setIsNavigating(true); 
         if (movie.link) {
             const encoded = btoa(movie.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
             router.push(`/v/${encoded}`);
         } else {
             router.push(`/search?q=${encodeURIComponent(movie.title)}`);
         }
-        // Fallback to reset loading state if back button is pressed later
         setTimeout(() => setIsNavigating(false), 3000);
     };
 
@@ -203,7 +235,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
                     className="flex flex-row w-full md:w-auto justify-center md:justify-start gap-3 md:gap-4 pt-2 md:pt-4 z-50"
                  >
-                    {/* 🌟 Dynamic Loading Button 🌟 */}
                     <motion.button 
                         whileTap={springTap} 
                         onClick={handlePlayClick} 
@@ -246,7 +277,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                            <img src={movie.poster} className="w-full h-full object-cover transition-transform duration-700 md:group-hover:scale-105" alt="Poster" />
                            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 opacity-0 md:group-hover:opacity-100 transition-opacity duration-700"></div>
                            
-                           {/* 🌟 3D Card Loading Overlay 🌟 */}
                            <AnimatePresence>
                                {isNavigating && (
                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50 backdrop-blur-sm z-30 flex items-center justify-center">
@@ -257,7 +287,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                        </motion.div>
                     </AnimatePresence>
 
-                    {/* 3D Play Button (Hides when loading) */}
                     {!isNavigating && (
                         <motion.div style={{ transform: "translateZ(80px)" }} className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                             <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 md:scale-50 md:group-hover:scale-100 transition-all duration-500 shadow-[0_20px_40px_rgba(0,0,0,0.5)]">
@@ -287,7 +316,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
 const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
-    const [clickedItem, setClickedItem] = useState<string | null>(null); // 🌟 Track which card is clicked
+    const [clickedItem, setClickedItem] = useState<string | null>(null); 
   
     const scroll = (direction: 'left' | 'right') => {
       if (rowRef.current) {
@@ -298,9 +327,9 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
     };
 
     const handleItemClick = (item: any) => {
-        if (clickedItem) return; // Prevent double clicks
+        if (clickedItem) return; 
         triggerHaptic('medium');
-        setClickedItem(item.title); // 🌟 Trigger Loading Animation for specific card
+        setClickedItem(item.title); 
 
         if (item.link) {
             const encoded = btoa(item.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -309,7 +338,6 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
             router.push(`/search?q=${encodeURIComponent(item.title)}`); 
         }
         
-        // Reset state after 3 seconds in case navigation is cancelled or back button is pressed
         setTimeout(() => setClickedItem(null), 3000);
     };
 
@@ -334,16 +362,14 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
             
             <div ref={rowRef} className="flex gap-3 md:gap-5 overflow-x-auto scrollbar-hide scroll-smooth pb-6 px-1 snap-x snap-mandatory">
               {items.map((item, idx) => {
-                const isClicked = clickedItem === item.title; // Check if this specific card was clicked
+                const isClicked = clickedItem === item.title; 
 
                 return (
                   <div key={idx} className="flex flex-col gap-2 md:gap-3 min-w-[130px] md:min-w-[180px] group/item cursor-pointer snap-start" onClick={() => handleItemClick(item)}>
                       
-                      {/* 🌟 Dynamic Scale based on Click State 🌟 */}
                       <div className={`relative w-full h-[195px] md:h-[270px] rounded-xl md:rounded-2xl overflow-hidden transition-all duration-300 border border-transparent bg-gray-900 z-10 ${isClicked ? 'scale-95 shadow-[0_0_30px_rgba(234,179,8,0.4)] border-yellow-500/50' : 'md:group-hover/item:scale-[1.03] md:group-hover/item:shadow-[0_15px_30px_rgba(0,0,0,0.6)] md:group-hover/item:border-white/20'}`}>
                           <img src={item.image || item.poster} alt={item.title} className="w-full h-full object-cover opacity-90 md:group-hover/item:opacity-100 transition-opacity" loading="lazy"/>
                           
-                          {/* Default Hover Glass (Hides if clicked) */}
                           {!isClicked && (
                               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 md:group-hover/item:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center backdrop-blur-[2px]">
                                   <div className="bg-white/20 backdrop-blur-md border border-white/40 text-white w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:bg-yellow-500 hover:border-yellow-400 hover:text-black transition-all scale-0 md:group-hover/item:scale-100 duration-300 shadow-xl">
@@ -352,14 +378,12 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
                               </div>
                           )}
 
-                          {/* 🌟 CLICKED LOADING OVERLAY 🌟 */}
                           <AnimatePresence>
                               {isClicked && (
                                   <motion.div 
                                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                       className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center"
                                   >
-                                      {/* Glowing Spinner Ring */}
                                       <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-yellow-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.6)] border border-yellow-500/50">
                                           <Loader2 className="w-6 h-6 md:w-8 md:h-8 text-yellow-500 animate-spin" />
                                       </div>
@@ -406,7 +430,6 @@ function HomePageContent() {
 
   return (
     <div className="min-h-screen relative bg-[#050505] text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
-      {/* <TwinklingStars /> */}
       <div className="relative z-10 bg-transparent">
           <Navbar />
           
