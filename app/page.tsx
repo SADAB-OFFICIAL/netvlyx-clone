@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Play, Info, Search, MonitorPlay, 
-  ChevronRight, Star, X, Mail
+  ChevronRight, Star, X, Mail, Loader2 // <-- YAHAN FIX KIYA HAI 
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 // @ts-ignore (Optional: If you don't have this component, remove it or keep it as is)
