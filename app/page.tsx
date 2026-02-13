@@ -6,7 +6,18 @@ import {
   Play, Info, Search, MonitorPlay, 
   ChevronRight, Star, X, Mail, Loader2 
 } from 'lucide-react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, Variants } from 'framer-motion';
+
+// --- 📱 HAPTIC FEEDBACK ENGINE 📱 ---
+const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
+  if (typeof window !== 'undefined' && navigator.vibrate) {
+    switch (type) {
+      case 'light': navigator.vibrate(10); break; 
+      case 'medium': navigator.vibrate(20); break; 
+      case 'heavy': navigator.vibrate([30, 50, 30]); break; 
+    }
+  }
+};
 
 // --- SKELETONS ---
 const HeroSkeleton = () => (
@@ -71,19 +82,16 @@ const Navbar = () => {
              : 'w-full px-4 md:px-6 py-4 md:py-5 bg-gradient-to-b from-black/90 to-transparent border-transparent'}
         `}
       >
-        {/* LOGO */}
         <div className="flex items-center gap-1.5 md:gap-2 cursor-pointer group shrink-0" onClick={() => router.push('/')}>
             <div className="relative">
                 <div className="absolute inset-0 bg-yellow-500 blur-[10px] opacity-20 group-hover:opacity-50 transition-opacity rounded-full"></div>
                 <MonitorPlay size={scrolled ? 24 : 28} className="text-yellow-500 relative z-10 transition-all duration-300 group-hover:scale-110 drop-shadow-md" />
             </div>
-            {/* Hide text on very small screens if search is active to save space, otherwise show */}
             <span className={`font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600 font-sans drop-shadow-sm transition-all duration-300 ${scrolled ? 'text-base md:text-xl hidden sm:block' : 'text-lg md:text-2xl'}`}>
               SADABEFY
             </span>
         </div>
 
-        {/* SEARCH (Responsive pill) */}
         <form onSubmit={handleSearchSubmit} className="relative group/search ml-2 md:ml-4 flex-1 md:flex-none flex justify-end max-w-[200px] sm:max-w-[300px]">
           <div className={`flex items-center rounded-full transition-all duration-500 border border-white/5 w-full ${scrolled ? 'bg-black/40 hover:bg-black/60 py-1.5 md:py-2 px-3' : 'bg-black/50 hover:bg-black/70 py-2 md:py-2.5 px-4 backdrop-blur-md'}`}>
              <Search className="text-gray-400 group-focus-within/search:text-yellow-500 transition-colors mr-1.5 md:mr-2 shrink-0" size={scrolled ? 16 : 18} />
@@ -94,7 +102,6 @@ const Navbar = () => {
           </div>
         </form>
 
-        {/* LINKS (Desktop Only) */}
         <div className={`hidden md:flex items-center gap-6 ml-6 transition-opacity duration-300 ${scrolled ? 'w-0 overflow-hidden opacity-0' : 'w-auto opacity-100'}`}>
              {['Home', 'Series', 'Movies', 'Trending'].map((item) => (
                 <span key={item} className="text-sm font-medium text-gray-300 hover:text-yellow-400 cursor-pointer transition-colors relative group/link">
@@ -104,7 +111,6 @@ const Navbar = () => {
              ))}
         </div>
         
-        {/* Profile Avatar */}
         <div className={`ml-2 md:ml-6 w-7 h-7 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-yellow-500 to-amber-700 p-[1px] cursor-pointer hover:scale-105 transition-transform shrink-0 ${scrolled ? 'hidden md:block' : 'block'}`}>
             <div className="w-full h-full bg-black rounded-full flex items-center justify-center">
               <span className="text-yellow-500 text-[10px] md:text-xs font-bold">S</span>
@@ -117,13 +123,12 @@ const Navbar = () => {
 };
 
 // =====================================================================
-// 🎬 NEW 3D PARALLAX HERO SLIDER (Apple TV+ Vibe) + Mobile Float
+// 🎬 HERO SLIDER (Fixed Button Overlap on Mobile)
 // =====================================================================
 const HeroSlider = ({ data }: { data: any[] }) => {
     const [current, setCurrent] = useState(0);
     const router = useRouter();
 
-    // 🎭 3D Parallax State & Physics
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const mouseXSpring = useSpring(x, { stiffness: 150, damping: 20 });
@@ -132,12 +137,12 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     const rotateX = useTransform(mouseYSpring, [-300, 300], [12, -12]);
     const rotateY = useTransform(mouseXSpring, [-300, 300], [-12, 12]);
 
-    const AUTO_PLAY_DURATION = 8000; // 8 seconds per slide
+    const AUTO_PLAY_DURATION = 8000;
 
     useEffect(() => {
         const timer = setInterval(() => setCurrent(p => (p + 1) % (data.length || 1)), AUTO_PLAY_DURATION);
         return () => clearInterval(timer);
-    }, [data, current]); // Reset timer on manual click
+    }, [data, current]);
 
     if (!data || data.length === 0) return null;
     const movie = data[current];
@@ -163,10 +168,14 @@ const HeroSlider = ({ data }: { data: any[] }) => {
         x.set(0); y.set(0); 
     };
   
+    // Haptic interaction setup
+    const springTap: any = { scale: 0.93, transition: { type: "spring", stiffness: 400, damping: 17 } };
+
     return (
-      <div className="relative h-[85vh] min-h-[600px] md:h-[95vh] w-full overflow-hidden flex items-center bg-[#050505] pt-16 md:pt-0">
+      // ⚡ FIX: Used min-h-[100svh] for mobile safe height, and added pb-12 padding so content can breathe.
+      <div className="relative min-h-[100svh] lg:min-h-0 lg:h-[95vh] w-full overflow-hidden flex items-center bg-[#050505] pt-24 pb-12 lg:pt-0 lg:pb-0">
          
-         {/* 🌟 1. DYNAMIC AMBIENT AURA (Background Glow) 🌟 */}
+         {/* AURA */}
          <AnimatePresence mode="wait">
             <motion.div
                 key={current}
@@ -186,18 +195,15 @@ const HeroSlider = ({ data }: { data: any[] }) => {
             </motion.div>
          </AnimatePresence>
 
-         {/* Dark Overlays for Text Legibility */}
          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent z-0 pointer-events-none h-full"></div>
          <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-transparent to-transparent hidden md:block z-0 pointer-events-none"></div>
   
-         {/* 🌟 2. HERO CONTENT (Mobile First: Column, Desktop: Row) 🌟 */}
-         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col-reverse md:flex-row items-center justify-center md:justify-between px-6 md:px-12 gap-6 md:gap-16">
+         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col-reverse lg:flex-row items-center justify-center lg:justify-between px-6 lg:px-12 gap-6 lg:gap-16">
              
-             {/* LEFT: Cinematic Info (Centered on mobile, left on desktop) */}
-             <div className="w-full md:w-[55%] flex flex-col items-center md:items-start text-center md:text-left gap-4 md:gap-6 mt-2 md:mt-0">
+             {/* LEFT: Cinematic Info */}
+             <div className="w-full lg:w-[55%] flex flex-col items-center lg:items-start text-center lg:text-left gap-4 lg:gap-6 mt-2 lg:mt-0">
                  
-                 {/* Badges */}
-                 <div className="flex flex-wrap justify-center md:justify-start items-center gap-2 md:gap-3">
+                 <div className="flex flex-wrap justify-center lg:justify-start items-center gap-2 lg:gap-3">
                      <span className="bg-yellow-500/10 text-yellow-400 px-3 py-1.5 text-[10px] md:text-xs font-bold rounded-full border border-yellow-500/20 flex items-center gap-1.5 backdrop-blur-md">
                        <Star size={12} fill="currentColor" /> {movie.rating || "Top"} Rated
                      </span>
@@ -208,7 +214,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                      </div>
                  </div>
 
-                 {/* Title */}
                  <AnimatePresence mode="wait">
                     <motion.h1 
                         key={movie.title}
@@ -221,7 +226,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                     </motion.h1>
                  </AnimatePresence>
 
-                 {/* Description (Hidden or clamped heavy on small mobile to save space) */}
                  <AnimatePresence mode="wait">
                     <motion.p 
                         key={movie.desc}
@@ -234,7 +238,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                     </motion.p>
                  </AnimatePresence>
 
-                 {/* Buttons (Full width on mobile) */}
+                 {/* Buttons */}
                  <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -248,24 +252,47 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                         <Info size={18} /> Details
                     </button>
                  </motion.div>
+
+                 {/* 🌟 FIX: MOBILE PROGRESS DOTS (Rendered inside the flow to avoid overlaps) 🌟 */}
+                 <motion.div 
+                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+                     className="lg:hidden flex gap-2 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10 mt-3"
+                 >
+                     {data.map((_, idx) => (
+                        <div 
+                           key={idx} 
+                           onClick={() => setCurrent(idx)}
+                           className="h-1.5 rounded-full overflow-hidden cursor-pointer bg-white/20 relative"
+                           style={{ width: idx === current ? '32px' : '6px', transition: 'width 0.5s ease-in-out' }}
+                        >
+                            {idx === current && (
+                                <motion.div 
+                                    initial={{ width: "0%" }}
+                                    animate={{ width: "100%" }}
+                                    transition={{ duration: AUTO_PLAY_DURATION / 1000, ease: "linear" }}
+                                    key={`progress-mob-${current}`}
+                                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-400 to-amber-500 shadow-[0_0_10px_rgba(250,204,21,0.8)]"
+                                />
+                            )}
+                            {idx < current && <div className="absolute top-0 left-0 h-full w-full bg-white/60" />}
+                        </div>
+                    ))}
+                 </motion.div>
              </div>
 
-             {/* RIGHT: 3D PARALLAX POSTER (Auto-floats on mobile) */}
-             <div className="w-full md:w-[45%] flex justify-center md:justify-end perspective-[2000px] z-50 mt-4 md:mt-0">
+             {/* RIGHT: 3D PARALLAX POSTER */}
+             <div className="w-full lg:w-[45%] flex justify-center lg:justify-end perspective-[2000px] z-50 mt-2 lg:mt-0">
                  <motion.div
                     onMouseMove={handleMouseMove}
                     onMouseLeave={handleMouseLeave}
                     onClick={handlePlayClick}
-                    // Apple TV Parallax + Zero Gravity Float
                     animate={{ y: [0, -12, 0] }}
                     transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
                     style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                    className="relative w-[160px] sm:w-[200px] md:w-[320px] lg:w-[360px] aspect-[2/3] cursor-pointer group"
+                    className="relative w-[160px] sm:w-[200px] md:w-[280px] lg:w-[360px] aspect-[2/3] cursor-pointer group"
                  >
-                    {/* Shadow Glow behind card */}
                     <div className="absolute -inset-4 bg-yellow-500/20 blur-[40px] md:blur-[60px] rounded-full opacity-50 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-700 z-0 pointer-events-none"></div>
 
-                    {/* Main Poster Card */}
                     <AnimatePresence mode="wait">
                        <motion.div
                          key={movie.poster}
@@ -281,7 +308,6 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                        </motion.div>
                     </AnimatePresence>
 
-                    {/* 3D Floating Play Button */}
                     <motion.div
                        style={{ transform: "translateZ(80px)" }} 
                        className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
@@ -294,22 +320,21 @@ const HeroSlider = ({ data }: { data: any[] }) => {
              </div>
          </div>
 
-         {/* 🌟 APPLE/INSTAGRAM STYLE PROGRESS DOTS 🌟 */}
-         <div className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 flex gap-2 md:gap-3 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10">
+         {/* 🌟 DESKTOP PROGRESS DOTS (Hidden on mobile, safe to keep absolute) 🌟 */}
+         <div className="hidden lg:flex absolute bottom-10 left-1/2 -translate-x-1/2 gap-3 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10">
              {data.map((_, idx) => (
                 <div 
                    key={idx} 
                    onClick={() => setCurrent(idx)}
-                   className="h-1.5 md:h-2 rounded-full overflow-hidden cursor-pointer bg-white/20 relative"
+                   className="h-2 rounded-full overflow-hidden cursor-pointer bg-white/20 relative"
                    style={{ width: idx === current ? '40px' : '8px', transition: 'width 0.5s ease-in-out' }}
                 >
-                    {/* Progress Fill Indicator */}
                     {idx === current && (
                         <motion.div 
                             initial={{ width: "0%" }}
                             animate={{ width: "100%" }}
                             transition={{ duration: AUTO_PLAY_DURATION / 1000, ease: "linear" }}
-                            key={`progress-${current}`} // Re-trigger animation on slide change
+                            key={`progress-desk-${current}`}
                             className="absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-400 to-amber-500 shadow-[0_0_10px_rgba(250,204,21,0.8)]"
                         />
                     )}
@@ -321,7 +346,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     );
 };
 
-// --- MOVIE SECTION (Mobile Optimized Grid) ---
+// --- MOVIE SECTION ---
 const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
@@ -358,16 +383,13 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
             {slug && <button onClick={() => router.push(`/category/${slug}`)} className="text-[10px] md:text-sm font-semibold text-gray-400 hover:text-white border border-gray-700 hover:border-white/50 bg-white/5 backdrop-blur-md px-3 md:px-5 py-1 md:py-1.5 rounded-full transition-all hover:bg-white/10 active:scale-95 whitespace-nowrap">View All</button>}
         </div>
         <div className="relative group">
-            {/* Desktop Scroll Buttons */}
             <ChevronRight className="hidden md:flex absolute left-0 top-0 bottom-0 z-20 m-auto h-full w-14 bg-gradient-to-r from-[#0a0a0a] to-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all rotate-180 text-white items-center justify-start pl-2" onClick={() => scroll('left')} />
             
-            {/* Snap Scrolling for Mobile */}
             <div ref={rowRef} className="flex gap-3 md:gap-5 overflow-x-auto scrollbar-hide scroll-smooth pb-6 px-1 snap-x snap-mandatory">
               {items.map((item, idx) => (
                 <div key={idx} className="flex flex-col gap-2 md:gap-3 min-w-[130px] md:min-w-[180px] group/item cursor-pointer snap-start" onClick={() => handleItemClick(item)}>
                     <div className="relative w-full h-[195px] md:h-[270px] rounded-xl md:rounded-2xl overflow-hidden transition-all duration-300 md:group-hover/item:scale-[1.03] md:group-hover/item:shadow-[0_15px_30px_rgba(0,0,0,0.6)] md:group-hover/item:border-white/20 border border-transparent bg-gray-900 z-10">
                         <img src={item.image || item.poster} alt={item.title} className="w-full h-full object-cover opacity-90 md:group-hover/item:opacity-100 transition-opacity" loading="lazy"/>
-                        
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 md:group-hover/item:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center backdrop-blur-[2px]">
                             <div className="bg-white/20 backdrop-blur-md border border-white/40 text-white w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:bg-yellow-500 hover:border-yellow-400 hover:text-black transition-all scale-0 md:group-hover/item:scale-100 duration-300 shadow-xl">
                                <Play size={18} className="ml-1 fill-current md:w-5 md:h-5" />
