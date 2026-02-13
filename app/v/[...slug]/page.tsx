@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Play, Download, CheckCircle, 
@@ -11,13 +11,12 @@ import { motion, AnimatePresence, Variants } from 'framer-motion';
 import html2canvas from 'html2canvas';
 
 // --- 📱 HAPTIC FEEDBACK ENGINE 📱 ---
-// Ye function mobile me premium vibration dega (Apple/Telegram style)
 const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
   if (typeof window !== 'undefined' && navigator.vibrate) {
     switch (type) {
-      case 'light': navigator.vibrate(10); break; // Tabs/Small clicks
-      case 'medium': navigator.vibrate(20); break; // Main actions (Watch/Download)
-      case 'heavy': navigator.vibrate([30, 50, 30]); break; // Errors or big transitions
+      case 'light': navigator.vibrate(10); break; 
+      case 'medium': navigator.vibrate(20); break; 
+      case 'heavy': navigator.vibrate([30, 50, 30]); break; 
     }
   }
 };
@@ -167,7 +166,7 @@ export default function MoviePage() {
 
   const handleGoldenShare = async () => {
     if (isSharing || !ticketRef.current) return;
-    triggerHaptic('medium'); // Haptic on share click
+    triggerHaptic('medium'); 
     setIsSharing(true);
 
     try {
@@ -187,9 +186,9 @@ export default function MoviePage() {
             const link = document.createElement("a");
             link.href = image; link.download = `SADABEFY_${finalTitle || 'Movie'}.jpg`; link.click();
         }
-        triggerHaptic('light'); // Success haptic
+        triggerHaptic('light'); 
     } catch (err: any) {
-        triggerHaptic('heavy'); // Error haptic
+        triggerHaptic('heavy'); 
         alert("Share Failed: " + (err.message || "Unknown Error"));
     } finally {
         setIsSharing(false);
@@ -239,7 +238,6 @@ export default function MoviePage() {
 
   const displayLinks = filteredLinks.filter((l: any) => !selectedQuality || l.quality === selectedQuality);
 
-  // --- Interaction Handlers with Haptic ---
   const handleLinkClick = (url: string) => {
     triggerHaptic('medium');
     try {
@@ -265,8 +263,8 @@ export default function MoviePage() {
       else router.back();
   };
 
-  // Liquid Spring Animation configuration
-  const springTap = { scale: 0.93, transition: { type: "spring", stiffness: 400, damping: 17 } };
+  // ✅ VERCEL TYPE ERROR FIX: `any` laga diya taaki strict TypeScript check fail na ho
+  const springTap: any = { scale: 0.93, transition: { type: "spring", stiffness: 400, damping: 17 } };
   
   const sectionVariant: Variants = {
     hidden: { opacity: 0, scale: 0.98, filter: 'blur(4px)' },
@@ -287,10 +285,10 @@ export default function MoviePage() {
     <div className="min-h-screen bg-transparent text-white font-sans pb-20 overflow-x-hidden relative selection:bg-yellow-500/30">
       <AmbientBackground image={finalPoster} />
 
-      {/* --- HIDDEN TICKET (Unchanged) --- */}
+      {/* --- HIDDEN TICKET --- */}
       <div className="fixed top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none opacity-0" style={{ zIndex: -50 }}>
          <div ref={ticketRef} className="w-[400px] h-[700px] relative overflow-hidden flex flex-col items-center justify-between py-12 px-8" 
-              style={{ backgroundColor: '#050505', border: '8px solid #ca8a04', borderRadius: '48px' }}> {/* Ticket also bubbled */}
+              style={{ backgroundColor: '#050505', border: '8px solid #ca8a04', borderRadius: '48px' }}>
              <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)' }}></div>
              {(base64Poster || finalPoster) && (
                <img src={base64Poster || finalPoster} className="absolute inset-0 w-full h-full object-cover opacity-20" style={{ filter: 'blur(20px)', transform: 'scale(1.25)' }} alt="bg"/>
@@ -330,7 +328,7 @@ export default function MoviePage() {
              <motion.button 
                  whileTap={springTap}
                  onClick={() => { triggerHaptic('light'); router.back(); }} 
-                 className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-colors hover:bg-white/10 shadow-lg"
+                 className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-colors hover:bg-white/10 shadow-lg cursor-pointer"
              >
                  <ArrowLeft size={20}/> Back
              </motion.button>
@@ -352,19 +350,18 @@ export default function MoviePage() {
                   {finalOverview}
               </p>
 
-              {/* Liquid Bubbly Buttons */}
               <div className="flex gap-4 relative z-50 animate-fade-in delay-200">
                   <motion.button 
                     whileTap={springTap}
                     onClick={() => handleHeroAction('watch')} 
-                    className="bg-white text-black px-8 py-4 rounded-[2rem] font-bold flex items-center gap-2 transition-all shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:shadow-[0_0_40px_rgba(255,255,255,0.5)]"
+                    className="bg-white text-black px-8 py-4 rounded-[2rem] font-bold flex items-center gap-2 transition-all shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:shadow-[0_0_40px_rgba(255,255,255,0.5)] cursor-pointer"
                   >
                       <Play className="fill-current" size={20}/> Watch Now
                   </motion.button>
                   <motion.button 
                     whileTap={springTap}
                     onClick={() => handleHeroAction('download')} 
-                    className="bg-white/5 backdrop-blur-xl text-white px-8 py-4 rounded-[2rem] font-bold flex items-center gap-2 border border-white/10 hover:bg-white/10 transition-colors shadow-lg"
+                    className="bg-white/5 backdrop-blur-xl text-white px-8 py-4 rounded-[2rem] font-bold flex items-center gap-2 border border-white/10 hover:bg-white/10 transition-colors shadow-lg cursor-pointer"
                   >
                       <Download size={20}/> Download
                   </motion.button>
@@ -372,7 +369,7 @@ export default function MoviePage() {
           </div>
       </div>
 
-      {/* 2. FLOATING POSTER (Squircle shape) */}
+      {/* 2. FLOATING POSTER */}
       <div className="relative z-20 -mt-10 mb-16 flex justify-center px-4">
           <div className="relative group">
               <div className="absolute inset-0 bg-cover bg-center blur-3xl opacity-30 scale-110 rounded-[3rem] transition-opacity duration-500 group-hover:opacity-50 pointer-events-none" style={{ backgroundImage: `url(${finalPoster})` }}></div>
@@ -409,11 +406,9 @@ export default function MoviePage() {
               </div>
           )}
 
-          {/* 💧 TELEGRAM STYLE LIQUID CARD 💧 */}
           <div id="download-section" ref={downloadRef} className="pt-10">
               <div className="bg-black/30 backdrop-blur-[40px] border border-white/10 rounded-[3rem] p-6 md:p-10 shadow-[0_20px_60px_rgba(0,0,0,0.4)] relative overflow-hidden group">
                   
-                  {/* Liquid Internal Blobs */}
                   <div className="absolute -top-20 -right-20 w-80 h-80 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none mix-blend-screen animate-pulse"></div>
                   <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-purple-600/20 blur-[100px] rounded-full pointer-events-none mix-blend-screen animate-pulse" style={{ animationDelay: '2s' }}></div>
                   
@@ -422,14 +417,13 @@ export default function MoviePage() {
                   <AnimatePresence mode="wait">
                     {(selectedSeason || actionType) && (
                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex items-center justify-between mb-8 pb-4 border-b border-white/5 relative z-10">
-                          <motion.button whileTap={springTap} onClick={goBackStep} className="text-sm bg-white/5 px-4 py-2 rounded-full text-gray-300 hover:text-white flex items-center gap-1 transition-colors"><ArrowLeft size={16}/> Go Back</motion.button>
+                          <motion.button whileTap={springTap} onClick={goBackStep} className="cursor-pointer text-sm bg-white/5 px-4 py-2 rounded-full text-gray-300 hover:text-white flex items-center gap-1 transition-colors"><ArrowLeft size={16}/> Go Back</motion.button>
                           <div className="text-xs font-mono text-gray-500 uppercase tracking-widest px-3 py-1 rounded-full bg-black/20 border border-white/5">{selectedSeason ? `S${selectedSeason}` : ''} {actionType ? `/ ${actionType}` : ''} {selectedQuality ? `/ ${selectedQuality}` : ''}</div>
                        </motion.div>
                     )}
                   </AnimatePresence>
 
                   <AnimatePresence mode="wait">
-                    {/* SEASON SELECTOR */}
                     {availableSeasons.length > 0 && selectedSeason === null && (
                          <motion.div key="season-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="relative z-10">
                             <h3 className="text-lg font-semibold text-gray-400 mb-4 flex items-center justify-center gap-2"><Tv size={18}/> Select Season</h3>
@@ -439,7 +433,7 @@ export default function MoviePage() {
                                       whileTap={springTap} 
                                       key={s} 
                                       onClick={() => { triggerHaptic('light'); setSelectedSeason(s); }} 
-                                      className="p-5 bg-white/5 hover:bg-white/15 border border-white/5 rounded-[2rem] font-bold text-lg transition-colors text-white text-center"
+                                      className="cursor-pointer p-5 bg-white/5 hover:bg-white/15 border border-white/5 rounded-[2rem] font-bold text-lg transition-colors text-white text-center"
                                     >
                                         Season {s}
                                     </motion.button>
@@ -448,41 +442,37 @@ export default function MoviePage() {
                         </motion.div>
                     )}
 
-                    {/* ACTION SELECTOR */}
                     {((availableSeasons.length === 0) || selectedSeason !== null) && actionType === null && (
                         <motion.div key="action-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto relative z-10">
-                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('medium'); setActionType('download'); }} className="p-8 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-blue-600/10 hover:border-blue-500/30 transition-all text-center group">
+                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('medium'); setActionType('download'); }} className="cursor-pointer p-8 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-blue-600/10 hover:border-blue-500/30 transition-all text-center group">
                                 <Download size={32} className="mx-auto mb-4 text-blue-400 group-hover:scale-110 transition-transform duration-300"/>
                                 <h3 className="text-2xl font-bold text-white">Download</h3>
                             </motion.button>
-                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('medium'); setActionType('watch'); }} className="p-8 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-green-600/10 hover:border-green-500/30 transition-all text-center group">
+                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('medium'); setActionType('watch'); }} className="cursor-pointer p-8 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-green-600/10 hover:border-green-500/30 transition-all text-center group">
                                 <Play size={32} className="mx-auto mb-4 text-green-400 group-hover:scale-110 transition-transform duration-300"/>
                                 <h3 className="text-2xl font-bold text-white">Watch Online</h3>
                             </motion.button>
                         </motion.div>
                     )}
 
-                    {/* TYPE SELECTOR */}
                     {actionType === 'download' && downloadType === null && availableSeasons.length > 0 && (
                         <motion.div key="type-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto relative z-10">
-                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('light'); setDownloadType('episode'); }} className="p-6 bg-white/5 rounded-[2.5rem] font-bold text-xl hover:bg-white/10 border border-white/5 transition-colors flex flex-col items-center justify-center gap-3"><Tv size={28} className="text-purple-400"/> Episode Wise</motion.button>
-                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('light'); setDownloadType('bulk'); }} className="p-6 bg-white/5 rounded-[2.5rem] font-bold text-xl hover:bg-white/10 border border-white/5 transition-colors flex flex-col items-center justify-center gap-3"><Archive size={28} className="text-orange-400"/> Bulk / Zip</motion.button>
+                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('light'); setDownloadType('episode'); }} className="cursor-pointer p-6 bg-white/5 rounded-[2.5rem] font-bold text-xl hover:bg-white/10 border border-white/5 transition-colors flex flex-col items-center justify-center gap-3"><Tv size={28} className="text-purple-400"/> Episode Wise</motion.button>
+                            <motion.button whileTap={springTap} onClick={() => { triggerHaptic('light'); setDownloadType('bulk'); }} className="cursor-pointer p-6 bg-white/5 rounded-[2.5rem] font-bold text-xl hover:bg-white/10 border border-white/5 transition-colors flex flex-col items-center justify-center gap-3"><Archive size={28} className="text-orange-400"/> Bulk / Zip</motion.button>
                         </motion.div>
                     )}
 
-                    {/* QUALITY SELECTOR */}
                     {((actionType === 'watch') || (actionType === 'download' && (availableSeasons.length === 0 || downloadType !== null))) && selectedQuality === null && (
                         <motion.div key="quality-selector" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="relative z-10">
                             <h3 className="text-lg font-semibold text-gray-400 mb-4 text-center">Select Quality</h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-3xl mx-auto">
                                 {currentQualities.length > 0 ? currentQualities.map(q => (
-                                    <motion.button whileTap={springTap} key={q} onClick={() => { triggerHaptic('light'); setSelectedQuality(q); }} className="p-4 bg-white/5 border border-white/5 hover:bg-white/15 rounded-[2rem] font-bold text-lg transition-colors">{q}</motion.button>
+                                    <motion.button whileTap={springTap} key={q} onClick={() => { triggerHaptic('light'); setSelectedQuality(q); }} className="cursor-pointer p-4 bg-white/5 border border-white/5 hover:bg-white/15 rounded-[2rem] font-bold text-lg transition-colors">{q}</motion.button>
                                 )) : <div className="col-span-full text-center text-gray-500 py-4">No options found.</div>}
                             </div>
                         </motion.div>
                     )}
 
-                    {/* LINKS LIST */}
                     {selectedQuality !== null && (
                         <motion.div key="links-list" variants={sectionVariant} initial="hidden" animate="visible" exit="exit" className="space-y-3 max-w-3xl mx-auto relative z-10">
                             <h3 className="text-green-400 font-bold mb-4 flex items-center justify-center gap-2"><CheckCircle size={20}/> Available Links</h3>
@@ -491,7 +481,7 @@ export default function MoviePage() {
                                   whileTap={springTap}
                                   key={idx} 
                                   onClick={() => handleLinkClick(link.url)} 
-                                  className="w-full text-left p-5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-[2rem] flex items-center justify-between group transition-colors"
+                                  className="cursor-pointer w-full text-left p-5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-[2rem] flex items-center justify-between group transition-colors"
                                 >
                                     <div>
                                         <span className="font-bold text-gray-200 group-hover:text-white block text-sm md:text-base">{link.label}</span>
@@ -508,7 +498,6 @@ export default function MoviePage() {
               </div>
           </div>
           
-          {/* CAST SECTION (Liquid Style) */}
           {castList.length > 0 && (
              <div className="pb-24">
                  <h2 className="text-2xl font-bold mb-8 pl-3 opacity-90">Top Cast</h2>
@@ -534,12 +523,11 @@ export default function MoviePage() {
 
       </div>
       
-      {/* LIQUID FLOATING SHARE BUTTON */}
       <motion.button 
         whileTap={{ scale: 0.85, borderRadius: "50px" }}
         onClick={handleGoldenShare} 
         disabled={isSharing}
-        className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-yellow-500 to-amber-600 text-white w-14 h-14 md:w-16 md:h-16 rounded-full shadow-[0_10px_30px_rgba(217,119,6,0.4)] hover:shadow-[0_10px_40px_rgba(217,119,6,0.6)] flex items-center justify-center transition-all disabled:opacity-70 disabled:cursor-wait group" 
+        className="cursor-pointer fixed bottom-6 right-6 z-50 bg-gradient-to-r from-yellow-500 to-amber-600 text-white w-14 h-14 md:w-16 md:h-16 rounded-full shadow-[0_10px_30px_rgba(217,119,6,0.4)] hover:shadow-[0_10px_40px_rgba(217,119,6,0.6)] flex items-center justify-center transition-all disabled:opacity-70 disabled:cursor-wait group" 
         title="Share Golden Ticket"
       >
         {isSharing ? <Loader2 className="animate-spin text-white" size={24}/> : <Share2 className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform text-yellow-50" />}
