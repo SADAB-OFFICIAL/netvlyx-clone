@@ -6,9 +6,7 @@ import {
   Play, Info, Search, MonitorPlay, 
   ChevronRight, Star, X, Mail, Loader2 
 } from 'lucide-react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
-// @ts-ignore
-import TwinklingStars from '@/components/TwinklingStars';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, Variants } from 'framer-motion';
 
 // --- 📱 HAPTIC FEEDBACK ENGINE 📱 ---
 const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
@@ -23,8 +21,8 @@ const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
 
 // --- SKELETONS ---
 const HeroSkeleton = () => (
-  <div className="w-full min-h-[100svh] md:h-[90vh] bg-[#050505] animate-pulse flex items-center justify-center pt-20">
-      <div className="w-full max-w-7xl mx-auto px-6 flex flex-col-reverse md:flex-row items-center gap-8 md:gap-12">
+  <div className="w-full h-[85vh] md:h-[90vh] bg-[#050505] animate-pulse flex items-center justify-center">
+      <div className="w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col-reverse md:flex-row items-center gap-12 mt-10">
           <div className="w-full md:w-1/2 space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
               <div className="h-6 w-32 bg-gray-800 rounded-full"></div>
               <div className="h-16 md:h-24 w-full md:w-3/4 bg-gray-800 rounded-2xl"></div>
@@ -50,7 +48,7 @@ const NavbarSkeleton = () => (
 );
 
 // =====================================================================
-// 💧 GOLD LIQUID NAVBAR (Fixed Logo & Search)
+// 💧 GOLD LIQUID NAVBAR (Mobile Optimized)
 // =====================================================================
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -64,9 +62,8 @@ const Navbar = () => {
   }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault(); // Default behavior rokenge taaki page reload na ho
-    if (query.trim() !== '') {
-        triggerHaptic('light');
+    e.preventDefault();
+    if (query.trim()) {
         router.push(`/search?q=${encodeURIComponent(query)}`);
     }
   };
@@ -85,33 +82,26 @@ const Navbar = () => {
              : 'w-full px-4 md:px-6 py-4 md:py-5 bg-gradient-to-b from-black/90 to-transparent border-transparent'}
         `}
       >
-        {/* LOGO (Fixed Visibility on Mobile) */}
         <div className="flex items-center gap-1.5 md:gap-2 cursor-pointer group shrink-0" onClick={() => router.push('/')}>
             <div className="relative">
                 <div className="absolute inset-0 bg-yellow-500 blur-[10px] opacity-20 group-hover:opacity-50 transition-opacity rounded-full"></div>
                 <MonitorPlay size={scrolled ? 24 : 28} className="text-yellow-500 relative z-10 transition-all duration-300 group-hover:scale-110 drop-shadow-md" />
             </div>
-            {/* Always visible text, just smaller on mobile */}
-            <span className={`font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600 font-sans drop-shadow-sm transition-all duration-300 ${scrolled ? 'text-sm md:text-xl' : 'text-base md:text-2xl'}`}>
+            <span className={`font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600 font-sans drop-shadow-sm transition-all duration-300 ${scrolled ? 'text-base md:text-xl hidden sm:block' : 'text-lg md:text-2xl'}`}>
               SADABEFY
             </span>
         </div>
 
-        {/* SEARCH (Fixed form submission) */}
-        <form onSubmit={handleSearchSubmit} className="relative ml-2 md:ml-4 flex-1 md:flex-none flex justify-end max-w-[180px] sm:max-w-[300px]">
-          <div className={`flex items-center rounded-full transition-all duration-500 border border-white/5 w-full ${scrolled ? 'bg-black/40 focus-within:bg-black/60 py-1.5 md:py-2 px-3' : 'bg-black/50 focus-within:bg-black/70 py-2 md:py-2.5 px-4 backdrop-blur-md'}`}>
-             <button type="submit" className="outline-none"><Search className="text-gray-400 hover:text-yellow-500 transition-colors mr-1.5 md:mr-2 shrink-0 cursor-pointer" size={scrolled ? 16 : 18} /></button>
+        <form onSubmit={handleSearchSubmit} className="relative group/search ml-2 md:ml-4 flex-1 md:flex-none flex justify-end max-w-[200px] sm:max-w-[300px]">
+          <div className={`flex items-center rounded-full transition-all duration-500 border border-white/5 w-full ${scrolled ? 'bg-black/40 hover:bg-black/60 py-1.5 md:py-2 px-3' : 'bg-black/50 hover:bg-black/70 py-2 md:py-2.5 px-4 backdrop-blur-md'}`}>
+             <Search className="text-gray-400 group-focus-within/search:text-yellow-500 transition-colors mr-1.5 md:mr-2 shrink-0" size={scrolled ? 16 : 18} />
              <input 
-                type="text" 
-                value={query} 
-                onChange={(e) => setQuery(e.target.value)} 
-                placeholder="Search..."
+                type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search..."
                 className="bg-transparent border-none outline-none text-white text-xs md:text-sm placeholder-gray-400/80 w-full font-medium"
              />
           </div>
         </form>
 
-        {/* LINKS (Desktop Only) */}
         <div className={`hidden md:flex items-center gap-6 ml-6 transition-opacity duration-300 ${scrolled ? 'w-0 overflow-hidden opacity-0' : 'w-auto opacity-100'}`}>
              {['Home', 'Series', 'Movies', 'Trending'].map((item) => (
                 <span key={item} className="text-sm font-medium text-gray-300 hover:text-yellow-400 cursor-pointer transition-colors relative group/link">
@@ -121,7 +111,6 @@ const Navbar = () => {
              ))}
         </div>
         
-        {/* Profile Avatar */}
         <div className={`ml-2 md:ml-6 w-7 h-7 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-yellow-500 to-amber-700 p-[1px] cursor-pointer hover:scale-105 transition-transform shrink-0 ${scrolled ? 'hidden md:block' : 'block'}`}>
             <div className="w-full h-full bg-black rounded-full flex items-center justify-center">
               <span className="text-yellow-500 text-[10px] md:text-xs font-bold">S</span>
@@ -134,7 +123,7 @@ const Navbar = () => {
 };
 
 // =====================================================================
-// 🎬 3D PARALLAX HERO SLIDER (Fixed Overlap Issue!)
+// 🎬 HERO SLIDER (Fixed Button Overlap on Mobile)
 // =====================================================================
 const HeroSlider = ({ data }: { data: any[] }) => {
     const [current, setCurrent] = useState(0);
@@ -148,18 +137,17 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     const rotateX = useTransform(mouseYSpring, [-300, 300], [12, -12]);
     const rotateY = useTransform(mouseXSpring, [-300, 300], [-12, 12]);
 
-    const AUTO_PLAY_DURATION = 8000; 
+    const AUTO_PLAY_DURATION = 8000;
 
     useEffect(() => {
         const timer = setInterval(() => setCurrent(p => (p + 1) % (data.length || 1)), AUTO_PLAY_DURATION);
         return () => clearInterval(timer);
-    }, [data, current]); 
+    }, [data, current]);
 
     if (!data || data.length === 0) return null;
     const movie = data[current];
 
     const handlePlayClick = () => {
-        triggerHaptic('medium');
         if (movie.link) {
             const encoded = btoa(movie.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
             router.push(`/v/${encoded}`);
@@ -176,14 +164,18 @@ const HeroSlider = ({ data }: { data: any[] }) => {
         y.set(e.clientY - centerY);
     };
 
-    const handleMouseLeave = () => { x.set(0); y.set(0); };
-    const springTap: any = { scale: 0.93, transition: { type: "spring", stiffness: 400, damping: 17 } };
+    const handleMouseLeave = () => {
+        x.set(0); y.set(0); 
+    };
   
+    // Haptic interaction setup
+    const springTap: any = { scale: 0.93, transition: { type: "spring", stiffness: 400, damping: 17 } };
+
     return (
-      // Fix: min-h-[100svh] ensures it takes full mobile screen height safely.
-      <div className="relative min-h-[100svh] md:h-[95vh] w-full overflow-hidden flex items-center bg-[#050505] pt-24 pb-12 md:pt-0 md:pb-0">
+      // ⚡ FIX: Used min-h-[100svh] for mobile safe height, and added pb-12 padding so content can breathe.
+      <div className="relative min-h-[100svh] lg:min-h-0 lg:h-[95vh] w-full overflow-hidden flex items-center bg-[#050505] pt-24 pb-12 lg:pt-0 lg:pb-0">
          
-         {/* 🌟 AMBIENT AURA 🌟 */}
+         {/* AURA */}
          <AnimatePresence mode="wait">
             <motion.div
                 key={current}
@@ -195,7 +187,10 @@ const HeroSlider = ({ data }: { data: any[] }) => {
             >
                 <div 
                     className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: `url(${movie.poster})`, filter: 'blur(60px) saturate(200%) brightness(0.5)' }}
+                    style={{ 
+                        backgroundImage: `url(${movie.poster})`,
+                        filter: 'blur(60px) saturate(200%) brightness(0.5)' 
+                    }}
                 />
             </motion.div>
          </AnimatePresence>
@@ -203,12 +198,12 @@ const HeroSlider = ({ data }: { data: any[] }) => {
          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent z-0 pointer-events-none h-full"></div>
          <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-transparent to-transparent hidden md:block z-0 pointer-events-none"></div>
   
-         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col-reverse md:flex-row items-center justify-center md:justify-between px-6 md:px-12 gap-6 md:gap-16">
+         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col-reverse lg:flex-row items-center justify-center lg:justify-between px-6 lg:px-12 gap-6 lg:gap-16">
              
              {/* LEFT: Cinematic Info */}
-             <div className="w-full md:w-[55%] flex flex-col items-center md:items-start text-center md:text-left gap-4 md:gap-6 mt-2 md:mt-0">
+             <div className="w-full lg:w-[55%] flex flex-col items-center lg:items-start text-center lg:text-left gap-4 lg:gap-6 mt-2 lg:mt-0">
                  
-                 <div className="flex flex-wrap justify-center md:justify-start items-center gap-2 md:gap-3">
+                 <div className="flex flex-wrap justify-center lg:justify-start items-center gap-2 lg:gap-3">
                      <span className="bg-yellow-500/10 text-yellow-400 px-3 py-1.5 text-[10px] md:text-xs font-bold rounded-full border border-yellow-500/20 flex items-center gap-1.5 backdrop-blur-md">
                        <Star size={12} fill="currentColor" /> {movie.rating || "Top"} Rated
                      </span>
@@ -248,20 +243,20 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.3 }}
-                    className="flex flex-row w-full md:w-auto justify-center md:justify-start gap-3 md:gap-4 pt-2 md:pt-4 z-50"
+                    className="flex flex-col sm:flex-row w-full md:w-auto gap-3 md:gap-4 pt-2 md:pt-4 z-50"
                  >
-                    <motion.button whileTap={springTap} onClick={handlePlayClick} className="w-1/2 sm:w-auto justify-center bg-white text-black px-6 md:px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 hover:bg-yellow-400 transition-all shadow-[0_0_30px_rgba(255,255,255,0.3)] text-sm md:text-base cursor-pointer">
-                        <Play fill="black" size={18} /> Watch
-                    </motion.button>
-                    <motion.button whileTap={springTap} onClick={() => triggerHaptic('light')} className="w-1/2 sm:w-auto justify-center bg-white/10 backdrop-blur-2xl text-white px-6 md:px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 hover:bg-white/20 transition-all border border-white/20 text-sm md:text-base cursor-pointer">
+                    <button onClick={handlePlayClick} className="w-full sm:w-auto justify-center bg-white text-black px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 hover:bg-yellow-400 transition-all hover:scale-105 active:scale-95 text-sm md:text-base shadow-[0_0_30px_rgba(255,255,255,0.3)]">
+                        <Play fill="black" size={18} /> Watch Now
+                    </button>
+                    <button className="w-full sm:w-auto justify-center bg-white/10 backdrop-blur-2xl text-white px-8 py-3.5 md:py-4 rounded-full font-bold flex items-center gap-2 hover:bg-white/20 transition-all border border-white/20 active:scale-95 text-sm md:text-base">
                         <Info size={18} /> Details
-                    </motion.button>
+                    </button>
                  </motion.div>
 
-                 {/* 🌟 THE OVERLAP FIX: Mobile Dots inside normal document flow 🌟 */}
+                 {/* 🌟 FIX: MOBILE PROGRESS DOTS (Rendered inside the flow to avoid overlaps) 🌟 */}
                  <motion.div 
                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-                     className="md:hidden flex gap-2 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10 mt-6"
+                     className="lg:hidden flex gap-2 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10 mt-3"
                  >
                      {data.map((_, idx) => (
                         <div 
@@ -285,8 +280,8 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                  </motion.div>
              </div>
 
-             {/* RIGHT: 3D PARALLAX POSTER (Auto-floats on mobile) */}
-             <div className="w-full md:w-[45%] flex justify-center md:justify-end perspective-[2000px] z-50 mt-4 md:mt-0">
+             {/* RIGHT: 3D PARALLAX POSTER */}
+             <div className="w-full lg:w-[45%] flex justify-center lg:justify-end perspective-[2000px] z-50 mt-2 lg:mt-0">
                  <motion.div
                     onMouseMove={handleMouseMove}
                     onMouseLeave={handleMouseLeave}
@@ -294,7 +289,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
                     animate={{ y: [0, -12, 0] }}
                     transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
                     style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                    className="relative w-[180px] sm:w-[220px] md:w-[320px] lg:w-[360px] aspect-[2/3] cursor-pointer group"
+                    className="relative w-[160px] sm:w-[200px] md:w-[280px] lg:w-[360px] aspect-[2/3] cursor-pointer group"
                  >
                     <div className="absolute -inset-4 bg-yellow-500/20 blur-[40px] md:blur-[60px] rounded-full opacity-50 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-700 z-0 pointer-events-none"></div>
 
@@ -325,8 +320,8 @@ const HeroSlider = ({ data }: { data: any[] }) => {
              </div>
          </div>
 
-         {/* 🌟 DESKTOP PROGRESS DOTS (Safe to keep absolute here) 🌟 */}
-         <div className="hidden md:flex absolute bottom-10 left-1/2 -translate-x-1/2 gap-3 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10">
+         {/* 🌟 DESKTOP PROGRESS DOTS (Hidden on mobile, safe to keep absolute) 🌟 */}
+         <div className="hidden lg:flex absolute bottom-10 left-1/2 -translate-x-1/2 gap-3 z-20 bg-black/40 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10">
              {data.map((_, idx) => (
                 <div 
                    key={idx} 
@@ -351,7 +346,7 @@ const HeroSlider = ({ data }: { data: any[] }) => {
     );
 };
 
-// --- MOVIE SECTION (Enhanced with Liquid Glass touches) ---
+// --- MOVIE SECTION ---
 const MovieSection = ({ title, items, slug }: { title: string, items: any[], slug?: string }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
@@ -365,7 +360,6 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
     };
 
     const handleItemClick = (item: any) => {
-        triggerHaptic('light');
         if (item.link) {
             const encoded = btoa(item.link).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
             router.push(`/v/${encoded}`);
@@ -386,7 +380,7 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
                 {title} 
                 <ChevronRight size={20} className="hidden md:block opacity-0 group-hover/section:opacity-100 transition-opacity -translate-x-2 group-hover/section:translate-x-0" />
             </h2>
-            {slug && <button onClick={() => { triggerHaptic('light'); router.push(`/category/${slug}`); }} className="text-[10px] md:text-sm font-semibold text-gray-400 hover:text-white border border-gray-700 hover:border-white/50 bg-white/5 backdrop-blur-md px-3 md:px-5 py-1 md:py-1.5 rounded-full transition-all hover:bg-white/10 active:scale-95 whitespace-nowrap cursor-pointer">View All</button>}
+            {slug && <button onClick={() => router.push(`/category/${slug}`)} className="text-[10px] md:text-sm font-semibold text-gray-400 hover:text-white border border-gray-700 hover:border-white/50 bg-white/5 backdrop-blur-md px-3 md:px-5 py-1 md:py-1.5 rounded-full transition-all hover:bg-white/10 active:scale-95 whitespace-nowrap">View All</button>}
         </div>
         <div className="relative group">
             <ChevronRight className="hidden md:flex absolute left-0 top-0 bottom-0 z-20 m-auto h-full w-14 bg-gradient-to-r from-[#0a0a0a] to-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all rotate-180 text-white items-center justify-start pl-2" onClick={() => scroll('left')} />
@@ -396,7 +390,6 @@ const MovieSection = ({ title, items, slug }: { title: string, items: any[], slu
                 <div key={idx} className="flex flex-col gap-2 md:gap-3 min-w-[130px] md:min-w-[180px] group/item cursor-pointer snap-start" onClick={() => handleItemClick(item)}>
                     <div className="relative w-full h-[195px] md:h-[270px] rounded-xl md:rounded-2xl overflow-hidden transition-all duration-300 md:group-hover/item:scale-[1.03] md:group-hover/item:shadow-[0_15px_30px_rgba(0,0,0,0.6)] md:group-hover/item:border-white/20 border border-transparent bg-gray-900 z-10">
                         <img src={item.image || item.poster} alt={item.title} className="w-full h-full object-cover opacity-90 md:group-hover/item:opacity-100 transition-opacity" loading="lazy"/>
-                        
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 md:group-hover/item:opacity-100 transition-opacity duration-300 flex flex-col justify-center items-center backdrop-blur-[2px]">
                             <div className="bg-white/20 backdrop-blur-md border border-white/40 text-white w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center hover:bg-yellow-500 hover:border-yellow-400 hover:text-black transition-all scale-0 md:group-hover/item:scale-100 duration-300 shadow-xl">
                                <Play size={18} className="ml-1 fill-current md:w-5 md:h-5" />
@@ -433,12 +426,11 @@ function HomePageContent() {
     fetchData();
   }, []);
 
-  if (error) return <div className="h-screen flex flex-col items-center justify-center bg-[#050505] text-white"><X size={48} className="text-red-500 mb-4"/><h1 className="text-2xl font-bold">Network Error</h1><button onClick={()=>window.location.reload()} className="mt-4 px-8 py-3 bg-white text-black rounded-full font-bold active:scale-95 transition-transform cursor-pointer">Retry Connection</button></div>;
+  if (error) return <div className="h-screen flex flex-col items-center justify-center bg-[#050505] text-white"><X size={48} className="text-red-500 mb-4"/><h1 className="text-2xl font-bold">Network Error</h1><button onClick={()=>window.location.reload()} className="mt-4 px-8 py-3 bg-white text-black rounded-full font-bold active:scale-95 transition-transform">Retry Connection</button></div>;
   if (loading) return <div className="min-h-screen bg-[#050505]"><NavbarSkeleton /><HeroSkeleton /><SectionSkeleton /></div>;
 
   return (
     <div className="min-h-screen relative bg-[#050505] text-white font-sans selection:bg-yellow-500/30 overflow-x-hidden">
-      <TwinklingStars />
       <div className="relative z-10 bg-transparent">
           <Navbar />
           
